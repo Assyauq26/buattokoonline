@@ -13,7 +13,7 @@ import { RegistrationOtpCleanup } from "@/components/auth/registration-otp-clean
 
 export async function generateMetadata() {
   const {config} = await getPublishedAppearance();
-  return { title: { default: config.identity.tagline ? `${config.identity.name} — ${config.identity.tagline}` : config.identity.name, template: `%s | ${config.identity.name}` }, description: config.identity.tagline, openGraph: { title: config.identity.name, description: config.identity.tagline } };
+  return { title: { absolute: config.identity.tagline ? `${config.identity.name} — ${config.identity.tagline}` : config.identity.name, template: `%s | ${config.identity.name}` }, description: config.identity.tagline, openGraph: { title: config.identity.name, description: config.identity.tagline } };
 }
 
 export default async function StorefrontLayout({

@@ -22,8 +22,10 @@ jobs:
           cache-dependency-path: app/package-lock.json
       - name: Verify clone and repository boundaries
         run: |
-          git clone --no-local . /tmp/single-store-clone
+          git clone --no-checkout "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}.git" /tmp/single-store-clone
           cd /tmp/single-store-clone
+          git fetch --depth=1 origin "$GITHUB_SHA"
+          git checkout --detach FETCH_HEAD
           git diff --exit-code
           node tests/repository-boundary.mjs
           bash -n install.sh
