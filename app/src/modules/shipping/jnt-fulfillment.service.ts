@@ -9,7 +9,8 @@ import { writeAudit } from "@/modules/audit/audit.service";
 import { transitionOrderInTransaction } from "@/modules/orders/orders.service";
 import { getVerifiedJntDistrict } from "@/infrastructure/shipping/jnt/verified-mapping";
 import { createJntOrder, cancelJntOrder, trackJntOrder, jntCreateOrderSchema } from "@/infrastructure/shipping/jnt/official-transport";
-import { activeJntConfig } from "@/infrastructure/shipping/jnt/official-config";
+import type { JntConfig } from "@/infrastructure/shipping/jnt/official-config";
+import { historicJntConfig } from "./shipping-settings.service";
 import type { Prisma } from "@prisma/client";
 
 function requireFlag(name: string) {
@@ -45,8 +46,7 @@ function pickupWindow(start: string, end: string) {
   }
   return { start: wib(a), end: wib(b) };
 }
-async function warehouse() {
-  const config = await activeJntConfig();
+function warehouse(config: JntConfig) {
   const sender = config.seller!.warehouse;
   const name=sender.name, contact=sender.contact,
     address=sender.address, phone=sender.phone,
@@ -69,10 +69,6 @@ export async function createJntAwb(orderId: string, actorId: string, input: {pic
     requireFlag("JNT_PRODUCTION_API_APPROVED");
   }
   const window=pickupWindow(input.pickupStart,input.pickupEnd);
-  const sender=await warehouse();
-  // Resolve deterministic configuration and decryption errors BEFORE persisting an
-  // intent. After commit, only a carrier/network outcome can make it UNKNOWN.
-  const approvedConfig = await activeJntConfig();
   const prepared=await prisma.$transaction(async tx=>{
     await assertStaffPermission(tx,actorId,PERMISSIONS.SHIPPING_CREATE);
     await lockOrder(tx,orderId);
@@ -93,7 +89,9 @@ export async function createJntAwb(orderId: string, actorId: string, input: {pic
        !order.address.recipientName || !order.address.postalCode)throw new HttpError("Alamat pesanan belum lengkap",422);
     if(order.shipment)throw new HttpError("Shipment sudah ada; selesaikan rekonsiliasi terlebih dahulu",409);
     await assertNoActiveRefund(tx,order.payment.id);
-    const mapped=await getVerifiedJntDistrict(order.address.districtCode);
+    const { config, environment, mappingVersion } = await historicJntConfig(order.jntCheckoutRevisionId, tx);
+    const sender = warehouse(config);
+    const mapped = await getVerifiedJntDistrict(order.address.districtCode, mappingVersion, tx);
     if(order.address.cityCode && !order.address.cityCode.startsWith(order.address.provinceCode||"??"))throw new HttpError("Hierarki alamat tidak valid",422);
     if(order.shippingWeightGram==null||order.shippingWeightGram<=0||order.shippingWeightGram>100_000)throw new HttpError("Berat pesanan tidak valid",422);
     const qty=order.items.reduce((sum,i)=>sum+i.quantity,0);
@@ -120,12 +118,12 @@ export async function createJntAwb(orderId: string, actorId: string, input: {pic
       state:"DISPATCHED",requestedBy:actorId,
     }});
     await writeAudit({userId:actorId,action:"jnt.order.dispatch",entity:"Order",entityId:orderId,
-      meta:{externalOrderId:values.orderid,service:"EZ",mode:process.env.JNT_API_ENV||"none"}},tx);
-    return {existing:false as const,values};
+      meta:{externalOrderId:values.orderid,service:"EZ",mode:environment}},tx);
+    return {existing:false as const,values,config};
   },{timeout:18000});
   if(prepared.existing)return {awb:prepared.awb,replayed:true};
   let result:{awb:string;orderId:string};
-  try {result=await createJntOrder(prepared.values, approvedConfig);}
+  try {result=await createJntOrder(prepared.values, prepared.config);}
   catch {
     await prisma.jntShipmentRequest.updateMany({
       where:{orderId,state:"DISPATCHED"},data:{state:"UNKNOWN",errorCode:"UNCONFIRMED"},
@@ -235,14 +233,12 @@ export async function getJntTracking(orderId:string,actorId:string) {
      !order.shipment.trackingNumber||order.shipment.trackingNumber!==order.jntShipmentRequest.awb)
     throw new HttpError("Resi J&T tidak tersedia untuk pesanan ini",404);
   // Transport already projects only non-PII status/time/city fields.
-  return trackJntOrder(order.shipment.trackingNumber, order.jntShipmentRequest.externalOrderId);
+  const { config } = await historicJntConfig(order.jntCheckoutRevisionId);
+  return trackJntOrder(order.shipment.trackingNumber, order.jntShipmentRequest.externalOrderId, config);
 }
 export async function cancelJntAwb(orderId:string,actorId:string) {
   requireFlag("JNT_ENABLE_CANCELLATION");
   if(process.env.JNT_API_ENV==="production")requireFlag("JNT_PRODUCTION_API_APPROVED");
-  // Do not persist cancellation-pending when the operator has disabled J&T or
-  // the encrypted configuration is unavailable/unreadable.
-  const approvedConfig = await activeJntConfig();
   const request=await prisma.$transaction(async tx=>{
     await assertStaffPermission(tx,actorId,PERMISSIONS.SHIPPING_UPDATE);
     await lockOrder(tx,orderId);
@@ -251,13 +247,14 @@ export async function cancelJntAwb(orderId:string,actorId:string) {
     if(!["PACKED","PROCESSING"].includes(order.status)||order.shipment?.status!=="PENDING"||
        order.shipment?.provider!=="jnt"||!order.shipment.trackingNumber||
        order.jntShipmentRequest?.state!=="SUCCEEDED")throw new HttpError("J&T hanya dapat membatalkan AWB sebelum paket diproses",409);
+    const { config } = await historicJntConfig(order.jntCheckoutRevisionId, tx);
     await tx.jntShipmentRequest.update({where:{orderId},data:{state:"UNKNOWN",errorCode:"CANCELLATION_PENDING"}});
     await writeAudit({userId:actorId,action:"jnt.cancel.requested",entity:"Order",entityId:orderId,meta:{externalOrderId:order.jntShipmentRequest.externalOrderId}},tx);
-    return {existing:false as const,externalOrderId:order.jntShipmentRequest.externalOrderId};
+    return {existing:false as const,externalOrderId:order.jntShipmentRequest.externalOrderId, config};
   });
   if(request.existing)return {cancelled:true,replayed:true};
   let cancelled=false;
-  try {await cancelJntOrder(request.externalOrderId,"Cancelled by seller",approvedConfig);cancelled=true;} catch {
+  try {await cancelJntOrder(request.externalOrderId,"Cancelled by seller",request.config);cancelled=true;} catch {
     throw new HttpError("Status pembatalan J&T tidak pasti; jangan ulangi hingga rekonsiliasi",409);
   }
   if(cancelled){

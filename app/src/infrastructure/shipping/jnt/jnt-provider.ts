@@ -20,7 +20,7 @@ export class JntProvider implements ShippingProvider {
       : await (async () => {
           const { getVerifiedJntDistrict } = await import("./verified-mapping");
           const row = await getVerifiedJntDistrict(input.destination.districtCode);
-          return { areaCode: row.destinationArea };
+          return row.destAreaCode ? { areaCode: row.destAreaCode } : null;
         })();
     if (!mapping) throw new HttpError("Kecamatan belum terpetakan secara resmi ke J&T.", 422);
     const config = this.transport ? null : await (await import("./official-config")).activeJntConfig();

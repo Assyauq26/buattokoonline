@@ -288,7 +288,7 @@ export function CheckoutClient({
         {/* Shipping */}
         <section className="space-y-3">
           <h2 className="flex items-center gap-2 font-display text-lg font-bold text-ink">
-            <Truck size={18} /> Layanan Pengiriman J&T Express
+            <Truck size={18} /> Layanan Pengiriman
           </h2>
           <div className="space-y-2">
             {rates.map((r, i) => (
@@ -313,7 +313,7 @@ export function CheckoutClient({
                       {r.courier} - {r.service}
                     </p>
                     <p className="text-xs text-ink-muted">{r.etd}</p>
-                    {r.mode === "manual" && <p className="text-xs text-ink-soft">Tarif manual toko untuk rute dan berat ini</p>}
+                    {r.mode === "manual" && <p className="text-xs text-ink-soft">Ongkir flat per pesanan</p>}
                   </div>
                 </div>
                 <span className="text-sm font-semibold">
@@ -322,7 +322,7 @@ export function CheckoutClient({
               </label>
             ))}
           </div>
-          {location && currentQuote && rates.length === 0 && <p role="status" className="text-sm text-ink-soft">Layanan J&T belum tersedia untuk alamat ini. Hubungi toko untuk tarif yang valid.</p>}
+          {location && currentQuote && rates.length === 0 && <p role="status" className="text-sm text-ink-soft">Layanan pengiriman belum tersedia untuk alamat ini. Hubungi toko untuk tarif yang valid.</p>}
           {rates.length > 0 && !rate && <p className="text-sm text-ink-soft">Pilih layanan untuk memeriksa ongkir dan total terbaru.</p>}
           <input type="hidden" name="courier" value={rate?.courier} />
           <input type="hidden" name="service" value={rate?.service} />

@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
+vi.mock("@/infrastructure/shipping/jnt/pinned-https", () => ({
+  postPinnedJnt: (url: string, body: string, headers: Record<string, string>) =>
+    fetch(url, { method: "POST", body, headers, redirect: "error" }),
+}));
 vi.mock("@/infrastructure/shipping/jnt/official-config", () => ({
   activeJntConfig: vi.fn(async () => ({
     endpoints: {

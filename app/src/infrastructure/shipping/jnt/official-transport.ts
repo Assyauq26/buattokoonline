@@ -4,6 +4,7 @@ import { z } from "zod";
 import { HttpError } from "@/lib/response";
 import { activeJntConfig, type JntConfig } from "./official-config";
 import type { ShippingRate } from "../contracts/shipping-provider";
+import { postPinnedJnt } from "./pinned-https";
 
 export function officialJntSignature(payload: string, key: string): string {
   // PHP base64_encode(md5($payload . $key)): Base64 of the 32-character MD5 HEX string.
@@ -11,17 +12,17 @@ export function officialJntSignature(payload: string, key: string): string {
   return Buffer.from(hex, "utf8").toString("base64");
 }
 async function postJnt(url: string, body: URLSearchParams | string, auth?: string): Promise<unknown> {
-  const response = await fetch(url, {
-    method: "POST",
-    headers: auth ? { "Content-Type": "application/json", Authorization: auth } :
-      { "Content-Type": "application/x-www-form-urlencoded" },
-    body,
-    cache: "no-store",
-    redirect: "error",
-    signal: AbortSignal.timeout(6000),
-  }).catch(() => { throw new HttpError("J&T tidak dapat dihubungi saat ini", 503); });
-  if (!response.ok) throw new HttpError("J&T menolak permintaan", 502);
+  const headers: Record<string, string> = auth ? { "Content-Type": "application/json", Authorization: auth } :
+    { "Content-Type": "application/x-www-form-urlencoded" };
+  const response = await postPinnedJnt(url, body.toString(), headers)
+    .catch(() => { throw new HttpError("J&T tidak dapat dihubungi saat ini", 503); });
+  if (!response.ok && !(auth && response.status === 404)) {
+    await response.body?.cancel();
+    if (auth && [401, 403].includes(response.status)) throw new HttpError("Autentikasi Tracking ditolak J&T", 502);
+    throw new HttpError("J&T menolak permintaan", 502);
+  }
   if (Number(response.headers.get("content-length") || 0) > 65536) {
+    await response.body?.cancel();
     throw new HttpError("Respons J&T terlalu besar", 502);
   }
   const reader = response.body?.getReader();
@@ -44,6 +45,7 @@ async function postJnt(url: string, body: URLSearchParams | string, auth?: strin
     throw new HttpError("Respons J&T tidak dapat dibaca", 502);
   } finally { reader.releaseLock(); }
   const responseText = Buffer.concat(chunks).toString("utf8");
+  if (!responseText.trim()) throw new HttpError("Respons J&T kosong", 502);
   try { return JSON.parse(responseText); }
   catch { throw new HttpError("Respons J&T bukan JSON valid", 502); }
 }
@@ -61,6 +63,7 @@ const lineSchema = z.object({
   name: z.enum(["EZ", "HBO", "JND", "ECO"]).optional(),
   productType: z.enum(["EZ", "HBO", "JND", "ECO"]).optional(),
   cost: z.string().regex(/^\d{1,10}$/),
+  currency: z.literal("IDR").optional(),
 }).passthrough();
 export interface JntRateRequest {
   originSite: string;
@@ -72,7 +75,7 @@ export async function checkJntRate(input: JntRateRequest, approvedConfig?: JntCo
   const cfg = approvedConfig ?? await activeJntConfig();
   if (!/^[A-Z][A-Z0-9 -]{1,79}$/.test(input.originSite) ||
       !/^[A-Z][A-Z0-9 -]{1,79}$/.test(input.destinationArea) ||
-      !Number.isSafeInteger(input.weightGram) || input.weightGram <= 0) {
+      !Number.isSafeInteger(input.weightGram) || input.weightGram <= 0 || input.weightGram > 100_000) {
     throw new HttpError("Rute atau berat J&T tidak valid", 422);
   }
   const weight = Math.ceil(input.weightGram / 10) / 100;
@@ -98,7 +101,7 @@ export async function checkJntRate(input: JntRateRequest, approvedConfig?: JntCo
       throw new HttpError("Layanan J&T tidak cocok dengan permintaan", 502);
     }
     const cost = Number(parsed.data.cost);
-    if (!Number.isSafeInteger(cost) || cost < 0) throw new HttpError("Nilai tarif J&T tidak valid", 502);
+    if (!Number.isSafeInteger(cost) || cost <= 0 || cost > 2_147_483_647) throw new HttpError("Nilai tarif J&T tidak valid", 502);
     return { courier: "J&T Express", service, cost, mode: "official" as const };
   });
   if (new Set(mapped.map(r => r.service)).size !== mapped.length) throw new HttpError("Tarif J&T duplikat", 502);
@@ -166,11 +169,14 @@ export async function cancelJntOrder(orderId: string, remark: string, approvedCo
   }
   // An approved snapshot is obtained before recording an in-flight cancellation.
   const cfg = approvedConfig ?? await activeJntConfig();
-  const payload = JSON.stringify({ detail: [{
-    username: cfg.credentials.orderUsername, api_key: cfg.credentials.orderApiKey,
-    orderid: orderId, remark,
-  }] });
-  const response = await postJnt(cfg.endpoints.cancellation, signedForm("data_param", payload, cfg.credentials.orderKey));
+  const credentials = cfg.credentials;
+  const shared = cfg.sharedCancellation !== false;
+  const username = shared ? credentials.orderUsername : credentials.cancellationUsername;
+  const apiKey = shared ? credentials.orderApiKey : credentials.cancellationApiKey;
+  const key = shared ? credentials.orderKey : credentials.cancellationKey;
+  if (!username || !apiKey || !key) throw new HttpError("Kredensial Cancellation belum lengkap", 503);
+  const payload = JSON.stringify({ detail: [{ username, api_key: apiKey, orderid: orderId, remark }] });
+  const response = await postJnt(cfg.endpoints.cancellation, signedForm("data_param", payload, key));
   const result = cancelResult.safeParse(response);
   if (!result.success || result.data.detail[0].orderid !== orderId) {
     throw new HttpError("J&T belum mengonfirmasi pembatalan", 502);
@@ -178,9 +184,9 @@ export async function cancelJntOrder(orderId: string, remark: string, approvedCo
   return { orderId, cancelled: true };
 }
 export type JntTrackingEvent = {status:string;time:string|null;note:string|null};
-export async function trackJntOrder(awb: string, expectedOrderId?: string): Promise<{ awb: string; events: JntTrackingEvent[] }> {
+export async function trackJntOrder(awb: string, expectedOrderId?: string, approvedConfig?: JntConfig): Promise<{ awb: string; events: JntTrackingEvent[] }> {
   if (!/^[A-Z0-9]{8,30}$/.test(awb)) throw new HttpError("Nomor resi tidak valid", 422);
-  const cfg: JntConfig = await activeJntConfig();
+  const cfg = approvedConfig ?? await activeJntConfig();
   const auth = Buffer.from(cfg.credentials.trackingUsername + ":" + cfg.credentials.trackingPassword).toString("base64");
   const response = await postJnt(cfg.endpoints.tracking,
     JSON.stringify({ awb, eccompanyid: cfg.credentials.trackingUsername }), "Basic " + auth);
@@ -188,6 +194,7 @@ export async function trackJntOrder(awb: string, expectedOrderId?: string): Prom
     awb: z.string().optional(),
     orderid: z.string().optional(),
     error_id: z.union([z.string(), z.number()]).optional(),
+    error_message: z.string().max(250).optional(),
     history: z.array(z.object({
       date_time: z.string().max(40).optional(),
       city_name: z.string().max(100).optional(),
@@ -195,6 +202,10 @@ export async function trackJntOrder(awb: string, expectedOrderId?: string): Prom
       status_code: z.union([z.string(),z.number()]).optional(),
     }).passthrough()).max(200).optional(),
   }).passthrough().safeParse(response);
+  if (parsed.success && String(parsed.data.error_id) === "404") {
+    if (parsed.data.error_message === "Authorization failed") throw new HttpError("Autentikasi Tracking ditolak J&T", 502);
+    if (parsed.data.error_message === "Invalid AWB number") throw new HttpError("Resi tidak ditemukan atau statusnya kedaluwarsa", 422);
+  }
   if (!parsed.success || (parsed.data.error_id != null &&
       String(parsed.data.error_id) !== "0" && String(parsed.data.error_id) !== "") ||
       parsed.data.awb !== awb ||

@@ -420,6 +420,8 @@ model Order {
   shippingCourier String?
   shippingService String?
   shippingMode String?
+  jntCheckoutRevisionId String? @db.VarChar(36)
+  jntCheckoutRevision JntCheckoutRevision? @relation(fields: [jntCheckoutRevisionId], references: [id], onDelete: Restrict)
   shippingWeightGram Int?
   shippingQuoteReference String?
   discount      Int           @default(0)
@@ -567,6 +569,8 @@ model PaymentEvent {
 model JntIntegration {
   environment String @id @db.VarChar(16)
   encryptedConfig String @db.Text
+  tariffProof String? @db.Text
+  legacyEncryptedConfig String? @db.Text
   enabled Boolean @default(false)
   updatedBy String? @db.VarChar(128)
   updatedAt DateTime @updatedAt
@@ -585,6 +589,9 @@ model JntL3Mapping {
   jntCityCode String @db.VarChar(10)
   jntDistrict String @db.VarChar(130)
   jntAreaCode String @db.VarChar(10)
+  sendSiteCode String? @db.VarChar(80)
+  originCityCode String? @db.VarChar(3)
+  destAreaCode String? @db.VarChar(80)
   emsifaDistrictCode String? @db.VarChar(12)
   matchStatus String @db.VarChar(16)
   sourceRow Int
@@ -965,4 +972,34 @@ model FlashSaleLegacy {
   snapshot Json
   capturedAt DateTime @default(now())
   resolvedCampaignId String? @db.Uuid
+}
+
+model ShippingSettings {
+  id Int @id @default(1)
+  manualFlat Int?
+  activeJntId String? @db.VarChar(36)
+  activeJnt JntCheckoutRevision? @relation(fields: [activeJntId], references: [id], onDelete: Restrict)
+  revision Int @default(0)
+  legacyMappingVersion String? @db.VarChar(64)
+}
+
+model JntCheckoutRevision {
+  id String @id @db.VarChar(36)
+  environment String @db.VarChar(16)
+  encryptedConfig String @db.Text
+  mappingVersion String @db.VarChar(64)
+  createdAt DateTime @default(now())
+  settings ShippingSettings[]
+  orders Order[]
+}
+
+model JntMappingImport {
+  version String @id @db.VarChar(64)
+  checksum String @db.VarChar(64)
+  filename String @db.VarChar(180)
+  source String @db.VarChar(240)
+  uploadedBy String @db.VarChar(128)
+  uploadedAt DateTime @default(now())
+  report Json
+  file Bytes
 }
