@@ -70,6 +70,7 @@ try {
   await expect(page).toHaveURL(/\/admin$/,{timeout:30000});
   await expect(page.locator('aside')).toContainText(brand);
   await expect(page.getByTestId('dashboard-products')).toHaveText('0');
+  await expect(page.getByTestId('dashboard-products')).toBeVisible();
   await expect(page.getByTestId('dashboard-orders')).toHaveText('0');
   await page.screenshot({path:'test-results/admin-login.png',fullPage:true});
   pass('Administrator created by installer can log in through dashboard UI');
@@ -94,6 +95,7 @@ try {
   const imagePath=sql('SELECT url FROM "ProductImage" LIMIT 1;');
   const publicImage=await context.request.get(base+imagePath);assert.equal(publicImage.status(),200);assert((await publicImage.body()).length>100);
   await page.goto(base+'/product/produk-uji-mawar');await expect(page.locator('h1')).toContainText('Produk Uji Mawar');
+  await expect.poll(()=>page.getByTestId('product-gallery').locator('img').first().evaluate(img=>img.complete&&img.naturalWidth>0)).toBe(true);
   assert.equal(JSON.parse(await page.locator('script[type="application/ld+json"]').textContent()).brand.name,brand);
   pass('Add product, upload photo, publish, inventory and public product/image routes');
   const logoUpload=await context.request.post(base+'/api/v1/admin/store-branding',{headers:{Origin:base},multipart:{requestId:randomUUID(),image:{name:'logo-test.png',mimeType:'image/png',buffer:png}}});
@@ -125,12 +127,17 @@ try {
     await page.goto(base+'/admin');
     await expect(page.locator('aside')).toContainText('Toko Melati');
     await expect(page.getByTestId('dashboard-products')).toHaveText('1');
+    await expect(page.getByTestId('dashboard-products')).toBeVisible();
   }).toPass({timeout:60000,intervals:[1000,2000,5000]});
   await page.screenshot({path:'test-results/admin-after-restart.png',fullPage:true});
   assert.equal(sql('SELECT count(*) FROM "Product";'),'1');assert.equal(sql('SELECT "onHand" FROM "Inventory";'),'7');
   assert.equal((await context.request.get(base+imagePath)).status(),200);
   await page.goto(base+'/');await expect(page).toHaveTitle('Toko Melati');await expect(page.locator('body')).toContainText('Produk Uji Mawar');
-  await page.setViewportSize({width:390,height:844});await page.screenshot({path:'test-results/storefront-after-restart-mobile.png',fullPage:true});
+  await page.setViewportSize({width:390,height:844});
+  const cardImage=page.getByTestId('product-card-produk-uji-mawar').locator('img');
+  await expect(cardImage).toBeVisible();
+  await expect.poll(()=>cardImage.evaluate(img=>img.complete&&img.naturalWidth>0),{timeout:30000}).toBe(true);
+  await page.screenshot({path:'test-results/storefront-after-restart-mobile.png',fullPage:true});
   assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
   pass('Database, administrator session, brand, product stock and photo survive service restart');
   assert.deepEqual(external,[]);assert.deepEqual(errors,[]);
