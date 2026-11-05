@@ -33,6 +33,12 @@ def atomic_json(path, value):
         file.flush()
         os.fsync(file.fileno())
     os.replace(temp, path)
+    if os.name == 'posix':
+        directory = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            os.fsync(directory)
+        finally:
+            os.close(directory)
 
 
 def read_json(path):
@@ -139,7 +145,15 @@ def discover_ips():
 def resolve(host, record, resolver):
     result = run(['dig', '+time=3', '+tries=1', '+short', '@' + resolver, host, record], timeout=6)
     version = 4 if record == 'A' else 6
-    return sorted({str(ipaddress.ip_address(line)) for line in result.splitlines() if public_address(line, version)})
+    addresses = set()
+    for line in result.splitlines():
+        try:
+            ip = ipaddress.ip_address(line)
+            if ip.version == version:
+                addresses.add(str(ip))
+        except ValueError:
+            pass
+    return sorted(addresses)
 
 
 def dns_status(answers, ips):
@@ -283,6 +297,12 @@ def healthy(local_test=False):
     raise StoreError('Versi aplikasi belum sehat.')
 
 
+def public_health(state):
+    extra = ['--cacert', str(CONFIG / 'local-test-ca.crt')] if state['local_test'] else []
+    for endpoint in ['/', '/login', '/api/v1/ready']:
+        curl('https://' + state['domain'] + endpoint, extra)
+
+
 def initialize_store(state, password=None):
     create_secrets(state['domain'])
     if not state.get('built'):
@@ -313,9 +333,7 @@ def initialize_store(state, password=None):
     dc(['up', '-d', '--wait', 'app'])
     healthy(state['local_test'])
     write_caddy(state, live=True)
-    extra = ['--cacert', str(CONFIG / 'local-test-ca.crt')] if state['local_test'] else []
-    for endpoint in ['/', '/login', '/api/v1/ready']:
-        curl('https://' + state['domain'] + endpoint, extra)
+    public_health(state)
     version = (ROOT / 'manager/VERSION').read_text().strip()
     atomic_json(CONFIG / 'version.json', {'version': version, 'source_sha': state['source_sha'], 'db_contract': 1,
                                        'migrations': inventory(ROOT)})

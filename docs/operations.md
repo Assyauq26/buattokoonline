@@ -20,18 +20,33 @@ sudo docker compose -f /opt/single-store/deploy/compose.yaml ps
 sudo docker compose -f /opt/single-store/deploy/compose.yaml restart
 ```
 
-Installer menolak direktori atau volume yang sudah ada agar kredensial/data tidak
-ditimpa. Jangan menghapus volume untuk memperbaiki startup. Jika instalasi berhenti
-setelah konfigurasi dibuat, perbaiki penyebab dengan melihat status/build log.
-Lanjutkan migrasi melalui service `tools`. Bootstrap menolak database yang sudah
-memiliki user/identitas toko, sehingga tidak mereset password yang ada.
+Installer baru mendukung 2 vCPU, RAM minimal 1900000 KiB, swap aktif minimal
+1900000 KiB untuk profil di bawah 3800000 KiB RAM, Ubuntu 24.04 dan disk kosong
+12 GB. Swap membantu saat build, tetapi tidak menggantikan pemeriksaan RAM.
+
+Wizard disimpan pada `/etc/single-store/setup.json`, termasuk exact source SHA,
+mode, brand/domain dan tahapan build/bootstrap; tidak menyimpan password admin.
+Jalankan installer dari checkout SHA dan mode yang sama untuk melanjutkan. Tautan
+setup root-only dapat dibuka melalui SSH tunnel. Periksa host key SSH melalui
+console penyedia VPS sebelum mempercayai koneksi pertama.
+
+Gangguan saat DNS/HTTPS dapat diperiksa ulang tanpa membuat ulang secret. Build
+yang terputus dijalankan ulang dengan cache. Jika transaksi bootstrap sudah commit,
+recovery mendeteksi admin existing dan hanya melanjutkan finalisasi. Password lama
+tetap berlaku. Setelah instalasi sehat, token dihapus, API setup mengembalikan 410,
+unit setup dinonaktifkan, lalu listener loopback berhenti. Menjalankan installer
+kembali tidak membuka setup untuk toko yang sudah selesai.
+
+Direktori/volume existing tanpa progres wizard dikenali dan ditolak aman. Jangan
+menghapusnya untuk mengatasi error. Log operasi lokal berada di
+`/etc/single-store/operation.log` (root-only); input password/SQL stdin tidak dicatat.
 
 ## DNS dan HTTPS
 
 Arahkan A (dan AAAA jika digunakan) domain ke IP server, buka inbound TCP 80/443,
 dan pastikan record AAAA tidak menunjuk server lain. Caddy meminta serta memperbarui
-sertifikat otomatis. Installer membuktikan akses HTTPS dari server bila penerbitan
-sudah selesai; jika belum, ia melaporkan status menunggu DNS. Port aplikasi hanya
+sertifikat otomatis. Wizard tidak membuka langkah admin sampai DNS dan HTTPS
+lulus, dan mengulang verifikasi saat membuat admin. Port aplikasi hanya
 terikat pada loopback; PostgreSQL tidak menerbitkan port host.
 
 `--local-test` hanya menerima domain `localhost` dan memakai CA lokal Caddy.
@@ -66,16 +81,13 @@ sudo sh -c 'umask 077; tar -czf /var/backups/single-store/files.tar.gz /etc/sing
 ```
 
 Uji restore pada server terpisah sebelum bergantung pada backup. Jangan menjalankan
-`docker compose down -v` pada toko yang hendak dipertahankan. Untuk update: backup,
-review perubahan, salin source baru ke `/opt/single-store/app`, build app/tools,
-jalankan `tools npm run db:migrate`, kemudian `up -d app`. Jangan jalankan bootstrap
-lagi. Tidak ada auto-update atau sinkronisasi dengan toko/platform lain.
+`docker compose down -v` pada toko yang hendak dipertahankan. Gunakan updater CLI
+release yang dijelaskan pada [updates.md](updates.md); updater membuat set backup
+ber-checksum dan mempertahankan versi kode lama. Jangan menimpa source aktif secara
+manual atau menjalankan bootstrap lagi. Tidak ada auto-update atau sinkronisasi.
 
 ## Ruang lingkup tes
 
-Workflow menjalankan installer pada VM GitHub-hosted Ubuntu 24.04 yang baru untuk
-setiap job. VM mempunyai tooling bawaan runner; database/media toko dimulai kosong.
-Ia menguji login nyata, UI produk dan upload, draft/publish brand, HTTPS lokal,
-database dan media setelah restart seluruh container. Provider J&T/email nyata
-dan sertifikat domain publik memerlukan konfigurasi milik seller dan tidak diuji
-menggunakan akun produksi sumber.
+Lihat [testing.md](testing.md) untuk profil runner biasa dan guest Ubuntu 2 GB,
+recovery wizard, backup/restore, dua versi disposable, rollback kode, serta batas
+pembuktian TLS lokal dan pengujian publik yang terotorisasi.

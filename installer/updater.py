@@ -213,6 +213,7 @@ def recover(journal):
     core.dc(['up', '-d', '--no-build', '--wait', '--wait-timeout', '90', 'app'])
     core.healthy()
     core.write_caddy(core.read_json(core.STATE), live=True)
+    core.public_health(core.read_json(core.STATE))
     core.atomic_json(core.CONFIG / 'version.json', journal['from'])
     shutil.copytree(journal['manager_backup'], core.ROOT / 'manager', dirs_exist_ok=True)
     core.run(['systemctl', 'start', 'single-store-maintenance.timer'])
@@ -257,6 +258,7 @@ def apply_release(release, package, installed):
         core.dc(['up', '-d', '--no-build', '--wait', '--wait-timeout', '90', 'app'])
         core.healthy()
         core.write_caddy(core.read_json(core.STATE), live=True)
+        core.public_health(core.read_json(core.STATE))
         # New manager code becomes available only after the new application is healthy.
         shutil.copytree(target / 'installer', core.ROOT / 'manager', dirs_exist_ok=True)
         for name in ['VERSION', 'update.sh', 'restore.sh']:

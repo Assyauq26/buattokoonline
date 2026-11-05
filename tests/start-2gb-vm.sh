@@ -19,13 +19,14 @@ PY
 curl --fail --location --silent --show-error https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img -o /tmp/store-vm-base.img
 qemu-img create -f qcow2 -F qcow2 -b /tmp/store-vm-base.img /tmp/store-vm-disk.qcow2 45G
 cloud-localds /tmp/store-vm-seed.img /tmp/store-vm-userdata /tmp/store-vm-metadata
-sudo qemu-system-x86_64 -enable-kvm -cpu host -smp 2 -m 2048 -drive file=/tmp/store-vm-disk.qcow2,format=qcow2,if=virtio -drive file=/tmp/store-vm-seed.img,format=raw,if=virtio -netdev user,id=n0,hostfwd=tcp:127.0.0.1:2222-:22,hostfwd=tcp:127.0.0.1:80-:80,hostfwd=tcp:127.0.0.1:443-:443,hostfwd=tcp:127.0.0.1:3000-:3000,hostfwd=tcp:127.0.0.1:8787-:8787 -device virtio-net-pci,netdev=n0 -display none -daemonize -pidfile /tmp/store-vm.pid
+sudo qemu-system-x86_64 -enable-kvm -cpu host -smp 2 -m 2048 -drive file=/tmp/store-vm-disk.qcow2,format=qcow2,if=virtio -drive file=/tmp/store-vm-seed.img,format=raw,if=virtio -netdev user,id=n0,hostfwd=tcp:127.0.0.1:2222-:22,hostfwd=tcp:127.0.0.1:80-:80,hostfwd=tcp:127.0.0.1:443-:443 -device virtio-net-pci,netdev=n0 -display none -daemonize -pidfile /tmp/store-vm.pid
 guest(){ ssh -i /tmp/store-vm-client -p 2222 -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=/tmp/store-vm-knownhosts ubuntu@127.0.0.1 "$@"; }
 for attempt in $(seq 1 90); do
   if guest true 2>/dev/null; then break; fi
   sleep 2
 done
 guest 'sudo cloud-init status --wait'
+ssh -i /tmp/store-vm-client -p 2222 -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=/tmp/store-vm-knownhosts -o ExitOnForwardFailure=yes -N -f -L 127.0.0.1:8787:127.0.0.1:8787 -L 127.0.0.1:3000:127.0.0.1:3000 ubuntu@127.0.0.1
 guest "git clone --no-checkout https://github.com/${GITHUB_REPOSITORY}.git /tmp/single-store-clone && git -C /tmp/single-store-clone fetch --depth=1 origin ${GITHUB_SHA} && git -C /tmp/single-store-clone checkout --detach FETCH_HEAD"
 guest 'sudo systemd-run --unit store-resource-monitor /usr/bin/python3 /tmp/single-store-clone/tests/resource-monitor.py'
 guest 'free -k; nproc; df -Pk /var'
