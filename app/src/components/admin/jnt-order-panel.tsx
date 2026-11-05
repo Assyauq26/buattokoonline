@@ -14,7 +14,7 @@ export function JntOrderPanel(props:{
   const [events,setEvents]=useState<Event[]|null>(null);
   if(!props.isOfficial)return null;
   const canIssue=props.canCreate&&props.hasPaid&&props.status==="PACKED"&&
-    props.service==="EZ"&&!props.awb&&!props.requestState;
+    ["EZ","HBO","JND","JSD"].includes(props.service || "")&&!props.awb&&!props.requestState;
   async function track() {
     if(busy)return;
     setBusy(true);setError("");setEvents(null);
@@ -37,7 +37,7 @@ export function JntOrderPanel(props:{
       {props.awb&&<p className="mt-2 break-all text-sm">Resi: <strong>{props.awb}</strong></p>}
       {["DISPATCHED","UNKNOWN","PREPARED"].includes(props.requestState||"")&&
         <p role="alert" className="mt-2 text-sm text-amber-700">Hasil pengajuan tidak pasti. Hubungi operasional J&T untuk rekonsiliasi; jangan membuat permintaan baru.</p>}
-      {props.service!=="EZ"&&<p className="mt-2 text-sm text-zinc-500">Create Order otomatis saat ini hanya mendukung EZ sesuai kontrak publik J&T.</p>}
+      <p className="mt-2 text-sm text-zinc-500">Layanan pesanan: {props.service}</p>
     </div>
     {canIssue&&<OperationForm
       url={"/api/v1/admin/orders/"+props.orderId+"/jnt"}
