@@ -1,0 +1,58 @@
+name: Publish initial v1.0.0 once
+# One-time user-authorized first release. This file's own creation triggers it.
+# Future commits and version bumps never trigger this workflow.
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/publish-v1.0.0-once.yml']
+permissions:
+  contents: write
+concurrency:
+  group: publish-initial-v1.0.0
+  cancel-in-progress: false
+jobs:
+  publish:
+    if: github.repository == 'Assyauq26/buattokoonline'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify exact release scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(cat VERSION)" = '1.0.0'
+          test "$(git rev-parse --abbrev-ref HEAD)" = 'HEAD'
+          git merge-base --is-ancestor baf44d2e354288a7e8a248830d3b47882da5ad98 HEAD
+          test -z "$(git status --porcelain)"
+          python3 -m unittest discover -s tests -p '*_test.py'
+          node tests/repository-boundary.mjs
+          if git ls-remote --exit-code --tags origin refs/tags/v1.0.0 >/dev/null 2>&1; then
+            echo 'Release tag v1.0.0 already exists; aborting to prevent overwrites.'
+            exit 1
+          fi
+      - name: Build tracked-source release package
+        run: python3 installer/release.py store-v1.0.0.tar.gz
+      - name: Publish GitHub Release v1.0.0
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > /tmp/release-notes.md <<'NOTES'
+          ## Template toko mandiri — rilis awal untuk pengujian live
+          Satu VPS, satu toko, satu database dan media independen. Installer browser empat tahap (nama toko, DNS+HTTPS, admin, selesai), dukungan Ubuntu 24.04 dengan 2 vCPU/2 GB RAM dan swap ~2 GB, serta updater lokal berbasis GitHub Release.
+
+          **Batasan uji:** Jangan aktifkan J&T official Production / create AWB sebelum pemeriksaan panjang nama penerima (maks. 30) dan alamat lengkap (maks. 200) diperbaiki pada checkout dan diuji. Pengaturan email, pembayaran, ongkir dan keamanan operasional tetap menjadi tanggung jawab pemilik toko. Rilis ini untuk pengujian, bukan klaim siap transaksi produksi.
+
+          Source PR #1 lulus CI dua profil, termasuk VM 2 GB; Tencent `uji.hubify.web.id` telah diuji dengan HTTPS publik. Tidak ada deploy atau perubahan produksi `gheverhan.store`.
+          NOTES
+          gh release create v1.0.0 store-v1.0.0.tar.gz \
+            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title 'v1.0.0 — Template Toko Mandiri (uji publik)' \
+            --notes-file /tmp/release-notes.md \
+            --latest
+          gh release view v1.0.0 --repo "$GITHUB_REPOSITORY" --json url,tagName,isDraft,isPrerelease,assets
