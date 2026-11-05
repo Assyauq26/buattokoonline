@@ -53,12 +53,14 @@ jobs:
           test -n "$SSH_KNOWN_HOSTS"
           umask 077
           mkdir -p "$HOME/.ssh"
-          printf '%s\n' "$SSH_KEY" > "$HOME/.ssh/hubify_deploy"
-          printf '%s\n' "$SSH_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          printf '%s\n' "$SSH_KEY" | tr -d '\r' > "$HOME/.ssh/hubify_deploy"
+          printf '%s\n' "$SSH_KNOWN_HOSTS" | tr -d '\r' > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/hubify_deploy" "$HOME/.ssh/known_hosts"
           grep -Eq '^43[.]173[.]41[.]24 ssh-ed25519 ' "$HOME/.ssh/known_hosts"
-          ssh -i "$HOME/.ssh/hubify_deploy" -o IdentitiesOnly=yes \
+          ssh -T -i "$HOME/.ssh/hubify_deploy" -o IdentitiesOnly=yes \
             -o StrictHostKeyChecking=yes -o BatchMode=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o GlobalKnownHostsFile=/dev/null \
+            -o HostKeyAlgorithms=ssh-ed25519 -o ConnectTimeout=15 \
             -o ServerAliveInterval=30 -o ServerAliveCountMax=6 \
             hubifydeploy@43.173.41.24 \
             sudo -n /usr/local/sbin/hubify-staging-deploy "$SHA"

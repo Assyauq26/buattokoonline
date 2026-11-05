@@ -23,6 +23,10 @@ REPOSITORY = 'Assyauq26/buattokoonline'
 HOST = 'hubify.web.id'
 JOURNAL = core.CONFIG / 'update.json'
 STAGING_STATE = core.CONFIG / 'hubify-staging.json'
+# Shipping settings only add schema and copy legacy integration data in one transaction.
+REVIEWED_MIGRATIONS = {
+    '20261105100000_shipping_settings': '4e0da4c8ce33d4dcffb3ca1a51c776c3a3551ddeb257519beb33120cc26e631e',
+}
 
 
 def github(path):
@@ -38,16 +42,10 @@ def github(path):
     return json.loads(data)
 
 
-def verify_main(sha):
-    if not re.fullmatch(r'[0-9a-f]{40}', sha):
-        raise core.StoreError('Diperlukan SHA main 40 karakter yang tepat.')
+def verify_repository():
     repo = github('')
     if repo['id'] != core.REPO_ID or repo['full_name'] != REPOSITORY:
         raise core.StoreError('Identitas repository tidak cocok.')
-    branch = github('git/ref/heads/main')
-    if branch['object']['type'] != 'commit' or branch['object']['sha'] != sha:
-        raise core.StoreError('SHA bukan HEAD main saat deployment.')
-    return branch
 
 
 def preflight():
@@ -81,7 +79,11 @@ def check_schema(source, installed):
     for name in sorted(set(candidate) - set(existing)):
         if not re.fullmatch(r'[0-9]{14}_[a-z0-9_]+', name) or name <= max(existing, default=''):
             raise core.StoreError('Urutan migrasi baru tidak kompatibel.')
-        updater.validate_additive((source / 'app/prisma/migrations' / name / 'migration.sql').read_text())
+        if name in REVIEWED_MIGRATIONS:
+            if candidate[name] != REVIEWED_MIGRATIONS[name]:
+                raise core.StoreError('Checksum migrasi Hubify yang ditinjau berubah: ' + name)
+        else:
+            updater.validate_additive((source / 'app/prisma/migrations' / name / 'migration.sql').read_text())
     version = (source / 'VERSION').read_text().strip()
     if updater.version_tuple(version) < updater.version_tuple(installed['version']):
         raise core.StoreError('Versi kandidat lebih lama dari versi terpasang.')
@@ -95,29 +97,44 @@ def prepare_source(sha):
     core.run(['git', 'init', '-q', str(source)])
     core.run(['git', '-C', source, 'remote', 'add', 'origin', 'https://github.com/' + REPOSITORY + '.git'])
     core.run(['git', '-C', source, 'fetch', '--depth=1', 'origin', 'refs/heads/main'], timeout=180)
-    core.run(['git', '-C', source, 'checkout', '-q', '--detach', 'FETCH_HEAD'])
-    actual = core.run(['git', '-C', source, 'rev-parse', 'HEAD'])
+    actual = core.run(['git', '-C', source, 'rev-parse', 'FETCH_HEAD'])
     if actual != sha:
-        raise core.StoreError('HEAD main berubah selama fetch; ulangi dengan SHA terbaru.')
+        raise core.StoreError('SHA bukan HEAD main terkini. Jalankan ulang deploy dari main.')
+    core.run(['git', '-C', source, 'checkout', '-q', '--detach', sha])
     return source
 
 
-def assert_db_inventory(installed):
+def read_db_inventory():
     rows = json.loads(core.sql(
         """SELECT coalesce(json_agg(json_build_object('name',migration_name,'checksum',checksum)),'[]')
            FROM "_prisma_migrations" WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL;"""))
-    if {row['name']: row['checksum'] for row in rows} != installed['migrations']:
-        raise core.StoreError('Riwayat migrasi database berbeda dari metadata instalasi.')
     if core.sql('SELECT count(*) FROM "_prisma_migrations" WHERE finished_at IS NULL AND rolled_back_at IS NULL;') != '0':
         raise core.StoreError('Terdapat migrasi gagal atau belum selesai.')
+    return {row['name']: row['checksum'] for row in rows}
+
+
+def recover_code(journal, approved_inventory):
+    updater.recover(journal)
+    actual = read_db_inventory()
+    if (any(actual.get(name) != digest for name, digest in journal['from']['migrations'].items())
+            or any(approved_inventory.get(name) != digest for name, digest in actual.items())):
+        raise core.StoreError('Riwayat migrasi setelah pemulihan perlu diperiksa operator.')
+    # Recover rolls back the application, while approved migrations may remain applied.
+    core.atomic_json(core.CONFIG / 'version.json', {**journal['from'], 'migrations': actual})
 
 
 def deploy(sha):
     state, installed = preflight()
-    verify_main(sha)
+    verify_repository()
     source = prepare_source(sha)
     inventory, candidate_version = check_schema(source, installed)
-    assert_db_inventory(installed)
+    if read_db_inventory() != installed['migrations']:
+        raise core.StoreError('Riwayat migrasi database berbeda dari metadata instalasi.')
+    if installed.get('source_sha') == sha:
+        core.healthy()
+        core.public_health(state)
+        print('STAGING_ALREADY_DEPLOYED: https://' + HOST + '/ @ ' + sha, flush=True)
+        return
     compose = source / 'compose.json'
     core.atomic_json(compose, core.compose_for(source, 'hubify-' + sha[:12]))
     previous_manager = source / 'previous-manager'
@@ -125,8 +142,8 @@ def deploy(sha):
     journal = {
         'status': 'updating', 'staging': True,
         'old_compose': core.read_json(core.COMPOSE), 'from': installed,
-        'to': sha, 'backup': None, 'manager_backup': str(previous_manager),
-        'ref': 'main'}
+        'to': sha, 'backup': 'belum dibuat', 'manager_backup': str(previous_manager),
+        'branch': 'main'}
     core.atomic_json(JOURNAL, journal)
     print('Staging main @ ' + sha + ' — backup dan deployment dimulai.', flush=True)
     try:
@@ -149,7 +166,7 @@ def deploy(sha):
             **installed, 'source_sha': sha, 'migrations': inventory,
             'channel': 'hubify-staging', 'candidate_version': candidate_version})
         core.atomic_json(STAGING_STATE, {
-            'ref': 'main', 'sha': sha,
+            'branch': 'main', 'sha': sha,
             'candidate_version': candidate_version, 'deployed_at': int(time.time()),
             'backup_path': journal['backup']})
         journal['status'] = 'complete'
@@ -160,7 +177,7 @@ def deploy(sha):
         journal['status'] = 'failed'
         core.atomic_json(JOURNAL, journal)
         try:
-            updater.recover(journal)
+            recover_code(journal, inventory)
         except Exception as error:
             raise core.StoreError(
                 'Recovery otomatis belum sehat. Pertahankan backup/journal dan minta review operator.') from error
@@ -180,21 +197,21 @@ def rollback():
     core.write_caddy(state, live=False)
     core.run(['systemctl', 'stop', 'single-store-maintenance.timer', 'single-store-maintenance.service'])
     core.dc(['stop', 'app'])
-    updater.recover(journal)
-    print('Rollback kode selesai. Migrasi additive tidak diturunkan.')
+    recover_code(journal, current['migrations'])
+    print('Rollback kode selesai. Migrasi database tetap tercatat.')
 
 
 def main():
     os.umask(0o077)
     args = sys.argv[1:]
-    if args != ['--rollback'] and len(args) != 1:
+    if args != ['--rollback'] and (len(args) != 1 or not re.fullmatch(r'[0-9a-f]{40}', args[0])):
         raise core.StoreError('Gunakan: hubify-staging-deploy MAIN_SHA_40_HEX | --rollback')
     with open('/run/single-store-operation.lock', 'a+') as file:
         fcntl.flock(file, fcntl.LOCK_EX | fcntl.LOCK_NB)
         if args == ['--rollback']:
             rollback()
         else:
-            deploy(*args)
+            deploy(args[0])
 
 
 if __name__ == '__main__':

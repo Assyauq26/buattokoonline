@@ -1,68 +1,82 @@
-# Deployment manual Hubify (tanpa gate CI)
+# Deploy `main` ke Hubify
 
-Hubify adalah staging khusus `hubify.web.id` pada VPS `43.173.41.24`, bukan produksi seller.
-Mulai dari perubahan kebijakan ini, `.github/workflows/verify.yml` hanya berjalan bila pemilik
-memilih **Actions > Single-store Ubuntu installation > Run workflow**. Tidak ada trigger
-push atau pull request. Hasil CI boleh digunakan sebagai informasi, tetapi bukan
-syarat merge maupun deployment Hubify.
+Hubify adalah toko staging publik di [hubify.web.id](https://hubify.web.id).
+Gunakan data pengujian dan jadwalkan kemungkinan downtime saat build atau migrasi.
+Deploy Hubify memakai commit terkini dari `main` di `Assyauq26/buattokoonline`.
+Workflow dan helper VPS memeriksa SHA tanpa bergantung pada status PR atau CI.
 
-## Kebijakan yang tetap berlaku
+## Pemasangan helper di VPS
 
-- Deploy tetap **manual** melalui Actions > Deploy to Hubify staging > Run workflow.
-- Hanya `main` dan **exact 40-character HEAD SHA** yang diizinkan; SHA diverifikasi
-  di Actions dan ulang di helper VPS. Jika `main` berubah selama proses, deploy berhenti.
-- Environment `hubify-staging` dan approval/reviewer yang dikonfigurasi tetap dipertahankan.
-- SSH menggunakan `hubifydeploy` dengan host key terverifikasi dan hanya
-  `sudo /usr/local/sbin/hubify-staging-deploy`; jangan beri root shell,
-  akses Docker socket, atau `NOPASSWD: ALL`.
-- Backup, maintenance mode, pemeriksaan kontrak database, validasi migrasi,
-  readiness/HTTPS, dan recovery tetap wajib. **Melepas CI tidak menghapus
-  pemeriksaan migrasi maupun persyaratan keamanan runtime.**
-- J&T Production tidak diaktifkan pada staging. Checkout transaksi live tidak diuji
-  dengan uang nyata atau order carrier sungguhan.
-
-## Pembaruan helper di server (sekali, oleh operator sudo)
-
-Kode helper baru di repository tidak otomatis mengganti helper root-owned yang terpasang.
-Operator harus memeriksa `main` terbaru dan memasang helper yang telah direview:
+Operator membutuhkan akses `sudo` melalui console Tencent atau SSH operator.
+Gunakan checkout yang berisi helper baru dari `main`. Pastikan instalasi selesai,
+domain cocok, dan backup sebelumnya tersedia. Dari root checkout di VPS, jalankan:
 
 ```bash
-# Jalankan dalam checkout repository yang sudah diperbarui ke main yang disetujui.
 sudo test -f /etc/single-store/installed
-sudo grep '^APP_ORIGIN=https://hubify.web.id$' /etc/single-store/runtime.env
-sudo install -o root -g root -m 0755 staging/hubify-staging-deploy.py /usr/local/sbin/hubify-staging-deploy
+sudo grep -qx 'APP_ORIGIN=https://hubify.web.id' /etc/single-store/runtime.env
+sudo cp -a /usr/local/sbin/hubify-staging-deploy /usr/local/sbin/hubify-staging-deploy.before-main
+sudo install -o root -g root -m 0755 staging/hubify-staging-deploy.py /usr/local/sbin/hubify-staging-deploy.new
+sudo mv -f /usr/local/sbin/hubify-staging-deploy.new /usr/local/sbin/hubify-staging-deploy
 sudo visudo -cf /etc/sudoers.d/hubify-staging
 ```
 
-Pastikan backup tersedia dan tidak ada proses upgrade aktif sebelum mengganti helper.
-Operator sebaiknya membandingkan SHA source helper dengan commit yang disetujui.
+Untuk instalasi pertama, lewati perintah `cp` dan siapkan akun `hubifydeploy`
+dengan public key ED25519 khusus deployment. Direktori `~/.ssh` miliknya
+bermode 0700 dan `authorized_keys` bermode 0600. Berikan hanya izin berikut
+melalui `sudo visudo -f /etc/sudoers.d/hubify-staging`.
 
-## Deploy dengan tombol manual
+```sudoers
+hubifydeploy ALL=(root) NOPASSWD: /usr/local/sbin/hubify-staging-deploy *
+```
 
-1. Buka repository pada branch `main`, salin exact 40-hex HEAD commit.
-2. Buka **Actions > Deploy to Hubify staging > Run workflow** dari `main`.
-3. Masukkan `exact_sha` dan ketik `DEPLOY HUBIFY`.
-4. Selesaikan approval environment bila diaktifkan.
-5. Workflow hanya memverifikasi identitas repo, exact SHA `main`, dan koneksi SSH.
-   Tidak ada pemeriksaan CI-success.
-6. Helper melakukan preflight, backup, build, migrasi yang kompatibel,
-   penggantian aplikasi, readiness dan HTTPS. Hasilnya mencatat SHA terpasang.
-7. Setelah deploy, atur ongkir Manual di dashboard sebelum menguji checkout dummy.
+Simpan private key khusus deploy sebagai `HUBIFY_SSH_PRIVATE_KEY` di GitHub
+Environment `hubify-staging`. Set `HUBIFY_SSH_KNOWN_HOSTS` dengan public host key
+ED25519 untuk `43.173.41.24` setelah mencocokkan fingerprint melalui console
+Tencent. Batasi deployment branches environment ke `main`. Akun SSH deploy
+menggunakan helper milik root. Simpan akses Docker dan shell root pada akun operator.
 
-Jika migrasi kandidat ditolak oleh validator additive, deployment **tetap berhenti**.
-Jangan mengubah validator, memalsukan inventory, atau menjalankan SQL manual tanpa
-review operator yang terpisah dan rencana backup/restore teruji. Fitur shipping
-pada PR #6 memakai migrasi data sehingga memerlukan pemeriksaan ini.
+## Deploy setelah merge
 
-## Recovery
+1. Merge perubahan aplikasi ke `main`.
+2. Jalankan **Actions → Deploy to Hubify staging → Run workflow** dari `main`.
+   Isi `exact_sha` dengan SHA HEAD `main` dan ketik `DEPLOY HUBIFY` untuk
+   konfirmasi. Dari terminal, gunakan:
 
-Jika deployment baru gagal, helper mengupayakan pemulihan container/kode sebelumnya
-dan mempertahankan journal serta backup. Migrasi additive yang telah berjalan tidak
-otomatis dihapus dari database. Untuk rollback staging terakhir melalui operator:
+   ```bash
+   sha=$(gh api repos/Assyauq26/buattokoonline/git/ref/heads/main --jq .object.sha)
+   gh workflow run deploy-hubify.yml --ref main -f exact_sha="$sha" -f confirmation='DEPLOY HUBIFY'
+   ```
+
+3. Setujui deployment jika GitHub Environment masih memakai **Required reviewers**.
+4. Workflow mengirim SHA `main` ke helper. Helper mengambil HEAD `main`,
+   memeriksa kecocokan SHA, membuat backup, melakukan build dan migrasi, lalu
+   mengecek HTTPS publik. Jika SHA sudah tertinggal, jalankan ulang dari `main`.
+5. Periksa `STAGING_DEPLOY_SUCCESS` pada log Actions dan
+   [status readiness](https://hubify.web.id/api/v1/ready). SHA terpasang
+   tercatat di `/etc/single-store/version.json` dengan channel `hubify-staging`.
+   Workflow bisa dijalankan ulang setelah commit terpasang untuk memeriksa
+   kesehatan aplikasi tanpa rebuild.
+
+CI verifikasi dapat dijalankan secara manual melalui workflow
+**Single-store Ubuntu installation**. Deploy Hubify dapat dijalankan langsung
+setelah merge. GitHub Releases dan updater toko memakai prosedur rilis sendiri.
+
+## Migrasi Issue #5 dan rollback
+
+Helper Hubify menerima `20261105100000_shipping_settings` melalui pengecualian
+yang dipatok ke nama dan checksum SQL. Pengecualian berlaku pada helper root
+yang dipasang operator. Migrasi baru lainnya melalui validator additive. Helper
+memeriksa riwayat migrasi database dan kontrak rollback sebelum memulai deploy.
+Untuk uji checkout sesudah migrasi Issue #5, tetapkan ongkir Manual di dashboard.
+
+Jika deploy gagal, helper memulihkan kode/container sebelumnya. Operator juga
+dapat memulihkan deployment terakhir secara manual.
 
 ```bash
 sudo /usr/local/sbin/hubify-staging-deploy --rollback
 ```
 
-Rollback kode bukan restore database. Jangan lakukan ketika ada perubahan data
-transaksi yang harus dipertahankan; lihat `docs/updates.md`.
+Backup database, media, dan konfigurasi tersimpan privat. Rollback kode
+mempertahankan migrasi yang sudah diterapkan. Jika pemulihan memerlukan
+perbaikan database, periksa journal dan backup sesuai [panduan update](updates.md).
+Gunakan data sintetis untuk pengujian dan biarkan akses J&T Production dinonaktifkan.

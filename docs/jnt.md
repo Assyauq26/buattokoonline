@@ -94,11 +94,12 @@ Pencabutan kredensial lama atau perubahan izin environment di server dapat
 menahan fulfillment historis dan memerlukan rekonsiliasi operator.
 
 Terapkan migrasi pada database pengujian dahulu dan buat backup sebelum
-cutover. Aturan SQL otomatis pada updater dan workflow Hubify saat ini
-memerlukan review operator untuk migrasi ini. Gunakan database preview yang
-terpisah dengan data sintetis dan gate Production dinonaktifkan. Jalankan
-`npm run db:migrate` menggunakan koneksi owner setelah review dan periksa
-hak akses role runtime. Atur tarif Manual sebelum membuka checkout.
+cutover. Updater rilis stabil memerlukan review operator untuk migrasi ini. Di Hubify,
+pasang [helper Hubify terbaru](hubify-staging.md) yang mematok checksum
+migrasi. Gunakan data sintetis dan biarkan gate J&T Production dinonaktifkan.
+Untuk migrasi manual, jalankan `npm run db:migrate` menggunakan koneksi owner
+setelah review dan periksa hak akses role runtime. Atur tarif Manual sebelum
+membuka checkout.
 
 Rollback metode atau mapping dapat dilakukan di dashboard sesuai langkah di
 atas. Untuk rollback kode, pertahankan tabel/kolom additive dan backup
