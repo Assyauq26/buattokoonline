@@ -149,10 +149,11 @@ export function requireProbeEnvironment(environment: JntEnvironment) {
   requireCarrierEnvironment(environment);
 }
 
+export function selectedJntServices(config: JntConfig): ("EZ" | "HBO" | "JND" | "JSD")[] {
+  return config.seller?.selectedServices ?? (config.seller?.services.filter(service => Date.parse(service.validUntil) > Date.now()).map(service => service.code) || []);
+}
 export function requireEz(config: JntConfig) {
-  if (!config.seller?.services.some(service => service.code === "EZ" && Date.parse(service.validUntil) > Date.now())) {
-    throw new HttpError("Persetujuan layanan EZ belum diisi atau telah kedaluwarsa", 422);
-  }
+  if (!selectedJntServices(config).length) throw new HttpError("Pilih minimal satu layanan J&T", 422);
 }
 
 export function validateJntConfig(config: JntConfig, environment: JntEnvironment) {
@@ -180,7 +181,7 @@ export async function resolveJntDraft(input: z.infer<typeof jntSettingsInput>, d
   const { originSite, originCityCode } = await mappedWarehouse(input.seller.warehouse.districtCode, version, db);
   const config = jntConfigSchema.safeParse({
     endpoints: input.endpoints, credentials: merged, sharedCancellation: input.sharedCancellation,
-    seller: { warehouse: { ...input.seller.warehouse, originSite, originCityCode }, services: input.seller.services },
+    seller: { warehouse: { ...input.seller.warehouse, originSite, originCityCode }, services: input.seller.services, selectedServices: input.seller.selectedServices },
   });
   if (!config.success) throw new HttpError("Lengkapi seluruh kredensial J&T", 422);
   validateJntConfig(config.data, input.environment);

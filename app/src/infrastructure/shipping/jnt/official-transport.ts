@@ -60,8 +60,8 @@ const rateResult = z.object({
   content: z.string().max(65536),
 }).passthrough();
 const lineSchema = z.object({
-  name: z.enum(["EZ", "HBO", "JND", "ECO"]).optional(),
-  productType: z.enum(["EZ", "HBO", "JND", "ECO"]).optional(),
+  name: z.enum(["EZ", "HBO", "JND", "JSD", "ECO"]).optional(),
+  productType: z.enum(["EZ", "HBO", "JND", "JSD", "ECO"]).optional(),
   cost: z.string().regex(/^\d{1,10}$/),
   currency: z.literal("IDR").optional(),
 }).passthrough();
@@ -69,7 +69,7 @@ export interface JntRateRequest {
   originSite: string;
   destinationArea: string;
   weightGram: number;
-  productType: "EZ" | "HBO" | "JND" | "ECO";
+  productType: "EZ" | "HBO" | "JND" | "JSD" | "ECO";
 }
 export async function checkJntRate(input: JntRateRequest, approvedConfig?: JntConfig): Promise<ShippingRate[]> {
   const cfg = approvedConfig ?? await activeJntConfig();
@@ -97,7 +97,7 @@ export async function checkJntRate(input: JntRateRequest, approvedConfig?: JntCo
     const parsed = lineSchema.safeParse(item);
     if (!parsed.success) throw new HttpError("Tarif J&T memiliki format tidak dikenal", 502);
     const service = parsed.data.productType || parsed.data.name;
-    if (!service || service !== input.productType || (parsed.data.name && parsed.data.name !== service)) {
+    if (!service || (parsed.data.name && parsed.data.name !== service)) {
       throw new HttpError("Layanan J&T tidak cocok dengan permintaan", 502);
     }
     const cost = Number(parsed.data.cost);
@@ -132,7 +132,7 @@ export const jntCreateOrderSchema = z.object({
   cod: z.number().int().min(0).max(99999999),
   sendstarttime: z.string().regex(/^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d$/),
   sendendtime: z.string().regex(/^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d$/),
-  expresstype: z.literal("1"),
+  expresstype: z.enum(["1", "EZ", "HBO", "JSD", "JND"]),
   goodsvalue: z.number().int().min(0).max(99999999),
 }).strict();
 const createResult = z.object({
@@ -218,4 +218,21 @@ export async function trackJntOrder(awb: string, expectedOrderId?: string, appro
     time:row.date_time || null,
     note:row.city_name || null,
   }))};
+}
+
+/** Only expose services selected by the owner and actually returned by J&T. */
+export async function availableJntRates(input: Omit<JntRateRequest, "productType">, config: JntConfig) {
+  const { selectedJntServices } = await import("./official-config");
+  const selected = selectedJntServices(config);
+  const outcomes = await Promise.allSettled(selected.map(productType => checkJntRate({ ...input, productType }, config)));
+  const responses = outcomes.flatMap(result => result.status === "fulfilled" ? [result.value] : []);
+  if (!responses.length) throw new HttpError("J&T belum mengembalikan layanan untuk alamat ini. Coba kembali atau hubungi toko.", 502);
+  const byService = new Map<string, ShippingRate>();
+  for (const rate of responses.flat()) {
+    if (!selected.includes(rate.service as typeof selected[number])) continue;
+    const previous = byService.get(rate.service);
+    if (previous && previous.cost !== rate.cost) throw new HttpError("J&T mengembalikan tarif yang tidak konsisten. Coba kembali.", 502);
+    byService.set(rate.service, rate);
+  }
+  return selected.flatMap(service => byService.has(service) ? [byService.get(service)!] : []);
 }

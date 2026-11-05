@@ -46,6 +46,15 @@ export function AdminNav({ permissions, canManageJnt = false }: { permissions: s
   return (
     <nav aria-label="Navigasi admin" className="flex flex-col gap-1 px-4 py-2">
       {visible.map((item, index) => {
+        if (item.href === "/admin/integrations/jnt") return null;
+        if (item.href === "/admin/shipping") return <details key={item.href} open={pathname.startsWith("/admin/shipping") || pathname.startsWith("/admin/integrations/jnt")} className="group">
+          <summary className="flex min-h-11 cursor-pointer list-none items-center gap-3 px-4 py-3 text-sm font-semibold"><Truck size={19} />Pengiriman<ChevronRight size={15} className="ml-auto group-open:rotate-90" /></summary>
+          {[{ href: "/admin/shipping", label: "Pengiriman Manual" }, ...(canManageJnt ? [{ href: "/admin/integrations/jnt", label: "API J&T Express" }] : [])].map(child =>
+            <Link key={child.href} href={child.href} aria-current={pathname === child.href ? "page" : undefined}
+              className={cn("my-1 flex min-h-10 items-center gap-3 rounded-lg px-5 text-sm", pathname === child.href ? "bg-primary font-semibold text-white" : "text-zinc-700 hover:bg-zinc-100")}>
+              <span aria-hidden="true">•</span>{child.label}
+            </Link>)}
+        </details>;
         const active = activeLink(pathname, item.href, "exact" in item ? item.exact : false);
         const Icon = item.icon;
         return (

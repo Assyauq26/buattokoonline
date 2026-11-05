@@ -6,7 +6,6 @@ import { HttpError } from "@/lib/http-error";
 import { writeAudit } from "@/modules/audit/audit.service";
 import { activeJntConfig, decryptJntConfig, jntEnvironment, readJntSettings, requireCarrierEnvironment, requireEz, validateJntConfig, type JntEnvironment } from "@/infrastructure/shipping/jnt/official-config";
 import { mappedWarehouse, readActiveJntRelease } from "@/infrastructure/shipping/jnt/verified-mapping";
-import { validTariffProof } from "@/infrastructure/shipping/jnt/tariff-proof";
 import { flatShippingRate } from "./shipping-settings-input";
 
 export async function readShippingSettings(db: Prisma.TransactionClient = prisma) {
@@ -47,8 +46,8 @@ async function jntChecklist(environment: JntEnvironment, db: Prisma.TransactionC
     return saved;
   });
   await check("Environment dan persetujuan operator", () => requireCarrierEnvironment(environment));
-  await check("Persetujuan layanan EZ", () => {
-    if (!state) throw new HttpError("Lengkapi konfigurasi layanan EZ", 422);
+  await check("Pilihan layanan J&T", () => {
+    if (!state) throw new HttpError("Pilih layanan J&T", 422);
     requireEz(state.config);
   });
   const warehouse = await check("Mapping resmi aktif dan gudang pengirim", async () => {
@@ -60,11 +59,6 @@ async function jntChecklist(environment: JntEnvironment, db: Prisma.TransactionC
       throw new HttpError("Unggah dan aktifkan mapping dengan lima kode J&T yang terpisah", 422);
     }
     return { ...origin, releaseStamp };
-  });
-  await check("Cek tarif EZ untuk konfigurasi tersimpan", () => {
-    if (!warehouse || !state || !validTariffProof(state.tariffProof, state.config, environment, warehouse.releaseStamp)) {
-      throw new HttpError("Uji tarif draft dengan mapping aktif, lalu simpan hasilnya. Hasil berlaku 24 jam untuk aktivasi.", 422);
-    }
   });
   return { checks, row, warehouse };
 }

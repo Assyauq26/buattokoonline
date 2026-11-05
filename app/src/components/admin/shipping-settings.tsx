@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import Link from "next/link";
 import { maxManualShippingCost } from "@/modules/shipping/shipping-settings-input";
 
 export async function shippingRequest<T>(url: string, options?: RequestInit): Promise<T> {
@@ -23,7 +22,6 @@ export type ShippingStatus = {
 
 export function ShippingSettings({ manualFlat, activeEnvironment }: Pick<ShippingStatus, "manualFlat" | "activeEnvironment">) {
   const [active, setActive] = useState(activeEnvironment);
-  const [choice, setChoice] = useState(activeEnvironment ? "jnt" : "manual");
   const [cost, setCost] = useState(manualFlat?.toString() ?? "");
   const [configured, setConfigured] = useState(manualFlat !== null);
   const [notice, setNotice] = useState("");
@@ -46,24 +44,37 @@ export function ShippingSettings({ manualFlat, activeEnvironment }: Pick<Shippin
   }
 
   return <form onSubmit={save} className="space-y-4 rounded-2xl bg-white p-4 shadow-sm sm:p-6">
-    <h2 className="text-lg font-semibold">Pengaturan Pengiriman</h2>
+    <div className="flex items-center justify-between gap-3"><h2 className="text-lg font-semibold">Pengiriman Manual</h2>
+      <button type="button" role="switch" aria-label="Aktifkan Pengiriman Manual" aria-checked={!active && configured} disabled={busy}
+        onClick={async () => {
+          if (!active && configured) {
+            setBusy(true);
+            try {
+              const saved = await shippingRequest<ShippingStatus>("/api/v1/admin/shipping/settings", shippingJson("PUT", { method: "jnt", environment: activeEnvironment || "production" }));
+              setActive(saved.activeEnvironment); setNotice("Pengiriman Manual dinonaktifkan; J&T aktif.");
+            } catch (error) { setNotice("Simpan konfigurasi J&T yang siap digunakan terlebih dahulu. " + (error as Error).message); }
+            finally { setBusy(false); }
+            return;
+          }
+          if (!/^\d+$/.test(cost)) { setNotice("Isi tarif Manual terlebih dahulu."); return; }
+          setBusy(true);
+          try {
+            const saved = await shippingRequest<ShippingStatus>("/api/v1/admin/shipping/settings", shippingJson("PUT", { method: "manual", cost: Number(cost) }));
+            setActive(saved.activeEnvironment); setConfigured(true); setNotice("Pengiriman Manual aktif.");
+          } catch (error) { setNotice((error as Error).message); } finally { setBusy(false); }
+        }} className={"relative h-6 w-11 rounded-full " + (!active && configured ? "bg-red-600" : "bg-zinc-300")}>
+        <span className={"absolute top-1 h-4 w-4 rounded-full bg-white " + (!active && configured ? "right-1" : "left-1")} />
+      </button></div>
     <p className="text-sm">Checkout aktif menggunakan {active ? "J&T Express · " + active : configured ? "Pengiriman Manual" : "Manual · tarif belum ditetapkan"}.</p>
     <fieldset disabled={busy} className="space-y-4">
-      <legend className="text-sm font-semibold">Metode yang ingin diatur</legend>
-      <div className="grid gap-3 sm:grid-cols-2">
-        {[["manual", "Pengiriman Manual"], ["jnt", "J&T Express API"]].map(([value, label]) =>
-          <label key={value} className="flex min-h-12 items-center gap-3 rounded-xl bg-zinc-100 px-4">
-            <input type="radio" name="shipping-method" checked={choice === value} onChange={() => setChoice(value)} />{label}
-          </label>)}
-      </div>
-      {choice === "manual" ? <>
+      {<>
         <label className="block text-sm font-semibold">Ongkir flat per pesanan (Rp)
           <input required inputMode="numeric" pattern="[0-9]+" maxLength={9} value={cost}
             onChange={event => setCost(event.target.value)} className="mt-1 block h-11 w-full max-w-xs rounded-xl bg-zinc-100 px-3" />
         </label>
         <p className="text-sm text-zinc-600">Ongkir dikenakan sekali per pesanan. Masukkan 0 untuk gratis ongkir.</p>
         <button className="min-h-11 rounded-xl bg-black px-4 text-sm font-semibold text-white" type="submit">Simpan dan aktifkan Manual</button>
-      </> : <Link href="/admin/integrations/jnt" className="inline-block text-sm font-semibold underline">Buka konfigurasi J&T Express API</Link>}
+      </>}
     </fieldset>
     {notice && <p role="status" className="text-sm">{notice}</p>}
   </form>;

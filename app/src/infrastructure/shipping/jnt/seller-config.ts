@@ -15,14 +15,15 @@ const warehouseContact = z.object({
     phone: z.string().regex(/^\+62\d{8,12}$/), address: z.string().trim().min(4).max(200),
 });
 const districtCode = z.string().regex(/^\d{2}\.\d{2}\.\d{2}$/);
+const selectedServices = z.array(z.enum(["EZ", "HBO", "JND", "JSD"])).min(1).max(4).refine(items => new Set(items).size === items.length).optional();
 const services = z.array(z.object({ code: z.literal("EZ"), verificationReference: z.string().trim().min(4).max(160), validUntil: z.string().datetime() }).strict()).max(1);
-export const sellerDraftSchema = z.object({ warehouse: warehouseContact.extend({ districtCode }).strict(), services }).strict();
+export const sellerDraftSchema = z.object({ warehouse: warehouseContact.extend({ districtCode }).strict(), services, selectedServices }).strict();
 export const sellerConfigurationSchema = z.object({
   warehouse: warehouseContact.extend({
     districtCode: districtCode.optional(),
     originSite: z.string().regex(/^[A-Z][A-Z0-9 -]{1,79}$/),
     originCityCode: z.string().regex(/^[A-Z0-9]{3}$/),
   }).strict(),
-  services,
+  services, selectedServices,
 }).strict();
 export type SellerConfiguration = z.infer<typeof sellerConfigurationSchema>;

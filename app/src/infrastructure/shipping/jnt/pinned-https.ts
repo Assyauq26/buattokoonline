@@ -11,7 +11,7 @@ export function isPublicAddress(address: string) {
   } catch { return false; }
 }
 
-export async function postPinnedJnt(url: string, body: string, headers: Record<string, string>) {
+export async function postPinnedJnt(url: string, body: string, headers: Record<string, string>, method: "POST" | "HEAD" = "POST") {
   const target = new URL(url);
   const signal = AbortSignal.timeout(6000);
   if (target.protocol !== "https:" || target.username || target.password || target.port) throw new Error("Invalid carrier URL");
@@ -24,12 +24,12 @@ export async function postPinnedJnt(url: string, body: string, headers: Record<s
   const pinned = addresses.find(entry => entry.family === 4) ?? addresses[0];
   return new Promise<Response>((resolve, reject) => {
     const req = request(target, {
-      method: "POST", headers: { ...headers, "Content-Length": String(Buffer.byteLength(body)), "Accept-Encoding": "identity" },
+      method, headers: { ...headers, "Content-Length": String(Buffer.byteLength(body)), "Accept-Encoding": "identity" },
       signal, agent: false, family: pinned.family,
       lookup: (_host, _options, callback) => callback(null, pinned.address, pinned.family),
     }, res => {
       const status = res.statusCode ?? 502;
-      if (status === 204 || status === 304) {
+      if (method === "HEAD" || status === 204 || status === 304) {
         res.resume();
         resolve(new Response(null, { status }));
         return;

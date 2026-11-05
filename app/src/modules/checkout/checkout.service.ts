@@ -9,7 +9,7 @@ import { computeDiscount } from "@/modules/promotions/coupon.service";
 import { getPaymentProvider } from "@/infrastructure/payments";
 import { approvedRevision, readShippingSettings } from "@/modules/shipping/shipping-settings.service";
 import { flatShippingRate } from "@/modules/shipping/shipping-settings-input";
-import { checkJntRate } from "@/infrastructure/shipping/jnt/official-transport";
+import { availableJntRates } from "@/infrastructure/shipping/jnt/official-transport";
 import { requireEz } from "@/infrastructure/shipping/jnt/official-config";
 import { mappedDestination } from "@/infrastructure/shipping/jnt/verified-mapping";
 import { checkoutLinesSchema, checkoutQuoteSchema, checkoutSignature, type CheckoutLines, type CheckoutQuoteConfirmation } from "./checkout.validation";
@@ -72,10 +72,10 @@ async function checkoutShipping(userId: string, cart: { lines: Array<CheckoutLin
     const { config, mappingVersion } = approvedRevision(settings.activeJnt);
     requireEz(config);
     const mapping = await mappedDestination(location.districtCode, mappingVersion);
-    rates = (await checkJntRate({ originSite: config.seller!.warehouse.originSite, destinationArea: mapping.destAreaCode,
-      weightGram: inquiry.weightGram, productType: "EZ" }, config))
+    rates = (await availableJntRates({ originSite: config.seller!.warehouse.originSite, destinationArea: mapping.destAreaCode,
+      weightGram: inquiry.weightGram }, config))
       .map(rate => ({ ...rate, reference: mappingVersion }));
-    if (rates.length !== 1) throw new HttpError("J&T belum mengembalikan tarif EZ untuk alamat ini. Coba kembali atau hubungi toko.", 502);
+    if (!rates.length) throw new HttpError("J&T belum mengembalikan layanan yang dipilih untuk alamat ini. Coba kembali atau hubungi toko.", 502);
   } else {
     if (settings.manualFlat === null) throw new HttpError("Toko belum menetapkan ongkir Manual. Hubungi toko.", 503);
     rates = [flatShippingRate(settings.manualFlat)];

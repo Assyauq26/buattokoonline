@@ -82,8 +82,8 @@ export async function createJntAwb(orderId: string, actorId: string, input: {pic
       throw new HttpError("Request J&T sebelumnya belum direkonsiliasi; jangan buat resi ganda",409);
     }
     if(order.status!=="PACKED"||order.paymentStatus!=="PAID"||order.payment?.status!=="PAID"||
-       order.shippingCourier!=="J&T Express"||order.shippingMode!=="official"||order.shippingService!=="EZ") {
-      throw new HttpError("Resi resmi hanya untuk order EZ yang lunas, dikemas, dan bertarif resmi",409);
+       order.shippingCourier!=="J&T Express"||order.shippingMode!=="official"||!["EZ","HBO","JND","JSD"].includes(order.shippingService || "")) {
+      throw new HttpError("Resi resmi hanya untuk order J&T yang lunas, dikemas, dan bertarif resmi",409);
     }
     if(!order.address?.districtCode || !order.address.villageCode || !order.address.phone ||
        !order.address.recipientName || !order.address.postalCode)throw new HttpError("Alamat pesanan belum lengkap",422);
@@ -108,7 +108,7 @@ export async function createJntAwb(orderId: string, actorId: string, input: {pic
       goodsdesc:"BARANG",servicetype:1 as const,insurance:0,
       orderdate:wib(new Date()),item_name:text(order.items[0].productName.slice(0,50),50),
       cod:0,sendstarttime:window.start,sendendtime:window.end,
-      expresstype:"1" as const,goodsvalue:order.subtotal,
+      expresstype:order.shippingService as "EZ" | "HBO" | "JND" | "JSD",goodsvalue:order.subtotal,
     };
     // Reject all deterministic request errors BEFORE reserving an external dispatch intent.
     if(!jntCreateOrderSchema.safeParse(values).success)throw new HttpError("Data penerima/paket tidak memenuhi format resmi Create Order J&T",422);
@@ -118,7 +118,7 @@ export async function createJntAwb(orderId: string, actorId: string, input: {pic
       state:"DISPATCHED",requestedBy:actorId,
     }});
     await writeAudit({userId:actorId,action:"jnt.order.dispatch",entity:"Order",entityId:orderId,
-      meta:{externalOrderId:values.orderid,service:"EZ",mode:environment}},tx);
+      meta:{externalOrderId:values.orderid,service:order.shippingService,mode:environment}},tx);
     return {existing:false as const,values,config};
   },{timeout:18000});
   if(prepared.existing)return {awb:prepared.awb,replayed:true};
@@ -136,7 +136,7 @@ export async function createJntAwb(orderId: string, actorId: string, input: {pic
       const request=await tx.jntShipmentRequest.findUniqueOrThrow({where:{orderId}});
       if(request.state!=="DISPATCHED"||request.externalOrderId!==result.orderId)throw new HttpError("State pengiriman berubah; perlu rekonsiliasi",409);
       await tx.shipment.create({data:{
-        orderId,provider:"jnt",courier:"J&T Express",service:"EZ",
+        orderId,provider:"jnt",courier:"J&T Express",service:prepared.values.expresstype,
         cost:(await tx.order.findUniqueOrThrow({where:{id:orderId},select:{shippingCost:true}})).shippingCost,
         trackingNumber:result.awb,status:"PENDING",notes:"AWB dibuat; belum bukti serah-terima",
       }});

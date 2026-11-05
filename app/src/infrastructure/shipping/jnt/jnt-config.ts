@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { locationSchema } from "@/modules/regions/region.validation";
-const service = z.enum(["EZ", "HBO", "JND", "ECO"]);
+const service = z.enum(["EZ", "HBO", "JND", "JSD", "ECO"]);
 const approval = { reference: z.string().min(4).max(200), approvedBy: z.string().min(2).max(100), validUntil: z.string().datetime() };
 /** Operator/admin supplied configuration, never sample rates or inferred carrier mappings. */
 export const manualConfigSchema = z.object({
