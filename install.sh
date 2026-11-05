@@ -37,6 +37,8 @@ apt-get update
 apt-get install -y ca-certificates curl openssl rsync dnsutils python3
 if ! command -v docker >/dev/null; then apt-get install -y docker.io docker-compose-v2; fi
 docker compose version >/dev/null
+if ! docker buildx version >/dev/null 2>&1; then apt-get install -y docker-buildx; fi
+docker buildx version >/dev/null
 systemctl enable --now docker
 if [[ ! -f /etc/single-store/setup.json ]]; then
   [[ -z $(docker volume ls -q --filter name=single-store_) ]] || { echo 'Volume toko existing ditemukan; data tidak ditimpa.'; exit 1; }

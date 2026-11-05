@@ -8,9 +8,10 @@ import core
 
 os.umask(0o077)
 source = Path(sys.argv[1]).resolve()
-local = sys.argv[2:] == ['--local-test']
-if sys.argv[2:] not in [[], ['--local-test']]:
-    raise SystemExit('Gunakan sudo bash install.sh [--local-test]')
+flags = sys.argv[2:]
+local = '--local-test' in flags
+if len(flags) != len(set(flags)) or any(flag not in ['--local-test', '--resume-source'] for flag in flags):
+    raise SystemExit('Gunakan sudo bash install.sh [--local-test] [--resume-source]')
 # Trust only the explicitly selected clone for this invocation, including when root
 # was launched through systemd and does not inherit sudo's SUDO_UID metadata.
 sha = core.run(['git', '-c', 'safe.directory=' + str(source), '-C', source, 'rev-parse', 'HEAD'])
@@ -25,8 +26,14 @@ os.chown(media, 1000, 1000)
 (core.ROOT / 'manager').mkdir(mode=0o700, exist_ok=True)
 if core.STATE.exists():
     state = core.read_json(core.STATE)
-    if state['local_test'] != local or state['source_sha'] != sha:
+    if state['local_test'] != local:
         raise SystemExit('Lanjutkan menggunakan mode dan exact Git SHA instalasi pertama. Data tidak diubah.')
+    if state['source_sha'] != sha:
+        if '--resume-source' not in flags or state.get('bootstrap_started') or state.get('built'):
+            raise SystemExit('SHA berubah. Sebelum finalisasi dimulai, root dapat memakai --resume-source setelah review source baru. Setelah itu gunakan SHA awal.')
+        state.setdefault('source_history', []).append(state['source_sha'])
+        state['source_sha'] = sha
+        core.atomic_json(core.STATE, state)
 else:
     token = secrets.token_urlsafe(32)
     (core.CONFIG / 'setup-token').write_text(token)

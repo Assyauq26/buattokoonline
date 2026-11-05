@@ -30,6 +30,12 @@ Jalankan installer dari checkout SHA dan mode yang sama untuk melanjutkan. Tauta
 setup root-only dapat dibuka melalui SSH tunnel. Periksa host key SSH melalui
 console penyedia VPS sebelum mempercayai koneksi pertama.
 
+Jika source perlu diperbaiki **sebelum finalisasi/build/admin dimulai**, root dapat
+mereview checkout baru lalu menjalankan `sudo bash install.sh --resume-source`.
+SHA lama disimpan dalam riwayat progres; brand, secret dan verifikasi tidak direset.
+Flag ini ditolak setelah finalisasi dimulai. Jangan menggunakannya untuk mengubah
+kode toko existing; gunakan updater release untuk toko yang sudah terpasang.
+
 Gangguan saat DNS/HTTPS dapat diperiksa ulang tanpa membuat ulang secret. Build
 yang terputus dijalankan ulang dengan cache. Jika transaksi bootstrap sudah commit,
 recovery mendeteksi admin existing dan hanya melanjutkan finalisasi. Password lama
