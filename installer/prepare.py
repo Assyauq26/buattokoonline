@@ -11,6 +11,9 @@ source = Path(sys.argv[1]).resolve()
 local = sys.argv[2:] == ['--local-test']
 if sys.argv[2:] not in [[], ['--local-test']]:
     raise SystemExit('Gunakan sudo bash install.sh [--local-test]')
+# Trust only the explicitly selected clone for this invocation, including when root
+# was launched through systemd and does not inherit sudo's SUDO_UID metadata.
+sha = core.run(['git', '-c', 'safe.directory=' + str(source), '-C', source, 'rev-parse', 'HEAD'])
 for path in [core.CONFIG, core.ROOT, core.DATA]:
     if path.is_symlink():
         raise SystemExit('Direktori instalasi tidak boleh berupa symlink.')
@@ -20,7 +23,6 @@ media.mkdir(mode=0o700, exist_ok=True)
 os.chown(media, 1000, 1000)
 (core.ROOT / 'deploy').mkdir(exist_ok=True)
 (core.ROOT / 'manager').mkdir(mode=0o700, exist_ok=True)
-sha = core.run(['git', '-C', source, 'rev-parse', 'HEAD'])
 if core.STATE.exists():
     state = core.read_json(core.STATE)
     if state['local_test'] != local or state['source_sha'] != sha:

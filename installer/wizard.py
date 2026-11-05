@@ -42,6 +42,8 @@ def submit(task):
             state['message'] = str(error) if isinstance(error, core.StoreError) else 'Proses terhenti. Jalankan Periksa Lagi atau lanjutkan finalisasi; data tidak dihapus.'
         finally:
             state['busy'] = False
+            if state.get('message', '').startswith('Sedang memproses'):
+                state['message'] = ''
             core.atomic_json(core.STATE, state)
     pool.submit(work)
 
