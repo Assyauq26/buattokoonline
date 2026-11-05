@@ -1,0 +1,103 @@
+{
+  "target": "43.173.41.24",
+  "domain": "uji.hubify.web.id",
+  "checks": [
+    {
+      "name": "Public DNS A/AAAA and real public certificate/hostname/server challenge verified",
+      "status": "PASS"
+    },
+    {
+      "name": "Actual 2 GB Tencent installation and migrations completed; initial business data/media/carrier credentials empty",
+      "status": "PASS"
+    },
+    {
+      "name": "New brand applied to storefront/login/metadata; administrator login works",
+      "status": "PASS"
+    },
+    {
+      "name": "Product/photo upload, publication and stock work on Tencent 2 GB",
+      "status": "PASS"
+    },
+    {
+      "name": "After restart: account, brand, product, stock and decoded photo persisted; public catalog verified after its 30-second data cache refreshed",
+      "status": "PASS"
+    }
+  ],
+  "source_sha": "9fbf6dae69db3b82a82752c98ee72d0df748c184",
+  "domain_evidence": {
+    "time": 1793847246,
+    "mode": "PUBLIC",
+    "hosts": {
+      "uji.hubify.web.id": [
+        {
+          "resolver": "1.1.1.1",
+          "A": [
+            "43.173.41.24"
+          ],
+          "AAAA": []
+        },
+        {
+          "resolver": "8.8.8.8",
+          "A": [
+            "43.173.41.24"
+          ],
+          "AAAA": []
+        }
+      ]
+    },
+    "https": "PUBLIC_CERTIFICATE_VALID",
+    "reachability": "HTTP/HTTPS hostname and server challenge verified from the VPS; external firewall vantage still requires an independent probe."
+  },
+  "certificate": {
+    "issuer": {
+      "C": "US",
+      "O": "Let's Encrypt",
+      "CN": "YE2"
+    },
+    "subject": {
+      "CN": "uji.hubify.web.id"
+    },
+    "valid_from": "Nov  5 01:48:50 2026 GMT",
+    "valid_to": "Feb  3 01:48:49 2027 GMT",
+    "fingerprint256": "1F:A9:3F:15:92:B1:31:6F:CF:39:03:19:6C:C4:47:68:19:62:D1:7C:9E:62:C0:34:B5:6C:E7:36:72:03:2E:22",
+    "authorized": true
+  },
+  "resources": {
+    "started_at": 1793846019.5777519,
+    "samples": 1746,
+    "peak_used_ram_kib": 1767768,
+    "peak_swap_used_kib": 448924,
+    "peak_node_rss_kib": 927948,
+    "peak_node_hwm_kib": 931252,
+    "mem_total_kib": 1982104,
+    "swap_total_kib": 2035708,
+    "vcpus": 2,
+    "elapsed_seconds": 1753.4,
+    "oom_kill_delta": 0,
+    "pswpin_delta": 44432,
+    "pswpout_delta": 114167,
+    "pgmajfault_delta": 32186,
+    "build_seconds": 234.4,
+    "installed": true
+  },
+  "runtime": {
+    "process_status": [
+      "Name:\tnext-server (v1",
+      "VmHWM:\t  222300 kB",
+      "VmRSS:\t  222300 kB"
+    ],
+    "heap_limit_mib": 536,
+    "node_options": "--max-old-space-size=512"
+  },
+  "setup_revoked": true,
+  "notes": [
+    "The original browser also verified admin product count 1 and stock 7 after restart; its subsequent 5-second photo wait met the still-cached empty storefront. This follow-up verifies the refreshed public catalog and decoded image.",
+    "No plaintext administrator password or browser session has been saved."
+  ],
+  "external_http": {
+    "status": 200,
+    "server_challenge_match": true,
+    "source": "External client, TCP port 80, authorized VPS address"
+  },
+  "updater_check": "No stable GitHub Release exists yet; installed 1.0.0 reported without modifying data. Production mode rejects CI fixtures."
+}

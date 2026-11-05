@@ -31,3 +31,51 @@ gunakan VPS/domain disposable yang diotorisasi, verifikasi host key dari sumber
 tepercaya, catat A/AAAA dua resolver, challenge HTTP/HTTPS dan sertifikat yang
 divalidasi trust store publik. Jangan memakai gheverhan.store atau kredensial J&T
 Production. Akses atau DNS publik yang belum tersedia dilaporkan sebagai blocker.
+
+## Bukti pengujian 5 November 2026
+
+Pengujian aplikasi di Tencent dan guest 2 GB berikut menggunakan source
+`9fbf6dae69db3b82a82752c98ee72d0df748c184`. Perubahan berikutnya pada CI/CLI dicatat
+pada PR; nilai berikut merupakan hasil pengukuran, bukan estimasi kebutuhan RAM.
+
+| Ukuran | Tencent 43.173.41.24 | Guest QEMU/KVM |
+| --- | ---: | ---: |
+| vCPU | 2 | 2 |
+| MemTotal | 1982104 KiB | 2014844 KiB |
+| SwapTotal | 2035708 KiB | 2097148 KiB |
+| Peak RAM (total − available) | 1767768 KiB | 1871780 KiB |
+| Peak swap terpakai | 448924 KiB | 424732 KiB |
+| Build berhasil | 234,4 detik | 195,6 detik |
+| Delta OOM kill | 0 | 0 |
+
+Runtime Tencent terukur 222300 KiB RSS/HWM pada akhir pengujian. Heap runtime
+512 MiB dan heap build 1024 MiB berhasil menjalankan skenario ini; build Node HWM
+Tencent mencapai 931252 KiB. Nilai tersebut memvalidasi profil minimal untuk beban
+uji ini, bukan janji kapasitas tak terbatas untuk semua katalog/traffic.
+
+Tencent: DNS dua resolver cocok, tanpa AAAA konflik, sertifikat publik Let's Encrypt
+YE2 untuk `uji.hubify.web.id` tervalidasi dengan trust store/hostname, serta challenge
+port 80 dan 443 terbukti dari klien di luar VPS. Admin dibuat setelah verifikasi,
+katalog/pelanggan/transaksi/media awal kosong, login serta produk/foto berhasil,
+dan akun/brand/stok/media bertahan sesudah restart. Listing memakai cache data
+30 detik; pemeriksaan publik setelah restart mencakup revalidasi cache dan decode
+foto, bukan hanya keberadaan file. Setup pertama telah dicabut.
+
+Guest 2 GB juga lulus dua versi disposable: update additive ke 1.0.1, restore dump
+ke database pemeriksaan serta ekstraksi media/config, kemudian kegagalan aktivasi
+1.0.2 memulihkan kode/container 1.0.1. Skema additive yang sudah berjalan tetap ada;
+tidak ada rollback database penuh yang diklaim.
+
+- [Laporan Tencent dan sertifikat publik](evidence/tencent-2gb.json)
+- [Pengukuran guest 2 GB](evidence/vm2gb-resources.json)
+- [Wizard: nama toko](evidence/wizard-1-name.png)
+- [Wizard: domain publik](evidence/wizard-2-public-domain.png)
+- [Wizard: buat admin](evidence/wizard-3-admin.png)
+- [Wizard: selesai](evidence/wizard-4-complete.png)
+- [Dashboard awal kosong](evidence/admin-empty.png)
+- [Storefront sesudah restart](evidence/storefront-after-restart.png)
+
+Paket release resmi belum diterbitkan. CLI produksi menampilkan status tersebut
+dan menolak paket fixture CI. Pengujian updater fixture dibatasi ke instalasi
+LOCAL_TEST di CI; tidak diaktifkan pada Tencent. Data yang tersisa di VPS uji
+adalah satu produk/foto sintetis dan satu admin uji, bukan data toko sumber.

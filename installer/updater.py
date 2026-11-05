@@ -14,6 +14,7 @@ import tarfile
 import tempfile
 import time
 import urllib.request
+import urllib.error
 import core
 
 API = 'https://api.github.com/repos/' + core.REPO
@@ -59,7 +60,14 @@ def official_release(version=None):
         raise core.StoreError('Identitas repository tidak cocok.')
     if version:
         version_tuple(version)
-    release = get(API + ('/releases/tags/v' + version if version else '/releases/latest'))
+    try:
+        release = get(API + ('/releases/tags/v' + version if version else '/releases/latest'))
+    except urllib.error.HTTPError as error:
+        if error.code == 404 and not version:
+            return None
+        if error.code == 404:
+            raise core.StoreError('GitHub Release stabil untuk versi tersebut belum tersedia.')
+        raise
     if release.get('draft') or release.get('prerelease') or not release['tag_name'].startswith('v'):
         raise core.StoreError('Hanya GitHub Release stabil yang diizinkan.')
     version = release['tag_name'][1:]
@@ -312,6 +320,9 @@ def main():
         release = fixture['release']
     else:
         release = official_release(args.version)
+    if release is None:
+        print('Belum ada GitHub Release stabil yang tersedia.')
+        return
     print('Release tersedia: ' + release['version'])
     print(re.sub(r'[\x00-\x08\x0b-\x1f\x7f]', '', release['notes'])[:20000])
     if version_tuple(release['version']) <= version_tuple(installed['version']):

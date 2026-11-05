@@ -130,7 +130,11 @@ try {
   await page.screenshot({path:'test-results/admin-after-restart.png',fullPage:true});
   assert.equal(sql('SELECT count(*) FROM "Product";'),'1');assert.equal(sql('SELECT "onHand" FROM "Inventory";'),'7');
   assert.equal((await context.request.get(base+imagePath)).status(),200);
-  await page.goto(base+'/');await expect(page).toHaveTitle('Toko Melati');await expect(page.locator('body')).toContainText('Produk Uji Mawar');
+  await expect(async()=>{
+    await page.goto(base+'/');
+    await expect(page).toHaveTitle('Toko Melati');
+    await expect(page.locator('body')).toContainText('Produk Uji Mawar');
+  }).toPass({timeout:60000,intervals:[1000,2000,5000]});
   await page.setViewportSize({width:390,height:844});
   const cardImage=page.getByTestId('product-card-produk-uji-mawar').locator('img');
   await expect(cardImage).toBeVisible();

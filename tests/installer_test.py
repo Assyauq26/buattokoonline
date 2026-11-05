@@ -7,6 +7,7 @@ import sys
 import tarfile
 import tempfile
 import unittest
+import urllib.error
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'installer'))
@@ -15,6 +16,16 @@ import updater
 
 
 class InstallerTests(unittest.TestCase):
+    def test_official_release_identity_and_missing_release(self):
+        identity={'id':core.REPO_ID,'full_name':core.REPO}
+        missing=urllib.error.HTTPError(updater.API+'/releases/latest',404,'Not Found',{},None)
+        with patch.object(updater,'get',side_effect=[identity,missing]):
+            self.assertIsNone(updater.official_release())
+        with patch.object(updater,'get',return_value={'id':1,'full_name':core.REPO}):
+            with self.assertRaises(core.StoreError):updater.official_release()
+        with patch.object(updater,'get',side_effect=[identity,{'draft':True,'prerelease':False,'tag_name':'v1.0.1'}]):
+            with self.assertRaises(core.StoreError):updater.official_release()
+
     def test_dns_production_states(self):
         ips = {'ipv4': '8.8.4.4', 'ipv6': None}
         def answers(a, aaaa=None):
