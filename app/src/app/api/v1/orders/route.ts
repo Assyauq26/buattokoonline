@@ -6,13 +6,14 @@ import { checkoutLinesSchema, checkoutQuoteSchema } from "@/modules/checkout/che
 import { createOrder } from "@/modules/checkout/checkout.service";
 import { listOrdersForUser } from "@/modules/orders/orders.service";
 import { addressSchema } from "@/modules/regions/region.validation";
+import { shippingCourierSchema } from "@/modules/shipping/shipping-settings-input";
 
 export const dynamic = "force-dynamic";
 
 const schema = z.object({
   intentId: checkoutIntentId.optional(),
   address: addressSchema.extend({ city: z.string().optional().default(""), province: z.string().optional().default("") }),
-  shipping: z.object({ courier: z.literal("J&T Express"), service: z.string().max(30), cost: z.number().int().nonnegative(), quoteToken: z.string().min(1).max(4096) }),
+  shipping: z.object({ courier: shippingCourierSchema, service: z.string().max(30), cost: z.number().int().nonnegative(), quoteToken: z.string().min(1).max(4096) }),
   bankAccountId: z.string().min(1),
   couponCode: z.string().optional(),
   note: z.string().optional(),

@@ -6,7 +6,9 @@ import { HttpError } from "@/lib/response";
 import type { AuthUser } from "@/lib/auth/session";
 import { writeAudit } from "@/modules/audit/audit.service";
 import type { Prisma } from "@prisma/client";
-import { assertJntScope, installationBinding, localJntSettings, mayManageLocalJnt, sellerConfigurationSchema } from "./seller-config";
+import { assertJntScope, installationBinding, localJntSettings, mayManageLocalJnt, sellerConfigurationSchema, sellerDraftSchema } from "./seller-config";
+import { mappedWarehouse, readActiveJntRelease } from "./verified-mapping";
+import { validTariffProof } from "./tariff-proof";
 
 export const jntEnvironment = z.enum(["sandbox", "production"]);
 export type JntEnvironment = z.infer<typeof jntEnvironment>;
@@ -25,18 +27,22 @@ const credentials = z.object({
   tariffKey: z.string().min(1).max(300),
   trackingUsername: z.string().trim().min(1).max(120),
   trackingPassword: z.string().min(1).max(300),
+  cancellationUsername: z.string().trim().min(1).max(120).optional(),
+  cancellationApiKey: z.string().trim().min(1).max(200).optional(),
+  cancellationKey: z.string().min(1).max(300).optional(),
 }).strict();
-export const jntConfigSchema = z.object({ endpoints: urls, credentials, seller: sellerConfigurationSchema.optional() }).strict();
+export const jntConfigSchema = z.object({ endpoints: urls, credentials, seller: sellerConfigurationSchema.optional(), sharedCancellation: z.boolean().optional() }).strict();
 export type JntConfig = z.infer<typeof jntConfigSchema>;
 export type JntCredentialKey = keyof JntConfig["credentials"];
 export const credentialKeys = [
   "orderUsername", "orderApiKey", "orderKey", "tariffCustomer", "tariffKey",
-  "trackingUsername", "trackingPassword",
+  "trackingUsername", "trackingPassword", "cancellationUsername", "cancellationApiKey", "cancellationKey",
 ] as const;
 
 export const jntSettingsInput = z.object({
   environment: jntEnvironment,
-  enabled: z.boolean(),
+  sharedCancellation: z.boolean(),
+  tariffProof: z.string().max(100).optional(),
   endpoints: urls,
   // Blank means preserve existing secret, never erase it by accident.
   credentials: z.object({
@@ -47,8 +53,11 @@ export const jntSettingsInput = z.object({
     tariffKey: z.string().max(300).optional(),
     trackingUsername: z.string().max(120).optional(),
     trackingPassword: z.string().max(300).optional(),
+    cancellationUsername: z.string().max(120).optional(),
+    cancellationApiKey: z.string().max(200).optional(),
+    cancellationKey: z.string().max(300).optional(),
   }).strict(),
-  seller: sellerConfigurationSchema.optional(),
+  seller: sellerDraftSchema,
 }).strict();
 
 const validPaths: Record<keyof JntConfig["endpoints"], string> = {
@@ -57,7 +66,7 @@ const validPaths: Record<keyof JntConfig["endpoints"], string> = {
   tariff: "/jandt_track/inquiry.action",
   tracking: "/jandt_track/track/trackAction!tracking.action",
 };
-function validateEndpoint(kind: keyof JntConfig["endpoints"], raw: string, env: JntEnvironment) {
+export function validateEndpoint(kind: keyof JntConfig["endpoints"], raw: string, env: JntEnvironment) {
   let u: URL;
   try { u = new URL(raw); }
   catch { throw new HttpError("URL endpoint J&T tidak valid", 422); }
@@ -82,8 +91,11 @@ function validateEndpoint(kind: keyof JntConfig["endpoints"], raw: string, env: 
     u.hostname === "secure-jk.jet.co.id" &&
     u.pathname === "/jandt-order-web/track/trackAction!tracking.action";
   const approvedDefault = u.hostname === hosts[env][kind] && u.pathname === validPaths[kind];
-  // Strict host/path allowlist: an operator's input must never become an SSRF primitive.
-  if (u.protocol !== "https:" || (!approvedDefault && !approvedProductionTracking) ||
+  let reviewed: unknown;
+  try { reviewed = JSON.parse(process.env.JNT_REVIEWED_ENDPOINTS_JSON || "{}")?.[env]?.[kind]; }
+  catch { throw new HttpError("Daftar endpoint J&T server tidak valid", 503); }
+  // An operator can pin a different URL only after verifying it directly with J&T.
+  if (u.protocol !== "https:" || (!approvedDefault && !approvedProductionTracking && reviewed !== u.href) ||
       u.search || u.hash || u.port || u.username || u.password) {
     throw new HttpError("Endpoint tidak sesuai allowlist resmi J&T untuk environment ini", 422);
   }
@@ -103,7 +115,7 @@ function encrypt(value: JntConfig, environment: JntEnvironment) {
   const encrypted = Buffer.concat([cipher.update(JSON.stringify(value), "utf8"), cipher.final()]);
   return [localJntSettings() ? "v2" : "v1", iv.toString("base64"), cipher.getAuthTag().toString("base64"), encrypted.toString("base64")].join(":");
 }
-function decrypt(value: string, environment: JntEnvironment): JntConfig {
+export function decryptJntConfig(value: string, environment: JntEnvironment): JntConfig {
   try {
     const [version, nonce, authTag, data, extra] = value.split(":");
     if (version !== (localJntSettings() ? "v2" : "v1") || !nonce || !authTag || !data || extra) throw new Error("Malformed ciphertext");
@@ -123,55 +135,91 @@ export function isJntSettingsAdministrator(user: AuthUser | null) {
 export async function readJntSettings(environment: JntEnvironment, db: Prisma.TransactionClient = prisma) {
   assertJntScope();
   const row = await db.jntIntegration.findUnique({ where: { environment } });
-  return row ? { config: decrypt(row.encryptedConfig, environment), enabled: row.enabled, updatedAt: row.updatedAt } : null;
+  return row ? { config: decryptJntConfig(row.encryptedConfig, environment), enabled: row.enabled, updatedAt: row.updatedAt, tariffProof: row.tariffProof } : null;
 }
+export function requireCarrierEnvironment(environment: JntEnvironment) {
+  if (process.env.JNT_API_ENV !== environment ||
+      (environment === "production" && process.env.JNT_PRODUCTION_API_APPROVED !== "yes")) {
+    throw new HttpError("Environment J&T belum disetujui operator server", 503);
+  }
+}
+
+export function requireProbeEnvironment(environment: JntEnvironment) {
+  if (environment === "sandbox" && process.env.JNT_SANDBOX_API_APPROVED === "yes") return;
+  requireCarrierEnvironment(environment);
+}
+
+export function requireEz(config: JntConfig) {
+  if (!config.seller?.services.some(service => service.code === "EZ" && Date.parse(service.validUntil) > Date.now())) {
+    throw new HttpError("Persetujuan layanan EZ belum diisi atau telah kedaluwarsa", 422);
+  }
+}
+
+export function validateJntConfig(config: JntConfig, environment: JntEnvironment) {
+  for (const kind of Object.keys(validPaths) as Array<keyof JntConfig["endpoints"]>) {
+    validateEndpoint(kind, config.endpoints[kind], environment);
+  }
+  if (config.sharedCancellation === false && (!config.credentials.cancellationUsername ||
+      !config.credentials.cancellationApiKey || !config.credentials.cancellationKey)) {
+    throw new HttpError("Lengkapi kredensial Cancellation atau pilih kredensial Order yang disetujui J&T", 422);
+  }
+}
+
+export async function resolveJntDraft(input: z.infer<typeof jntSettingsInput>, db: Prisma.TransactionClient = prisma) {
+  const previous = await readJntSettings(input.environment, db);
+  const merged: Partial<Record<JntCredentialKey, string>> = {};
+  for (const key of credentialKeys) {
+    const candidate = input.credentials[key];
+    if (candidate && /^(?:[*•●]+|\[?(?:masked|redacted)\]?)$/i.test(candidate.trim())) {
+      throw new HttpError("Kosongkan field untuk mempertahankan kredensial tersimpan", 422);
+    }
+    const value = candidate || previous?.config.credentials[key];
+    if (value) merged[key] = value;
+  }
+  const { version, releaseStamp } = await readActiveJntRelease(db);
+  const { originSite, originCityCode } = await mappedWarehouse(input.seller.warehouse.districtCode, version, db);
+  const config = jntConfigSchema.safeParse({
+    endpoints: input.endpoints, credentials: merged, sharedCancellation: input.sharedCancellation,
+    seller: { warehouse: { ...input.seller.warehouse, originSite, originCityCode }, services: input.seller.services },
+  });
+  if (!config.success) throw new HttpError("Lengkapi seluruh kredensial J&T", 422);
+  validateJntConfig(config.data, input.environment);
+  return { config: config.data, version, releaseStamp, previousProof: previous?.tariffProof };
+}
+
 export async function readJntPublicStatus(environment: JntEnvironment) {
   const state = await readJntSettings(environment);
   return {
-    environment,
-    configured: !!state,
-    enabled: !!state?.enabled,
-    updatedAt: state?.updatedAt.toISOString() ?? null,
+    environment, configured: !!state, enabled: !!state?.enabled, updatedAt: state?.updatedAt.toISOString() ?? null,
     endpoints: state?.config.endpoints ?? null,
+    seller: state?.config.seller ?? null,
+    sharedCancellation: state?.config.sharedCancellation ?? true,
     credentialSet: Object.fromEntries(credentialKeys.map(key => [key, !!state?.config.credentials[key]])),
-    ...(localJntSettings() ? { scope: "local_store", seller: state?.config.seller ?? null,
-      connectionStatus: "NOT_TESTED", shippingReady: false } : {}),
   };
 }
+
 export async function saveJntSettings(input: z.infer<typeof jntSettingsInput>, actorId: string) {
-  assertJntScope();
-  if (localJntSettings()) {
-    installationBinding(input.environment);
-    if (!input.seller) throw new HttpError("Lengkapi informasi gudang pengirim", 422);
-  } else if (input.seller) throw new HttpError("Konfigurasi seller memerlukan mode toko lokal", 422);
-  for (const kind of Object.keys(validPaths) as Array<keyof JntConfig["endpoints"]>) {
-    validateEndpoint(kind, input.endpoints[kind], input.environment);
-  }
-  // Secrets are encrypted before DB persistence; never return them, even to the owner.
-  const row = await prisma.$transaction(async tx => {
-    // Serialize even the first insert so blank updates cannot undo a concurrent rotation.
+  await prisma.$transaction(async tx => {
+    await tx.$queryRaw`SELECT id FROM "ShippingSettings" WHERE id = 1 FOR SHARE`;
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${"jnt-settings:" + input.environment}))::text`;
-    const previous = await readJntSettings(input.environment, tx);
-    const merged: Record<string, string> = {};
-    for (const key of credentialKeys) {
-      merged[key] = input.credentials[key] || previous?.config.credentials[key] || "";
+    const { config, releaseStamp, previousProof } = await resolveJntDraft(input, tx);
+    const proof = input.tariffProof || previousProof;
+    if (input.tariffProof && !validTariffProof(input.tariffProof, config, input.environment, releaseStamp)) {
+      throw new HttpError("Hasil uji tarif telah kedaluwarsa atau input berubah. Uji kembali.", 409);
     }
-    const config = jntConfigSchema.safeParse({ endpoints: input.endpoints, credentials: merged, ...(input.seller ? { seller: input.seller } : {}) });
-    if (!config.success) throw new HttpError("Lengkapi seluruh kredensial J&T sebelum menyimpan", 422);
-    const saved = await tx.jntIntegration.upsert({
-    where: { environment: input.environment },
-    create: { environment: input.environment, enabled: input.enabled, encryptedConfig: encrypt(config.data, input.environment), updatedBy: actorId },
-    update: { enabled: input.enabled, encryptedConfig: encrypt(config.data, input.environment), updatedBy: actorId },
-    });
-    await writeAudit({ userId: actorId, action: "jnt.integration.updated",
-      entity: "JntIntegration", entityId: input.environment,
-      meta: { environment: input.environment, enabled: input.enabled,
-        ...(localJntSettings() ? { scope: "local_store", credentialFieldsChanged: credentialKeys.filter(k => !!input.credentials[k]) } : {}) } }, tx);
-    return saved;
+    const tariffProof = validTariffProof(proof, config, input.environment, releaseStamp) ? proof : null;
+    const data = { encryptedConfig: encrypt(config, input.environment), updatedBy: actorId, tariffProof };
+    // Preserve the legacy authorization flag for historical orders.
+    await tx.jntIntegration.upsert({ where: { environment: input.environment },
+      create: { environment: input.environment, ...data }, update: data });
+    await writeAudit({ userId: actorId, action: "jnt.integration.updated", entity: "JntIntegration",
+      entityId: input.environment, meta: { environment: input.environment,
+        credentialFieldsChanged: credentialKeys.filter(key => !!input.credentials[key]) } }, tx);
   });
-  return { environment: input.environment, configured: true, enabled: row.enabled, updatedAt: row.updatedAt.toISOString() };
+  return readJntPublicStatus(input.environment);
 }
-export async function activeJntConfig() {
+
+export async function activeJntConfig(db: Prisma.TransactionClient = prisma) {
   assertJntScope();
   const environment = jntEnvironment.safeParse(process.env.JNT_API_ENV);
   if (!environment.success) throw new HttpError("Environment J&T belum dipilih oleh operator server", 503);
@@ -179,8 +227,9 @@ export async function activeJntConfig() {
   if (environment.data === "production" && process.env.JNT_PRODUCTION_API_APPROVED !== "yes") {
     throw new HttpError("Operasi API J&T Production belum disetujui operator server", 503);
   }
-  const settings = await readJntSettings(environment.data);
-  if (!settings?.enabled) throw new HttpError("Integrasi J&T belum diaktifkan", 503);
-  if (!settings.config.seller || !settings.config.seller.services.some(s => s.code === "EZ" && Date.parse(s.validUntil) > Date.now())) throw new HttpError("Layanan EZ toko belum dikonfigurasi atau kedaluwarsa", 503);
-  return settings.config;
+  const row = await db.jntIntegration.findUnique({ where: { environment: environment.data } });
+  if (!row?.enabled || !row.legacyEncryptedConfig) throw new HttpError("Konfigurasi historis J&T belum tersedia", 503);
+  const config = decryptJntConfig(row.legacyEncryptedConfig, environment.data);
+  validateJntConfig(config, environment.data);
+  return config;
 }

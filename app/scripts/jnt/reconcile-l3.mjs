@@ -115,7 +115,10 @@ async function main() {
     writeFileSync(join(cwd,".jnt-mapping-report","unmatched.csv"),
       "sourceRow,province,city,district,jntAreaCode,status\n" +
       rows.filter(row=>row.matchStatus!=="EXACT")
-        .map(row=>[row.sourceRow,row.province,row.city,row.district,row.jntAreaCode,row.matchStatus].map(v=>'"'+String(v).replaceAll('"','""')+'"').join(",")).join("\n") + "\n");
+        .map(row=>[row.sourceRow,row.province,row.city,row.district,row.jntAreaCode,row.matchStatus].map(value=>{
+          const cell=String(value);
+          return '"'+(/^\s*[=+\-@\t\r\n]/.test(cell)?"'"+cell:cell).replaceAll('"','""')+'"';
+        }).join(",")).join("\n") + "\n");
     console.log(JSON.stringify(report,null,2));return;
   }
   // Stage/activate require the store operator's reviewed row count and exact file version.

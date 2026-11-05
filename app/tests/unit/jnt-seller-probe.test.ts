@@ -1,90 +1,98 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
-const s = vi.hoisted(() => ({ user: null as any, audit: vi.fn(), rate: vi.fn(), state: null as any }));
-vi.mock("@/lib/auth/session", () => ({ getCurrentUser: async () => s.user }));
+const mock = vi.hoisted(() => ({ user: null as any, rate: vi.fn(), tracking: vi.fn(), resolve: vi.fn() }));
+vi.mock("@/lib/auth/session", () => ({ getCurrentUser: async () => mock.user }));
 vi.mock("@/lib/auth/rate-limit", () => ({ consumeAuthBucket: vi.fn() }));
-vi.mock("@/modules/audit/audit.service", () => ({ writeAudit: (...args: any[]) => s.audit(...args) }));
-vi.mock("@/infrastructure/shipping/jnt/official-transport", () => ({ checkJntRate: (...args: any[]) => s.rate(...args) }));
-vi.mock("@/infrastructure/shipping/jnt/verified-mapping", () => ({ getVerifiedJntDistrict: async () => ({ destinationArea: "SYNTHETIC DISTRICT" }) }));
-vi.mock("@/infrastructure/shipping/jnt/official-config", async () => {
-  const { z } = await import("zod");
-  const { mayManageLocalJnt } = await import("@/infrastructure/shipping/jnt/seller-config");
-  return { isJntSettingsAdministrator: mayManageLocalJnt, readJntSettings: async () => s.state, jntEnvironment: z.enum(["sandbox", "production"]) };
-});
+vi.mock("@/infrastructure/shipping/jnt/official-transport", () => ({ checkJntRate: mock.rate, trackJntOrder: mock.tracking }));
+vi.mock("@/infrastructure/shipping/jnt/verified-mapping", async (original) => ({
+  ...await original<object>(), mappedDestination: async () => ({ destAreaCode: "SYNTHETIC DISTRICT" }),
+}));
+vi.mock("@/infrastructure/shipping/jnt/official-config", async (original) => ({
+  ...await original<object>(), resolveJntDraft: mock.resolve,
+}));
 import { POST } from "@/app/api/v1/admin/integrations/jnt/test/route";
-afterEach(() => { vi.unstubAllEnvs(); vi.clearAllMocks(); s.user = null; s.state = null; });
-function setup() {
+import { validTariffProof } from "@/infrastructure/shipping/jnt/tariff-proof";
+import type { JntConfig } from "@/infrastructure/shipping/jnt/official-config";
+
+const endpoints = Object.fromEntries(["order", "tariff", "tracking", "cancellation"].map(key => [key, "https://synthetic.example"]));
+const seller = { warehouse: { districtCode: "31.71.01", name: "Toko Uji", contact: "Toko Uji", phone: "+6281234567890", address: "Alamat sintetis" },
+  services: [{ code: "EZ", verificationReference: "synthetic test", validUntil: "2099-01-01T00:00:00Z" }] };
+const draft = { environment: "sandbox", endpoints, sharedCancellation: true, credentials: { tariffKey: "SYNTHETIC-DRAFT" }, seller };
+const config = { ...draft, seller: { ...seller, warehouse: { ...seller.warehouse, originSite: "SYNTHETIC CITY", originCityCode: "TST" } } } as unknown as JntConfig;
+
+beforeEach(() => {
   vi.stubEnv("APP_ORIGIN", "https://store.example");
-  s.user = { id: "local-admin", roles: ["Admin"], permissions: ["shipping.update"] };
-  s.state = { enabled: true, config: { seller: { warehouse: { originSite: "SYNTHETIC CITY" },
-    services: [{ code: "EZ", validUntil: "2030-01-01T00:00:00Z" }] }, credentials: { orderKey: "NEVER-RETURN-THIS-KEY" } } };
-  s.rate.mockResolvedValue([{ courier: "J&T Express", service: "EZ", cost: 10000 }]);
-}
+  vi.stubEnv("JWT_SECRET", "test-only-".repeat(5));
+  vi.stubEnv("JNT_API_ENV", "sandbox");
+  mock.user = { id: "local-admin", roles: ["Admin"], permissions: ["shipping.update"] };
+  mock.resolve.mockResolvedValue({ config, version: "synthetic-mapping", releaseStamp: "synthetic-mapping:1" });
+  mock.rate.mockResolvedValue([{ courier: "J&T Express", service: "EZ", cost: 10000 }]);
+});
+afterEach(() => { vi.unstubAllEnvs(); vi.resetAllMocks(); });
 function request(body: unknown, origin = "https://store.example") {
   return new Request("https://store.example/api/v1/admin/integrations/jnt/test", {
-    method: "POST", headers: { Origin: origin, "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    method: "POST", headers: { Origin: origin, "Content-Type": "application/json" }, body: JSON.stringify(body),
+  });
 }
-describe("local seller connection probes", () => {
-  it("denies anonymous, unprivileged and cross-origin calls before touching carrier", async () => {
-    setup(); const admin = s.user; s.user = null;
-    expect((await POST(request({}))).status).toBe(401);
-    s.user = { ...admin, roles: ["Customer"] };
-    expect((await POST(request({}))).status).toBe(403);
-    s.user = admin;
-    expect((await POST(request({}, "https://attacker.example"))).status).toBe(403);
-    expect(s.rate).not.toHaveBeenCalled();
-  });
-  it("rejects staff without shipping permission before carrier activity", async () => {
-    setup();
-    s.user.permissions = [];
-    expect((await POST(request({ environment: "sandbox", endpoint: "tariff" }))).status).toBe(403);
-    expect(s.rate).not.toHaveBeenCalled();
-  });
+const tariff = { draft, endpoint: "tariff", destinationDistrictCode: "31.71.01", weightGram: 1000 };
 
-  it("does not invent safe Order/Cancel/Tracking probes or dispatch any request", async () => {
-    setup();
-    for (const endpoint of ["order", "cancellation", "tracking"]) {
-      const result = await POST(request({ environment: "sandbox", endpoint }));
+describe("local seller connection probes", () => {
+  it("rejects anonymous, insufficient permissions and cross-origin calls before resolving credentials", async () => {
+    const admin = mock.user; mock.user = null;
+    expect((await POST(request(tariff))).status).toBe(401);
+    mock.user = { ...admin, permissions: [] };
+    expect((await POST(request(tariff))).status).toBe(403);
+    mock.user = admin;
+    expect((await POST(request(tariff, "https://other.example"))).status).toBe(403);
+    expect(mock.resolve).not.toHaveBeenCalled();
+  });
+  it("validates Order and Cancellation without calling either operation", async () => {
+    for (const endpoint of ["order", "cancellation"]) {
+      const result = await POST(request({ draft, endpoint }));
       expect((await result.json()).data.status).toBe("SAFE_PROBE_UNAVAILABLE");
       expect(result.headers.get("Cache-Control")).toContain("no-store");
     }
-    expect(s.rate).not.toHaveBeenCalled(); expect(s.audit).toHaveBeenCalledTimes(3);
+    expect(mock.rate).not.toHaveBeenCalled();
+    expect(mock.tracking).not.toHaveBeenCalled();
   });
-  it("uses only saved local config and approved mapping for read-only Check Fee, never returns secrets", async () => {
-    setup();
-    const result = await POST(request({ environment: "sandbox", endpoint: "tariff", destinationDistrictCode: "31.71.01", weightGram: 1000 }));
-    const text = await result.text(); expect(result.status).toBe(200); expect(text).toContain("CONNECTED"); expect(text).not.toContain("NEVER-RETURN");
-    expect(s.rate).toHaveBeenCalledWith(expect.objectContaining({ originSite: "SYNTHETIC CITY", destinationArea: "SYNTHETIC DISTRICT" }), s.state.config);
+  it("quotes draft before save and binds success to config, environment, warehouse and version", async () => {
+    const result = await POST(request(tariff));
+    const data = (await result.json()).data;
+    expect(result.status).toBe(200);
+    expect(data.status).toBe("AUTHENTICATED");
+    expect(JSON.stringify(data)).not.toContain("SYNTHETIC-DRAFT");
+    expect(mock.resolve).toHaveBeenCalledWith(draft);
+    expect(mock.rate).toHaveBeenCalledWith(expect.objectContaining({ originSite: "SYNTHETIC CITY", destinationArea: "SYNTHETIC DISTRICT" }), config);
+    expect(validTariffProof(data.tariffProof, config, "sandbox", "synthetic-mapping:1")).toBe(true);
+    expect(validTariffProof(data.tariffProof, config, "sandbox", "synthetic-mapping:2")).toBe(false);
+    expect(validTariffProof(data.tariffProof, config, "production", "synthetic-mapping:1")).toBe(false);
+    expect(validTariffProof(data.tariffProof, config, "sandbox", "other-mapping")).toBe(false);
+    const changed = structuredClone(config);
+    changed.seller!.warehouse.address = "Changed warehouse";
+    expect(validTariffProof(data.tariffProof, changed, "sandbox", "synthetic-mapping:1")).toBe(false);
   });
-  it("does not report CONNECTED on empty, mismatched or invalid Check Fee results", async () => {
-    setup();
-    const req = () => request({ environment: "sandbox", endpoint: "tariff", destinationDistrictCode: "31.71.01", weightGram: 1000 });
-    for (const result of [
-      [],
-      [{ courier: "J&T Express", service: "HBO", cost: 10000 }],
-      [{ courier: "J&T Express", service: "EZ", cost: -1 }],
-      [{ courier: "J&T Express", service: "EZ", cost: 10000 }, { courier: "J&T Express", service: "EZ", cost: 12000 }],
-    ]) {
-      s.rate.mockResolvedValueOnce(result);
-      const response = await POST(req());
-      expect(response.status).toBe(502);
-      expect(await response.text()).not.toContain("CONNECTED");
+  it("fails closed on empty, invalid, duplicate and zero rates", async () => {
+    for (const rates of [[], [{ courier: "J&T Express", service: "EZ", cost: 0 }],
+      [{ courier: "J&T Express", service: "EZ", cost: -1 }], [{ courier: "J&T Express", service: "HBO", cost: 10000 }]]) {
+      mock.rate.mockResolvedValueOnce(rates);
+      expect((await POST(request(tariff))).status).toBe(502);
     }
-    expect(s.audit).not.toHaveBeenCalled();
   });
-
-  it("rejects ID/credential injection and Production calls without server approval", async () => {
-    setup();
-    expect((await POST(request({ environment: "sandbox", endpoint: "tariff", installationId: "other-install" }))).status).toBe(422);
-    expect((await POST(request({ environment: "production", endpoint: "tariff", destinationDistrictCode: "31.71.01", weightGram: 1000 }))).status).toBe(503);
-    expect(s.rate).not.toHaveBeenCalled();
+  it("requires an authorized seller AWB and nonempty history for a tracking pass", async () => {
+    const tracking = { draft, endpoint: "tracking", awb: "SYNTHETICAWB" };
+    expect((await POST(request(tracking))).status).toBe(422);
+    expect(mock.tracking).not.toHaveBeenCalled();
+    mock.tracking.mockResolvedValueOnce({ events: [] });
+    expect((await POST(request({ ...tracking, ownsAwb: true }))).status).toBe(502);
+    mock.tracking.mockResolvedValueOnce({ events: [{ note: "SENSITIVE-NOTE" }] });
+    const result = await POST(request({ ...tracking, ownsAwb: true }));
+    expect(result.status).toBe(200);
+    expect(await result.text()).not.toContain("SENSITIVE-NOTE");
   });
-  it("bounds bodies without trusting Content-Length and never echoes malformed secret input", async () => {
-    setup();
-    const tooLarge = await POST(request({ padding: "x".repeat(5000) }));
-    expect(tooLarge.status).toBe(413);
-    const invalid = new Request("https://store.example/api/v1/admin/integrations/jnt/test", { method: "POST", headers: { Origin: "https://store.example" }, body: "{NEVER-ECHO-SYNTHETIC-SECRET" });
-    const result = await POST(invalid); expect(result.status).toBe(422); expect(await result.text()).not.toContain("NEVER-ECHO");
-    expect(s.rate).not.toHaveBeenCalled();
+  it("rejects arbitrary installation IDs, oversized bodies and ungated Production", async () => {
+    expect((await POST(request({ ...tariff, installationId: "other" }))).status).toBe(422);
+    expect((await POST(request({ padding: "x".repeat(17000) }))).status).toBe(413);
+    expect((await POST(request({ ...tariff, draft: { ...draft, environment: "production" } }))).status).toBe(503);
+    expect(mock.rate).not.toHaveBeenCalled();
   });
 });

@@ -9,6 +9,7 @@ import { checkoutLinesSchema, checkoutQuoteSchema } from "./checkout.validation"
 import { checkoutIntentId } from "./checkout-intent";
 import { createOrder } from "./checkout.service";
 import { addressSchema } from "@/modules/regions/region.validation";
+import { shippingCourierSchema } from "@/modules/shipping/shipping-settings-input";
 
 const schema = z.object({
   recipientName: z.string().min(2),
@@ -17,7 +18,7 @@ const schema = z.object({
   city: z.string().min(2),
   province: z.string().min(2),
   postalCode: z.string().min(3),
-  courier: z.string().min(1),
+  courier: shippingCourierSchema,
   service: z.string().min(1),
   shippingCost: z.coerce.number().int().nonnegative(),
   quoteToken: z.string().min(1).max(4096),

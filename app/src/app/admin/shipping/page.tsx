@@ -6,11 +6,15 @@ import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Truck } from "lucide-react";
 import Link from "next/link";
+import { ShippingSettings } from "@/components/admin/shipping-settings";
+import { isJntSettingsAdministrator } from "@/infrastructure/shipping/jnt/official-config";
+import { readShippingSettings } from "@/modules/shipping/shipping-settings.service";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminShippingPage() {
-  await requireBackofficeUser(PERMISSIONS.SHIPPING_READ);
+  const user = await requireBackofficeUser(PERMISSIONS.SHIPPING_READ);
+  const settings = isJntSettingsAdministrator(user) ? await readShippingSettings() : null;
   // Orders that are paid or beyond and need shipping management.
   const orders = await prisma.order.findMany({
     where: { status: { in: ["PAID", "PROCESSING", "PACKED", "SHIPPED", "DELIVERED"] } },
@@ -21,7 +25,9 @@ export default async function AdminShippingPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="font-display text-2xl font-black text-ink">Pengiriman Manual</h1>
+      <h1 className="font-display text-2xl font-black text-ink">Pengiriman</h1>
+      {settings && <ShippingSettings manualFlat={settings.manualFlat} activeEnvironment={settings.activeJnt?.environment ?? null} />}
+      <h2 className="font-semibold text-ink">Kelola pengiriman pesanan</h2>
       <Link href="/admin/shipping/coverage" className="inline-block text-sm font-semibold underline">Periksa kesiapan tarif dan mapping J&T Express</Link>
       {orders.length === 0 ? (
         <EmptyState icon={<Truck size={40} />} title="Belum ada pesanan untuk dikirim" />

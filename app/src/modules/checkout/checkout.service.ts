@@ -7,7 +7,11 @@ import { getCartView } from "@/modules/cart/cart.service";
 import { reserveStock } from "@/modules/inventory/inventory.service";
 import { computeDiscount } from "@/modules/promotions/coupon.service";
 import { getPaymentProvider } from "@/infrastructure/payments";
-import { getShippingProvider } from "@/infrastructure/shipping";
+import { approvedRevision, readShippingSettings } from "@/modules/shipping/shipping-settings.service";
+import { flatShippingRate } from "@/modules/shipping/shipping-settings-input";
+import { checkJntRate } from "@/infrastructure/shipping/jnt/official-transport";
+import { requireEz } from "@/infrastructure/shipping/jnt/official-config";
+import { mappedDestination } from "@/infrastructure/shipping/jnt/verified-mapping";
 import { checkoutLinesSchema, checkoutQuoteSchema, checkoutSignature, type CheckoutLines, type CheckoutQuoteConfirmation } from "./checkout.validation";
 import { getIntentCheckoutView, readCheckoutIntent } from "./checkout-intent";
 import { writeAudit } from "@/modules/audit/audit.service";
@@ -61,13 +65,23 @@ async function shippingInquiry(cart: { lines: Array<{ product: { id: string }; q
   return { destination, weightGram, packages };
 }
 async function checkoutShipping(userId: string, cart: { lines: Array<CheckoutLines[number] & { product: { id: string } }> }, location: SelectedLocation) {
-  const inquiry = await shippingInquiry(cart, location);
+  const settings = await readShippingSettings();
+  const inquiry = settings.activeJnt ? await shippingInquiry(cart, location) : { destination: location, weightGram: 0, packages: [] };
   let rates: ShippingRate[];
-  try { rates = (await getShippingProvider().getRates?.(inquiry)) ?? []; }
-  catch (error) { if (error instanceof HttpError) throw error; throw new HttpError("Gagal memeriksa ongkir J&T. Coba lagi atau hubungi toko.", 503); }
-  if (rates.some(r => r.courier !== "J&T Express" || !Number.isSafeInteger(r.cost) || r.cost < 0)) throw new HttpError("Tarif J&T tidak valid", 502);
-  const fingerprint = shippingFingerprint(userId, inquiry, checkoutSignature(cart.lines));
-  return { inquiry, fingerprint, rates, options: rates.map(r => issueShippingQuote(fingerprint, r)) };
+  if (settings.activeJnt) {
+    const { config, mappingVersion } = approvedRevision(settings.activeJnt);
+    requireEz(config);
+    const mapping = await mappedDestination(location.districtCode, mappingVersion);
+    rates = (await checkJntRate({ originSite: config.seller!.warehouse.originSite, destinationArea: mapping.destAreaCode,
+      weightGram: inquiry.weightGram, productType: "EZ" }, config))
+      .map(rate => ({ ...rate, reference: mappingVersion }));
+    if (rates.length !== 1) throw new HttpError("J&T belum mengembalikan tarif EZ untuk alamat ini. Coba kembali atau hubungi toko.", 502);
+  } else {
+    if (settings.manualFlat === null) throw new HttpError("Toko belum menetapkan ongkir Manual. Hubungi toko.", 503);
+    rates = [flatShippingRate(settings.manualFlat)];
+  }
+  const fingerprint = shippingFingerprint(userId, inquiry, checkoutSignature(cart.lines), settings.revision);
+  return { fingerprint, rates, options: rates.map(r => issueShippingQuote(fingerprint, r)), revisionId: settings.activeJntId };
 }
 
 /** Server-side recalculation only. Client-submitted totals are ignored. */
@@ -82,7 +96,7 @@ export async function previewCheckout(
   if (input.shipping && !location) throw new HttpError("Silakan pilih lokasi pengiriman.", 422);
   const shipping = location ? await checkoutShipping(userId, cart, location) : null;
   const selected = input.shipping ? shipping?.rates.find(r => r.courier === input.shipping!.courier && r.service === input.shipping!.service) : null;
-  if (input.shipping && !selected) throw new HttpError("Layanan J&T belum tersedia untuk alamat ini.", 422);
+  if (input.shipping && !selected) throw new HttpError("Layanan pengiriman belum tersedia untuk alamat ini.", 422);
   const accepted = selected ? verifyShippingQuote(input.shipping?.quoteToken, shipping!.fingerprint, selected) : null;
   const shippingCost = selected?.cost ?? 0;
   const { discount, code, reason } = await computeDiscount(input.couponCode, cart.subtotal, prisma, userId);
@@ -174,8 +188,14 @@ export async function createOrder(
   const location = await validateLocation(parsedAddress);
   const canonicalAddress = { recipientName: parsedAddress.recipientName, phone: parsedAddress.phone, line: parsedAddress.line, ...location };
   const quotedShipping = await checkoutShipping(userId, cartView, location);
+  if (quotedShipping.revisionId) {
+    const address = [canonicalAddress.line, location.village, location.district, location.city, location.province].filter(Boolean).join(", ");
+    if (canonicalAddress.recipientName.length > 30 || address.length > 200) {
+      throw new HttpError("Untuk J&T, gunakan nama penerima maksimal 30 karakter dan alamat lengkap maksimal 200 karakter", 422);
+    }
+  }
   const selectedRate = quotedShipping.rates.find(r => r.courier === input.shipping.courier && r.service === input.shipping.service);
-  if (!selectedRate) throw new HttpError("Layanan J&T belum tersedia untuk alamat ini.", 422);
+  if (!selectedRate) throw new HttpError("Layanan pengiriman belum tersedia untuk alamat ini.", 422);
   verifyShippingQuote(input.shipping.quoteToken, quotedShipping.fingerprint, selectedRate);
   if (!acceptedQuote?.success) throw new HttpError("Konfirmasi total dan ongkir diperlukan.", 409);
   const shippingCost = selectedRate.cost;
@@ -212,8 +232,11 @@ export async function createOrder(
     if (current.lines.some(l => !l.inStock || !Number.isSafeInteger(l.quantity) || l.quantity <= 0)) throw new HttpError("Produk tidak tersedia atau stok tidak mencukupi", 409);
     // Product locks also protect shipping metadata. Reject address/cart/weight/config changes
     // and expired quotes before any order, stock, payment, or cart mutation.
-    const lockedInquiry = await shippingInquiry(current, location, tx);
-    verifyShippingQuote(input.shipping.quoteToken, shippingFingerprint(userId, lockedInquiry, checkoutSignature(current.lines)), selectedRate);
+    await tx.$queryRaw`SELECT id FROM "ShippingSettings" WHERE id = 1 FOR SHARE`;
+    const shippingSettings = await readShippingSettings(tx);
+    if (shippingSettings.activeJnt) requireEz(approvedRevision(shippingSettings.activeJnt).config);
+    const lockedInquiry = shippingSettings.activeJnt ? await shippingInquiry(current, location, tx) : { destination: location, weightGram: 0, packages: [] };
+    verifyShippingQuote(input.shipping.quoteToken, shippingFingerprint(userId, lockedInquiry, checkoutSignature(current.lines), shippingSettings.revision), selectedRate);
     const lockedBank = await tx.bankAccount.findFirst({ where: { id: bank.id, isActive: true } });
     if (!lockedBank) throw new HttpError("Rekening bank tidak valid", 409);
     // Serializes redemptions for capped coupons across concurrent checkout transactions.
@@ -258,7 +281,8 @@ export async function createOrder(
         shippingCourier: selectedRate.courier,
         shippingService: selectedRate.service,
         shippingMode: selectedRate.mode || "official",
-        shippingWeightGram: lockedInquiry.weightGram,
+        jntCheckoutRevisionId: quotedShipping.revisionId,
+        shippingWeightGram: quotedShipping.revisionId ? lockedInquiry.weightGram : null,
         shippingQuoteReference: selectedRate.reference,
         history: {
           create: { toStatus: "PENDING_PAYMENT", note: "Order dibuat", createdBy: userId },

@@ -3,15 +3,16 @@ import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 import { HttpError } from "@/lib/http-error";
 import type { ShippingInquiry, ShippingRate } from "@/infrastructure/shipping/contracts/shipping-provider";
+import { shippingCourierSchema } from "@/modules/shipping/shipping-settings-input";
 const hash = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
 function secret() {
   const value = process.env.JWT_SECRET;
   if (!value || value.length < 32) throw new HttpError("Konfigurasi quote pengiriman belum siap", 503);
   return value;
 }
-const tokenSchema = z.object({ fingerprint: z.string(), courier: z.literal("J&T Express"), service: z.string(), cost: z.number().int().nonnegative(), expiresAt: z.number().int() });
-export function shippingFingerprint(userId: string, inquiry: ShippingInquiry, lines: unknown) {
-  return hash({ userId, inquiry, lines, config: hash([process.env.SHIPPING_PROVIDER || "manual", process.env.JNT_MANUAL_RATE_CONFIG || "", process.env.JNT_OFFICIAL_AREA_MAPPING || "", process.env.JNT_ORIGIN_WAREHOUSE || "", process.env.JNT_API_ENV || "", process.env.JNT_RATE_SERVICES || ""]) });
+const tokenSchema = z.object({ fingerprint: z.string(), courier: shippingCourierSchema, service: z.string(), cost: z.number().int().nonnegative(), expiresAt: z.number().int() });
+export function shippingFingerprint(userId: string, inquiry: ShippingInquiry, lines: unknown, revision: number) {
+  return hash({ userId, inquiry, lines, revision });
 }
 export function issueShippingQuote(fingerprint: string, rate: ShippingRate) {
   const expiresAt = Math.min(Date.now() + 5 * 60_000, rate.validUntil ? new Date(rate.validUntil).getTime() : Infinity);
