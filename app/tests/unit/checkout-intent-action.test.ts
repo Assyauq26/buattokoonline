@@ -3,7 +3,7 @@ import { HttpError } from "@/lib/response";
 const mocks = vi.hoisted(() => ({ user: vi.fn(), create: vi.fn(), get: vi.fn(), set: vi.fn() }));
 vi.mock("next/headers", () => ({ cookies: async () => ({ get: mocks.get, set: mocks.set }) }));
 vi.mock("@/lib/auth/session", () => ({ getCurrentUserBasic: mocks.user }));
-vi.mock("@/modules/checkout/checkout-intent", () => ({ CHECKOUT_INTENT_COOKIE: "gh_buy_now", CHECKOUT_INTENT_TTL_SECONDS: 900, createCheckoutIntent: mocks.create }));
+vi.mock("@/modules/checkout/checkout-intent", () => ({ CHECKOUT_INTENT_COOKIE: "store_buy_now", CHECKOUT_INTENT_TTL_SECONDS: 900, createCheckoutIntent: mocks.create }));
 import { buyNowAction } from "@/modules/checkout/checkout-intent.actions";
 const id = "0d1b15fb-c5b8-4246-b2d5-a9fae6ce121d";
 beforeEach(() => {
@@ -18,7 +18,7 @@ describe("Buy Now action boundary", () => {
     vi.stubEnv("NODE_ENV", "production");
     const response = await buyNowAction("selected-variant", 2);
     expect(mocks.create).toHaveBeenCalledWith(null, { variantId: "selected-variant", quantity: 2 }, undefined);
-    expect(mocks.set).toHaveBeenCalledWith("gh_buy_now", "dummy-browser-secret", { httpOnly: true, secure: true, sameSite: "lax", path: "/", maxAge: 900 });
+    expect(mocks.set).toHaveBeenCalledWith("store_buy_now", "dummy-browser-secret", { httpOnly: true, secure: true, sameSite: "lax", path: "/", maxAge: 900 });
     expect(response).toEqual({ ok: true, data: { checkoutUrl: `/login?redirectTo=${encodeURIComponent(`/checkout?intent=${id}`)}` } });
     expect(JSON.stringify(response)).not.toContain("dummy-browser-secret");
   });

@@ -16,7 +16,7 @@ import { getSellerDashboard } from "@/modules/admin/dashboard.service";
 import { validateProductImage, uploadProductImage, readManagedProductImage, MAX_IMAGE_BYTES } from "@/modules/catalog/product-images.service";
 
 const actor = { id: "staff", isAdmin: true, permissions: Object.values(PERMISSIONS) };
-const input = () => ({ name: "Kaos Toko", slug: "kaos-store", basePrice: 150000, variants: [{ sku: "GH-BLK-M", onHand: 5 }] });
+const input = () => ({ name: "Kaos Toko", slug: "kaos-store", basePrice: 150000, variants: [{ sku: "SKU-BLK-M", onHand: 5 }] });
 beforeEach(() => { vi.clearAllMocks(); db.product.groupBy.mockResolvedValue([]); db.inventory.aggregate.mockResolvedValue({ _sum: { onHand: null, reserved: null }, _count: { _all: 0 } }); db.order.groupBy.mockResolvedValue([]); db.order.aggregate.mockResolvedValue({ _sum: { total: null }, _count: { _all: 0 } }); db.order.findMany.mockResolvedValue([]); });
 
 describe("product validation", () => {

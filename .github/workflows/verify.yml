@@ -1,7 +1,7 @@
 name: Single-store Ubuntu installation
 on:
   push:
-    branches: [main, 'codex/**']
+    branches: [main]
   pull_request:
   workflow_dispatch:
 permissions:

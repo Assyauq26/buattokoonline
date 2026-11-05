@@ -7,6 +7,10 @@
 - `/var/lib/single-store/media`: upload persisten, UID 1000.
 - Volume Docker `single-store_postgres`: database toko ini.
 - Volume `single-store_caddy_data`: sertifikat dan akun ACME.
+- Database hanya diakses backend. Role `store_app` mempunyai DML dan `BYPASSRLS`
+  untuk membaca tabel aplikasi yang memiliki RLS dari migrasi sumber, tanpa hak
+  superuser, membuat database/role, atau memiliki schema. Otorisasi pelanggan/staf
+  dilakukan API; port PostgreSQL tidak dibuka. Migrasi memakai role terpisah.
 - Timer systemd `single-store-maintenance.timer`: kedaluwarsa pesanan belum dibayar
   dan pembersihan upload sementara kedaluwarsa setiap menit, hanya di server ini.
   Referensi wilayah dibaca dari snapshot lokal; pembaruan data dilakukan manual.
@@ -58,8 +62,7 @@ set. Simpan backup terenkripsi di lokasi lain dengan akses terbatas. Contoh dump
 ```bash
 sudo install -d -m 700 /var/backups/single-store
 sudo sh -c 'umask 077; docker compose -f /opt/single-store/deploy/compose.yaml exec -T db pg_dump -U postgres -d store -Fc > /var/backups/single-store/store.dump'
-sudo tar -czf /var/backups/single-store/files.tar.gz /etc/single-store /var/lib/single-store/media
-sudo chmod 600 /var/backups/single-store/*
+sudo sh -c 'umask 077; tar -czf /var/backups/single-store/files.tar.gz /etc/single-store /var/lib/single-store/media'
 ```
 
 Uji restore pada server terpisah sebelum bergantung pada backup. Jangan menjalankan

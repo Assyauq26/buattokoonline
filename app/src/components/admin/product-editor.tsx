@@ -185,7 +185,7 @@ export function ProductEditor({
   const uploadRequests = useRef(new WeakMap<File, string>());
   const [mediaRecovered, setMediaRecovered] = useState(false);
   useEffect(() => {
-    const key = `gh-product-media:${productId || "new"}`;
+    const key = `store-product-media:${productId || "new"}`;
     let cancelled = false;
     async function restoreMedia() {
       try {
@@ -255,7 +255,7 @@ export function ProductEditor({
       .map((photo) => photo.id);
     try {
       sessionStorage.setItem(
-        `gh-product-media:${productId || "new"}`,
+        `store-product-media:${productId || "new"}`,
         JSON.stringify(ids),
       );
     } catch {
@@ -335,7 +335,7 @@ export function ProductEditor({
         return;
       }
       try {
-        sessionStorage.removeItem(`gh-product-media:${productId || "new"}`);
+        sessionStorage.removeItem(`store-product-media:${productId || "new"}`);
       } catch {
         /* optional */
       }

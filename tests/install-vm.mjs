@@ -33,8 +33,19 @@ assert.equal(sql('SELECT count(*) FROM "User";'),'1');
 assert.equal(sql('SELECT count(*) FROM "Role" WHERE name = \'Super Admin\';'),'0');
 assert.equal(sql('SELECT published->\'identity\'->>\'name\' FROM "StoreAppearance";'),brand);
 assert.equal(sql('SELECT rolsuper::int FROM pg_roles WHERE rolname=\'store_app\';'),'0');
+assert.equal(sql('SELECT (rolcreatedb OR rolcreaterole)::int FROM pg_roles WHERE rolname=\'store_app\';'),'0');
+assert.equal(sql('SELECT rolbypassrls::int FROM pg_roles WHERE rolname=\'store_app\';'),'1');
 assert.equal(execFileSync('sudo',['find','/var/lib/single-store/media','-type','f'],{encoding:'utf8'}).trim(),'');
 pass('Empty catalog/customer/order/promotion/carrier/media state and least-privilege runtime role');
+// Block new outbound connections from the app on this disposable VM. PostgreSQL and
+// Caddy remain reachable on their Docker subnets; no external service can assist the proof.
+const containerId=dc(['ps','-q','app']).trim();
+const networks=JSON.parse(execFileSync('sudo',['docker','inspect','--format','{{json .NetworkSettings.Networks}}',containerId],{encoding:'utf8'}));
+const webNetwork=networks['single-store_web'];assert(webNetwork?.IPAddress);
+const subnet=execFileSync('sudo',['docker','network','inspect','single-store_web','--format','{{(index .IPAM.Config 0).Subnet}}'],{encoding:'utf8'}).trim();
+execFileSync('sudo',['iptables','-I','DOCKER-USER','-s',webNetwork.IPAddress+'/32','!','-d',subnet,'-m','conntrack','--ctstate','NEW','-j','REJECT']);
+dc(['exec','-T','app','node','-e',"fetch('https://example.com',{signal:AbortSignal.timeout(5000)}).then(()=>process.exit(1)).catch(()=>process.exit(0))"]);
+pass('Application outbound internet blocked before storefront/admin/product tests');
 const browser=await chromium.launch({headless:true});
 let context;
 try {
@@ -103,7 +114,7 @@ try {
   assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
   pass('Database, administrator session, brand, product stock and photo survive service restart');
   assert.deepEqual(external,[]);assert.deepEqual(errors,[]);
-  const html=await page.content();assert(!/Gheverhan|JetSeller|Buat Toko Online Sendiri|BTOS/i.test(html));
+  const html=await page.content();assert(!/Ghever|JetSeller|Buat Toko Online Sendiri|BTOS/i.test(html));
   pass('No external browser dependency, source store branding or browser runtime errors');
 } catch(error) {
   reports.push({name:'Failure',status:'FAIL',message:String(error)});

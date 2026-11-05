@@ -379,7 +379,7 @@ export function CheckoutClient({
             value={couponCode}
             maxLength={64}
             autoComplete="off"
-            placeholder="GHEVER10"
+            placeholder="HEMAT10"
             data-testid="input-coupon"
             onChange={(event) =>
               setCouponCode(event.target.value.toUpperCase().replace(/\s/g, ""))

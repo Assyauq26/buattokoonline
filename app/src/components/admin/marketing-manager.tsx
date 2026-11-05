@@ -112,7 +112,7 @@ export function MarketingManager({ vouchers, canCreate, canUpdate, asOfMs }: {
           <h3 className="font-semibold">{editing ? "Edit voucher" : "Buat voucher"}</h3>
           <fieldset disabled={pending} className="space-y-3">
             <div><Label htmlFor="voucher-code">Kode voucher</Label><Input id="voucher-code" value={draft.code}
-              onChange={e => setField("code", e.target.value.toUpperCase())} disabled={!!editing} required minLength={3} maxLength={32} placeholder="GHEVER10"/></div>
+              onChange={e => setField("code", e.target.value.toUpperCase())} disabled={!!editing} required minLength={3} maxLength={32} placeholder="HEMAT10"/></div>
             <div><Label htmlFor="voucher-type">Jenis diskon</Label><select id="voucher-type" value={draft.discountType}
               onChange={e => setField("discountType", e.target.value as VoucherDraft["discountType"])}
               className="h-11 w-full rounded-xl border border-line bg-white px-3 text-sm"><option value="PERCENT">Persentase (%)</option><option value="FIXED">Nominal (Rp)</option></select></div>

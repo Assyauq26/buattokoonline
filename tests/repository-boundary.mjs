@@ -10,7 +10,7 @@ for(const file of files){
     const s=readFileSync(file,'utf8');
     assert(!/-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/.test(s),`Private key: ${file}`);
     if(file.startsWith('app/src/')&&!file.endsWith('PROVENANCE.md')) {
-      assert(!/gheverhan|jetseller|\bBTOS\b|control[-_]plane|tenantId|tenant_id|Super Admin|Buat Toko Online Sendiri/i.test(s),`Source boundary/branding: ${file}`);
+      assert(!/ghever|jetseller|\bBTOS\b|control[-_]plane|tenantId|tenant_id|Super Admin|Buat Toko Online Sendiri|\bgh[_-]/i.test(s),`Source boundary/branding: ${file}`);
     }
   }
 }

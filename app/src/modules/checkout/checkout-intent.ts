@@ -7,7 +7,7 @@ import { HttpError } from "@/lib/response";
 import { authRateLimitRealm, consumeAuthBucket } from "@/lib/auth/rate-limit";
 import { getDirectCheckoutView } from "@/modules/cart/cart.service";
 
-export const CHECKOUT_INTENT_COOKIE = "gh_buy_now";
+export const CHECKOUT_INTENT_COOKIE = "store_buy_now";
 export const CHECKOUT_INTENT_TTL_SECONDS = 15 * 60;
 export const checkoutIntentId = z.string().uuid();
 const selectionSchema = z.object({ variantId: z.string().min(1).max(64), quantity: z.number().int().min(1).max(999) }).strict();

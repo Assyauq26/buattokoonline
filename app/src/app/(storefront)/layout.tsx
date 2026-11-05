@@ -13,7 +13,7 @@ import { RegistrationOtpCleanup } from "@/components/auth/registration-otp-clean
 
 export async function generateMetadata() {
   const {config} = await getPublishedAppearance();
-  return { title: { default: `${config.identity.name} — ${config.identity.tagline}`, template: `%s | ${config.identity.name}` }, description: config.identity.tagline, openGraph: { title: config.identity.name, description: config.identity.tagline } };
+  return { title: { default: config.identity.tagline ? `${config.identity.name} — ${config.identity.tagline}` : config.identity.name, template: `%s | ${config.identity.name}` }, description: config.identity.tagline, openGraph: { title: config.identity.name, description: config.identity.tagline } };
 }
 
 export default async function StorefrontLayout({
@@ -43,7 +43,7 @@ export default async function StorefrontLayout({
             { icon: Truck, t: "Pengiriman Cepat", s: "ke seluruh Indonesia" },
             { icon: ShieldCheck, t: "Belanja Aman", s: "Informasi pesanan jelas" },
             { icon: Headphones, t: "CS Responsif", s: "Siap membantu kamu" },
-            { icon: Star, t: "Demo Store", s: `Kenali ${theme.identity.name}` },
+            { icon: Star, t: theme.identity.name, s: "Temukan produk pilihan kamu" },
           ] : []).map((f, i) => (
             <div key={i} className="flex items-center gap-3">
               <f.icon size={24} className="text-ink" />

@@ -22,7 +22,7 @@ source /etc/os-release
 [[ $(awk '/MemTotal/ {print $2}' /proc/meminfo) -ge 3800000 ]] || fail 'RAM minimal 4 GB diperlukan untuk build.'
 [[ $(df -Pk /var | awk 'NR==2 {print $4}') -ge 12000000 ]] || fail 'Ruang kosong minimal 12 GB diperlukan.'
 [[ -d /run/systemd/system ]] || fail 'Server harus menggunakan systemd.'
-[[ ! -e $CONFIG_DIR && ! -e $INSTALL_DIR && ! -e $DATA_DIR ]] || fail 'Instalasi/data sudah ada. Installer tidak menimpa toko; lihat docs/operations.md.'
+[[ ! -e $CONFIG_DIR && ! -L $CONFIG_DIR && ! -e $INSTALL_DIR && ! -L $INSTALL_DIR && ! -e $DATA_DIR && ! -L $DATA_DIR ]] || fail 'Instalasi/data sudah ada. Installer tidak menimpa toko; lihat docs/operations.md.'
 command -v flock >/dev/null || fail 'util-linux/flock diperlukan.'
 exec 9>/run/single-store-install.lock
 flock -n 9 || fail 'Installer lain sedang berjalan.'
@@ -34,7 +34,7 @@ printf '\nInstalasi toko mandiri — satu instalasi, satu toko.\n'
 IFS= read -r -p 'Nama brand/toko: ' STORE_NAME
 IFS= read -r -p 'Domain toko (contoh: toko.example.com): ' STORE_DOMAIN
 IFS= read -r -p 'Email administrator dashboard: ' ADMIN_EMAIL
-[[ ${#STORE_NAME} -ge 1 && ${#STORE_NAME} -le 100 && $STORE_NAME != *$'\r'* && $STORE_NAME != *$'\t'* && $STORE_NAME == "${STORE_NAME# }" && $STORE_NAME == "${STORE_NAME% }" ]] || fail 'Nama toko tidak valid (1–100 karakter).'
+[[ ${#STORE_NAME} -ge 1 && ${#STORE_NAME} -le 100 && $STORE_NAME != *[[:cntrl:]]* && $STORE_NAME == "${STORE_NAME# }" && $STORE_NAME == "${STORE_NAME% }" ]] || fail 'Nama toko tidak valid (1–100 karakter).'
 STORE_DOMAIN=${STORE_DOMAIN,,}
 if $LOCAL_TEST; then
   [[ $STORE_DOMAIN == localhost ]] || fail '--local-test hanya untuk localhost dengan sertifikat lokal.'
@@ -76,7 +76,10 @@ CRON_SECRET=$(openssl rand -hex 32)
 printf 'POSTGRES_PASSWORD=%s\n' "$POSTGRES_PASSWORD" > "$CONFIG_DIR/postgres.env"
 cat > "$CONFIG_DIR/init.sql" <<SQL
 CREATE ROLE store_owner LOGIN PASSWORD '$OWNER_PASSWORD' NOSUPERUSER NOCREATEDB NOCREATEROLE;
-CREATE ROLE store_app LOGIN PASSWORD '$RUNTIME_PASSWORD' NOSUPERUSER NOCREATEDB NOCREATEROLE;
+-- The trusted server enforces customer/staff permissions. No browser connects to PostgreSQL.
+-- Existing application migrations enable RLS without client policies, so this server role
+-- needs BYPASSRLS while retaining only explicit DML grants (no schema/role ownership).
+CREATE ROLE store_app LOGIN PASSWORD '$RUNTIME_PASSWORD' NOSUPERUSER NOCREATEDB NOCREATEROLE BYPASSRLS;
 CREATE DATABASE store OWNER store_owner;
 REVOKE CONNECT ON DATABASE store FROM PUBLIC;
 GRANT CONNECT ON DATABASE store TO store_owner, store_app;

@@ -128,7 +128,7 @@ describe("official J&T API transport (network mocked)", () => {
     await expect(trackJntOrder(fixture.awb, "SYNTHETIC-ORDER")).rejects.toThrow();
   });
   it("uses Basic Authorization for tracking and keeps AWB in JSON body", async () => {
-    const mock = vi.fn().mockResolvedValue(respond({ awb: "JO9001348812", orderid: "GH-TEST-ID", detail: { receiver: { phone: "SECRET-PHONE" } }, history: [{ status: "Paket diproses", date_time: "2026-10-31 10:30:00", city_name: "JAKARTA", driverPhone: "SECRET-PHONE" }] }));
+    const mock = vi.fn().mockResolvedValue(respond({ awb: "JO9001348812", orderid: "SO-TEST-ID", detail: { receiver: { phone: "SECRET-PHONE" } }, history: [{ status: "Paket diproses", date_time: "2026-10-31 10:30:00", city_name: "JAKARTA", driverPhone: "SECRET-PHONE" }] }));
     vi.stubGlobal("fetch", mock);
     const result = await trackJntOrder("JO9001348812");
     expect(result).toMatchObject({ awb: "JO9001348812", events: [{ status: "Paket diproses", time: "2026-10-31 10:30:00", note: "JAKARTA" }] });

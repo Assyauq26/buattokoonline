@@ -3,14 +3,14 @@ import { voucherInputSchema } from "@/modules/promotions/marketing.validation";
 import { activeScheduledFlashPrice, effectiveProductPrice } from "@/modules/promotions/scheduled-flash-sale";
 
 const voucher = () => ({
-  code: "GHEVER10", discountType: "PERCENT" as const,
+  code: "HEMAT10", discountType: "PERCENT" as const,
   discountValue: 10, minSpend: 150000, maxDiscount: 25000,
   expiresAt: null, isActive: true,
 });
 
 describe("Marketing voucher input", () => {
   it("normalizes coupon codes and validates percentage and Rupiah", () => {
-    expect(voucherInputSchema.parse({ ...voucher(), code: " ghever10 " }).code).toBe("GHEVER10");
+    expect(voucherInputSchema.parse({ ...voucher(), code: " hemat10 " }).code).toBe("HEMAT10");
     for (const discountValue of [0, -1, 1.2, 101, 2147483648, Infinity])
       expect(voucherInputSchema.safeParse({ ...voucher(), discountValue }).success).toBe(false);
     for (const code of ["A", "Hello world", "abc<script>", "../promo", "x".repeat(33)])
