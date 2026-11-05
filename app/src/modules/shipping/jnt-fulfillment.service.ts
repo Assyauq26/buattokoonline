@@ -1,4 +1,5 @@
 import "server-only";
+import { jntDistrictCodePattern } from "@/infrastructure/shipping/jnt/mapping-codes";
 import { createHash } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { HttpError } from "@/lib/response";
@@ -85,14 +86,14 @@ export async function createJntAwb(orderId: string, actorId: string, input: {pic
        order.shippingCourier!=="J&T Express"||order.shippingMode!=="official"||!["EZ","HBO","JND","JSD"].includes(order.shippingService || "")) {
       throw new HttpError("Resi resmi hanya untuk order J&T yang lunas, dikemas, dan bertarif resmi",409);
     }
-    if(!order.address?.districtCode || !order.address.villageCode || !order.address.phone ||
+    if(!order.address?.districtCode || !order.address.phone ||
        !order.address.recipientName || !order.address.postalCode)throw new HttpError("Alamat pesanan belum lengkap",422);
     if(order.shipment)throw new HttpError("Shipment sudah ada; selesaikan rekonsiliasi terlebih dahulu",409);
     await assertNoActiveRefund(tx,order.payment.id);
     const { config, environment, mappingVersion } = await historicJntConfig(order.jntCheckoutRevisionId, tx);
     const sender = warehouse(config);
     const mapped = await getVerifiedJntDistrict(order.address.districtCode, mappingVersion, tx);
-    if(order.address.cityCode && !order.address.cityCode.startsWith(order.address.provinceCode||"??"))throw new HttpError("Hierarki alamat tidak valid",422);
+    if(!jntDistrictCodePattern.test(order.address.districtCode) && order.address.cityCode && !order.address.cityCode.startsWith(order.address.provinceCode||"??"))throw new HttpError("Hierarki alamat tidak valid",422);
     if(order.shippingWeightGram==null||order.shippingWeightGram<=0||order.shippingWeightGram>100_000)throw new HttpError("Berat pesanan tidak valid",422);
     const qty=order.items.reduce((sum,i)=>sum+i.quantity,0);
     if(qty<1||qty>100||order.subtotal<1||order.subtotal>99_999_999)throw new HttpError("Jumlah atau nilai paket di luar batas API J&T",422);

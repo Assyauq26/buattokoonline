@@ -55,6 +55,10 @@ async function jntChecklist(environment: JntEnvironment, db: Prisma.TransactionC
     if (!district) throw new HttpError("Pilih kecamatan gudang dari mapping resmi", 422);
     const { version, releaseStamp } = await readActiveJntRelease(db);
     const origin = await mappedWarehouse(district, version, db);
+    const savedWarehouse = state?.config.seller?.warehouse;
+    if (origin.originSite !== savedWarehouse?.originSite || origin.originCityCode !== savedWarehouse?.originCityCode) {
+      throw new HttpError("Kode gudang berubah pada mapping terbaru. Simpan ulang konfigurasi J&T.", 422);
+    }
     if (!await db.jntMappingImport.findUnique({ where: { version: origin.version }, select: { version: true } })) {
       throw new HttpError("Unggah dan aktifkan mapping dengan lima kode J&T yang terpisah", 422);
     }

@@ -6,7 +6,7 @@ import { Truck, CreditCard } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Textarea } from "@/components/ui/input";
 import { RegionSelectorDialog } from "./region-selector-dialog";
-import { addressSchema, locationSchema, type SelectedLocation } from "@/modules/regions/region.validation";
+import { addressSchema, jntLocationSchema, locationSchema, type SelectedLocation } from "@/modules/regions/region.validation";
 import { formatIDR } from "@/lib/money";
 import { createOrderAction } from "@/modules/checkout/checkout.actions";
 import type { CheckoutLines } from "@/modules/checkout/checkout.validation";
@@ -76,6 +76,7 @@ export function CheckoutClient({
   intentId,
   banks,
   address,
+  jntCheckout = false,
 }: {
   subtotal: number;
   expectedLines: CheckoutLines;
@@ -83,6 +84,7 @@ export function CheckoutClient({
   intentId?: string;
   banks: Bank[];
   address: Addr | null;
+  jntCheckout?: boolean;
 }) {
   const [state, action] = useFormState(createOrderAction, { ok: false } as any);
   const submitting = useRef(false);
@@ -91,9 +93,14 @@ export function CheckoutClient({
   }, [state]);
   const [rates, setRates] = useState<Rate[]>([]);
   const [rateIdx, setRateIdx] = useState(-1);
-  const [location, setLocation] = useState<SelectedLocation | null>(() =>
-    address && locationSchema.safeParse(address).success && address.district && address.village
-      ? { ...address, ...locationSchema.parse(address), district: address.district, village: address.village, regionSource: address.regionSource || "emsifa-v2", regionUpdatedAt: address.regionUpdatedAt || "" } : null);
+  const [location, setLocation] = useState<SelectedLocation | null>(() => {
+    if (!address?.district) return null;
+    const schema = jntCheckout ? jntLocationSchema : locationSchema;
+    const parsed = schema.safeParse({ ...address, villageCode: jntCheckout ? address.villageCode ?? "" : address.villageCode });
+    if (!parsed.success || (!jntCheckout && !address.village)) return null;
+    return { ...address, ...parsed.data, district: address.district, village: address.village ?? "",
+      regionSource: jntCheckout ? "jnt-mapping" : "emsifa-v2", regionUpdatedAt: address.regionUpdatedAt || "" };
+  });
   const [recipient, setRecipient] = useState(address?.recipientName || "");
   const [phone, setPhone] = useState(address?.phone || "");
   const [street, setStreet] = useState(address?.line || "");
@@ -271,7 +278,7 @@ export function CheckoutClient({
         </section>
         <section className="space-y-3">
           <h2 className="font-display text-lg font-bold text-ink">Alamat Pengiriman</h2>
-          <RegionSelectorDialog value={location} onChange={value => { setLocation(value); setRateIdx(-1); setRates([]); }} />
+          <RegionSelectorDialog jntCheckout={jntCheckout} value={location} onChange={value => { setLocation(value); setRateIdx(-1); setRates([]); }} />
           {!location && address && <p className="text-sm text-ink-soft">Alamat tersimpan: {address.city}, {address.province}. Lengkapi wilayah melalui Pilih Lokasi; detail jalan Anda tetap tersimpan.</p>}
           {["provinceCode", "cityCode", "districtCode", "villageCode", "province", "city", "postalCode"].map(name => <input key={name} type="hidden" name={name} value={location?.[name as keyof SelectedLocation] || ""} />)}
           <div>

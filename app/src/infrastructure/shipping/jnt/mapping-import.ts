@@ -1,17 +1,12 @@
 import "server-only";
-import { mappingRegionIdentity } from "./mapping-region-identity";
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
-import { gunzipSync } from "node:zlib";
 import { z } from "zod";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { HttpError } from "@/lib/http-error";
 import { writeAudit } from "@/modules/audit/audit.service";
 import { lockShippingSettings } from "@/modules/shipping/shipping-settings.service";
-import { decryptJntConfig, jntEnvironment } from "./official-config";
-import { districtCodePattern, tariffAreaPattern } from "./verified-mapping";
+import { tariffAreaPattern } from "./verified-mapping";
 import { parseMappingFile } from "./mapping-file";
 
 const column = z.number().int().min(0).max(39);
@@ -20,29 +15,6 @@ export const mappingColumns = z.object({
   sendSiteCode: column, originCityCode: column, destAreaCode: column, destinationCityCode: column, receiverArea: column,
 }).strict();
 type Columns = z.infer<typeof mappingColumns>;
-const identity = mappingRegionIdentity;
-
-type Region = { code: string; name: string };
-let regions: { byName: Map<string, string[]>; byCode: Map<string, string> } | undefined;
-
-function districtIndex() {
-  if (regions) return regions;
-  const lists = JSON.parse(gunzipSync(readFileSync(join(process.cwd(), "src/modules/regions/data/snapshot.json.gz"))).toString()) as Record<string, { data: Region[] }>;
-  const byName = new Map<string, string[]>(), byCode = new Map<string, string>();
-  for (const province of lists.provinces.data) {
-    for (const city of lists["regencies/" + province.code]?.data ?? []) {
-      for (const district of lists["districts/" + city.code]?.data ?? []) {
-        const key = identity(province.name, city.name, district.name);
-        const codes = byName.get(key) ?? [];
-        codes.push(district.code);
-        byName.set(key, codes);
-        byCode.set(district.code, key);
-      }
-    }
-  }
-  return regions = { byName, byCode };
-}
-
 export async function inspectMapping(filename: string, file: Buffer, input: {
   sheet?: string; delimiter?: "," | ";"; headerRow: number; columns?: Columns;
 }) {
@@ -50,7 +22,7 @@ export async function inspectMapping(filename: string, file: Buffer, input: {
   const header = parsed.rows.find(row => row.number === input.headerRow)?.cells;
   if (!header?.some(cell => cell?.trim())) throw new HttpError("Baris header tidak ditemukan", 422);
   const checksum = createHash("sha256").update(file).digest("hex");
-  const version = createHash("sha256").update(JSON.stringify([checksum, parsed.sheet, input.delimiter ?? ",", input.headerRow,
+  const version = createHash("sha256").update(JSON.stringify(["jnt-source-v1", checksum, parsed.sheet, input.delimiter ?? ",", input.headerRow,
     input.columns && Object.entries(input.columns).sort()])).digest("hex");
   const body = parsed.rows.filter(row => row.number > input.headerRow && row.cells.some(cell => cell?.trim()));
   const preview = { header: Array.from(header, cell => (cell || "").slice(0, 100)), samples: body.slice(0, 3)
@@ -64,7 +36,6 @@ export async function inspectMapping(filename: string, file: Buffer, input: {
   }
   const rows: Array<Prisma.JntL3MappingCreateManyInput & { sourceRow: number }> = [];
   if (columns) {
-    const { byName, byCode } = districtIndex();
     const byDistrict = new Map<string, number>(), byReceiverArea = new Map<string, number>();
     const conflictRows = new Set<number>();
     function issue(row: number, reason: string) {
@@ -75,33 +46,26 @@ export async function inspectMapping(filename: string, file: Buffer, input: {
       const province = get("province"), city = get("city"), district = get("district");
       const sendSiteCode = get("sendSiteCode"), originCityCode = get("originCityCode"), destAreaCode = get("destAreaCode");
       const jntCityCode = get("destinationCityCode"), jntAreaCode = get("receiverArea");
-      const code = get("districtCode"), key = identity(province, city, district);
-      if (code && !districtCodePattern.test(code)) {
+      if ([province, city, district].some(name => !name || name.length > 130 || /[\p{Cc}]/u.test(name))) {
         report.invalid++;
-        issue(number, "districtCode harus berupa kode kecamatan internal (contoh 11.05.01). Kosongkan kolom ini untuk pencocokan otomatis berdasarkan nama wilayah.");
+        issue(number, "Isi Provinsi, Kota/Kabupaten, dan Kecamatan dari file J&T.");
         continue;
       }
-      const matches = code ? (districtCodePattern.test(code) && byCode.get(code) === key ? [code] : []) : (byName.get(key) ?? []);
-      if (matches.length !== 1) {
-        if (matches.length) report.ambiguous++; else report.unmatched++;
-        issue(number, matches.length ? "Wilayah ambigu. Sertakan kode kecamatan internal." : "Wilayah tidak ditemukan: " + province + " / " + city + " / " + district + (code ? " (districtCode " + code + " tidak sesuai hierarki)." : ". Periksa nama atau gunakan kode kecamatan internal."));
-        continue;
-      }
-      const emsifaDistrictCode = matches[0];
+      const districtPath = JSON.stringify([province, city, district].map(name => name.normalize("NFKC").toLowerCase().replace(/\s+/g, " ")));
       if (!tariffAreaPattern.test(sendSiteCode) || !tariffAreaPattern.test(destAreaCode) ||
           !/^[A-Z0-9]{3}$/.test(originCityCode) || !/^[A-Z0-9]{3}$/.test(jntCityCode) || !/^[A-Z0-9]{1,10}$/.test(jntAreaCode)) {
         report.invalid++;
         issue(number, "Kode wajib hilang atau tidak valid (sendSiteCode, origin_code, destAreaCode, destination_code, receiver_area).");
         continue;
       }
-      for (const [index, value] of [[byDistrict, emsifaDistrictCode], [byReceiverArea, jntAreaCode]] as const) {
+      for (const [index, value] of [[byDistrict, districtPath], [byReceiverArea, jntAreaCode]] as const) {
         const prior = index.get(value);
         if (prior !== undefined) {
           conflictRows.add(prior); conflictRows.add(number);
         } else index.set(value, number);
       }
       rows.push({ id: version + ":" + jntAreaCode, version, province, city, district, sendSiteCode, originCityCode, destAreaCode,
-        jntProvince: "", jntCity: "", jntDistrict: "", jntCityCode, jntAreaCode, emsifaDistrictCode,
+        jntProvince: province, jntCity: city, jntDistrict: district, jntCityCode, jntAreaCode, emsifaDistrictCode: null,
         matchStatus: "EXACT", sourceRow: number });
     }
     report.duplicate = conflictRows.size;
@@ -143,16 +107,6 @@ async function activateMappingInTransaction(tx: Prisma.TransactionClient, versio
     // Existing checkout revisions keep their immutable mapping version.
     if (!await tx.jntMappingImport.findUnique({ where: { version }, select: { version: true } })) {
       throw new HttpError("Versi mapping resmi yang telah divalidasi tidak ditemukan", 404);
-    }
-    const integrations = await tx.jntIntegration.findMany();
-    for (const integration of integrations) {
-      const config = decryptJntConfig(integration.encryptedConfig, jntEnvironment.parse(integration.environment));
-      const district = config.seller?.warehouse.districtCode;
-      if (!district) continue;
-      const warehouse = await tx.jntL3Mapping.findFirst({ where: { version, emsifaDistrictCode: district, matchStatus: "EXACT" } });
-      if (!warehouse?.sendSiteCode || !warehouse.originCityCode) {
-        throw new HttpError("Versi ini tidak mencakup kode asal gudang tersimpan di " + integration.environment, 409);
-      }
     }
     const approvedAt = new Date();
     await tx.jntL3Mapping.updateMany({ where: { version, matchStatus: "EXACT", approvedAt: null }, data: { approvedAt } });

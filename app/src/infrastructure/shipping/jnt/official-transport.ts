@@ -1,4 +1,5 @@
 import "server-only";
+import { tariffAreaPattern } from "./mapping-codes";
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import { HttpError } from "@/lib/response";
@@ -73,8 +74,8 @@ export interface JntRateRequest {
 }
 export async function checkJntRate(input: JntRateRequest, approvedConfig?: JntConfig): Promise<ShippingRate[]> {
   const cfg = approvedConfig ?? await activeJntConfig();
-  if (!/^[A-Z][A-Z0-9 -]{1,79}$/.test(input.originSite) ||
-      !/^[A-Z][A-Z0-9 -]{1,79}$/.test(input.destinationArea) ||
+  if (!tariffAreaPattern.test(input.originSite) ||
+      !tariffAreaPattern.test(input.destinationArea) ||
       !Number.isSafeInteger(input.weightGram) || input.weightGram <= 0 || input.weightGram > 100_000) {
     throw new HttpError("Rute atau berat J&T tidak valid", 422);
   }

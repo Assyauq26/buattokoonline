@@ -4,11 +4,14 @@ import { useEffect, useRef, useState } from "react";
 import { Check, ChevronRight, MapPin, Search, X } from "lucide-react";
 import { Input, Label } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { locationSchema, regionLevels, type Region, type RegionList, type SelectedLocation } from "@/modules/regions/region.validation";
+import { jntLocationSchema, locationSchema, regionLevels, type Region, type RegionList, type SelectedLocation } from "@/modules/regions/region.validation";
 
-const labels = ["Provinsi", "Kota/Kabupaten", "Kecamatan", "Desa/Kelurahan"];
+const regionLabels = ["Provinsi", "Kota/Kabupaten", "Kecamatan", "Desa/Kelurahan"];
 const clientCache = new Map<string, { list: RegionList; expires: number }>();
-export function RegionSelectorDialog({ value, onChange }: { value: SelectedLocation | null; onChange: (value: SelectedLocation) => void }) {
+export function RegionSelectorDialog({ value, onChange, jntCheckout = false }: { value: SelectedLocation | null; onChange: (value: SelectedLocation) => void; jntCheckout?: boolean }) {
+  const lastStep = jntCheckout ? 3 : 4;
+  const labels = regionLabels.slice(0, lastStep);
+  const schema = jntCheckout ? jntLocationSchema : locationSchema;
   const [open, setOpen] = useState(false);
   const [container, setContainer] = useState<HTMLElement | null>(null);
   const [draft, setDraft] = useState<Region[]>([]);
@@ -22,52 +25,58 @@ export function RegionSelectorDialog({ value, onChange }: { value: SelectedLocat
   const confirmRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     if (!open) return;
-    const frame = requestAnimationFrame(() => (step < 4 ? searchRef.current : confirmRef.current)?.focus());
+    const frame = requestAnimationFrame(() => (step < lastStep ? searchRef.current : confirmRef.current)?.focus());
     return () => cancelAnimationFrame(frame);
-  }, [open, step]);
+  }, [open, step, lastStep]);
   useEffect(() => setContainer(document.querySelector<HTMLElement>(".storefront-checkout-root, .storefront-root")), []);
   const parent = step ? draft[step - 1]?.code : "";
-  const key = step < 4 ? `${regionLevels[step]}:${parent || ""}` : "done";
+  const province = draft[0]?.code ?? "";
+  const key = step < lastStep ? `${jntCheckout ? "jnt:" + province : "manual"}:${regionLevels[step]}:${parent || ""}` : "done";
   useEffect(() => {
-    if (!open || step === 4 || parent === undefined) return;
+    if (!open || step === lastStep || parent === undefined) return;
     const cached = clientCache.get(key);
-    if (cached && cached.expires > Date.now()) { setState({ key, list: cached.list }); return; }
+    if (!jntCheckout && cached && cached.expires > Date.now()) { setState({ key, list: cached.list }); return; }
     const controller = new AbortController();
     setState({ key });
-    fetch(`/api/v1/regions?level=${regionLevels[step]}&parent=${encodeURIComponent(parent)}`, { signal: controller.signal })
+    const params = new URLSearchParams({ level: regionLevels[step], parent });
+    if (jntCheckout) { params.set("source", "jnt-checkout"); params.set("province", province); }
+    fetch("/api/v1/regions?" + params, { signal: controller.signal })
       .then(async response => {
         const result = await response.json();
         if (!response.ok || !result.success) throw new Error("regions");
         return result.data as RegionList;
       }).then(list => {
         if (controller.signal.aborted) return;
-        if (clientCache.size >= 128) clientCache.delete(clientCache.keys().next().value!);
-        clientCache.set(key, { list, expires: Date.now() + 300_000 });
+        if (!jntCheckout) {
+          if (clientCache.size >= 128) clientCache.delete(clientCache.keys().next().value!);
+          clientCache.set(key, { list, expires: Date.now() + 300_000 });
+        }
         setState({ key, list });
       }).catch(() => { if (!controller.signal.aborted) setState({ key, error: true }); });
     return () => controller.abort();
-  }, [open, key, parent, step, retry]);
+  }, [open, key, parent, step, retry, jntCheckout, lastStep, province]);
   function changeOpen(next: boolean) {
     if (next) {
       setDraft(value ? [
         { code: value.provinceCode, name: value.province }, { code: value.cityCode, name: value.city },
-        { code: value.districtCode, name: value.district }, { code: value.villageCode, name: value.village, postalCode: value.postalCode },
+        { code: value.districtCode, name: value.district },
+        ...(!jntCheckout ? [{ code: value.villageCode, name: value.village, postalCode: value.postalCode }] : []),
       ] : []);
       setPostal(value?.postalCode || ""); setUpdatedAt(value?.regionUpdatedAt || "");
-      setStep(value ? 4 : 0); setQuery("");
+      setStep(value ? lastStep : 0); setQuery("");
     }
     setOpen(next);
   }
   const list = state.key === key ? state.list : undefined;
   const filtered = list?.data.filter(r => r.name.toLocaleLowerCase("id").includes(query.trim().toLocaleLowerCase("id")));
-  const codes = { provinceCode: draft[0]?.code, cityCode: draft[1]?.code, districtCode: draft[2]?.code, villageCode: draft[3]?.code, postalCode: postal };
+  const codes = { provinceCode: draft[0]?.code, cityCode: draft[1]?.code, districtCode: draft[2]?.code, villageCode: jntCheckout ? "" : draft[3]?.code, postalCode: postal };
   return <Dialog.Root open={open} onOpenChange={changeOpen}>
     <Dialog.Trigger asChild>
       <button type="button" className="region-trigger" data-testid="select-location">
         <MapPin size={20} aria-hidden="true" />
         <span className="min-w-0 flex-1 text-left">
-          <strong className="block text-sm">{value ? `${value.village}, ${value.district}` : "Pilih Lokasi Pengiriman"}</strong>
-          <span className="block text-xs text-ink-soft">{value ? `${value.city}, ${value.province} ${value.postalCode}` : "Pilih Provinsi, Kota/Kabupaten, Kecamatan, dan Desa/Kelurahan."}</span>
+          <strong className="block text-sm">{value ? [value.village, value.district].filter(Boolean).join(", ") : "Pilih Lokasi Pengiriman"}</strong>
+          <span className="block text-xs text-ink-soft">{value ? `${value.city}, ${value.province} ${value.postalCode}` : jntCheckout ? "Pilih Provinsi, Kota/Kabupaten, dan Kecamatan J&T." : "Pilih Provinsi, Kota/Kabupaten, Kecamatan, dan Desa/Kelurahan."}</span>
         </span><ChevronRight size={18} aria-hidden="true" />
       </button>
     </Dialog.Trigger>
@@ -84,7 +93,7 @@ export function RegionSelectorDialog({ value, onChange }: { value: SelectedLocat
             <span className="block font-semibold">{label}</span><span className="block truncate">{draft[i]?.name || "Pilih wilayah"}</span>
           </button>)}
         </nav>
-        {step < 4 ? <>
+        {step < lastStep ? <>
           <Label htmlFor="region-search" className="sr-only">Cari {labels[step]}</Label>
           <div className="relative"><Search className="pointer-events-none absolute left-3 top-3" size={18} aria-hidden="true" /><Input ref={searchRef} id="region-search" value={query} onChange={e => setQuery(e.target.value)} placeholder="Cari provinsi / kota / kecamatan / desa..." className="pl-10" autoComplete="off" /></div>
           <div className="region-options" aria-label={labels[step]} aria-busy={!list && !state.error}>
@@ -99,9 +108,9 @@ export function RegionSelectorDialog({ value, onChange }: { value: SelectedLocat
           <p className="text-sm" data-testid="region-confirm-summary">{draft.map(r => r.name).join(", ")}</p>
           <div><Label htmlFor="region-postal">Kode pos</Label><Input id="region-postal" inputMode="numeric" maxLength={5} value={postal} readOnly={!!draft[3]?.postalCode} onChange={e => setPostal(e.target.value.replace(/\D/g, ""))} /></div>
           {!draft[3]?.postalCode && <p className="text-xs text-ink-soft">Kode pos belum tersedia dari sumber wilayah. Isi kode pos alamat Anda.</p>}
-          <Button ref={confirmRef} type="button" className="w-full" disabled={!locationSchema.safeParse(codes).success} onClick={() => {
-            const parsed = locationSchema.parse(codes);
-            onChange({ ...parsed, province: draft[0].name, city: draft[1].name, district: draft[2].name, village: draft[3].name, regionSource: "emsifa-v2", regionUpdatedAt: updatedAt });
+          <Button ref={confirmRef} type="button" className="w-full" disabled={!schema.safeParse(codes).success} onClick={() => {
+            const parsed = schema.parse(codes);
+            onChange({ ...parsed, province: draft[0].name, city: draft[1].name, district: draft[2].name, village: draft[3]?.name ?? "", regionSource: jntCheckout ? "jnt-mapping" : "emsifa-v2", regionUpdatedAt: updatedAt });
             setOpen(false);
           }}>Gunakan lokasi ini</Button>
         </div>}

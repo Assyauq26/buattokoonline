@@ -153,7 +153,7 @@ function JntEnvironmentSettings({ environment, setEnvironment, mapping, setMappi
         <label className="text-sm">Nama<input required maxLength={30} className={field} value={warehouse.name} onChange={event => { setWarehouse(previous => ({ ...previous, name: event.target.value })); edited(); }} /></label>
         <label className="text-sm">Nomor telepon<input required type="tel" maxLength={15} placeholder="081234567890" className={field} value={warehouse.phone} onChange={event => { setWarehouse(previous => ({ ...previous, phone: event.target.value })); edited(); }} /></label>
       </div>
-      <WarehouseRegions value={warehouse.districtCode} onChange={districtCode => { setWarehouse(previous => ({ ...previous, districtCode })); edited(); }} />
+      <WarehouseRegions mappingVersion={mapping?.activeVersion ?? null} value={warehouse.districtCode} onChange={districtCode => { setWarehouse(previous => ({ ...previous, districtCode })); edited(); }} />
       <label className="block text-sm">Alamat lengkap<textarea required maxLength={200} rows={2} className={field} value={warehouse.address} onChange={event => { setWarehouse(previous => ({ ...previous, address: event.target.value })); edited(); }} /></label>
     </fieldset>
     <fieldset disabled={busy || !stored}><JntMappingSettings state={mapping} onChange={mappingChanged} /></fieldset>
@@ -173,26 +173,35 @@ function JntEnvironmentSettings({ environment, setEnvironment, mapping, setMappi
   </form>;
 }
 
-function WarehouseRegions({ value, onChange }: { value: string; onChange: (code: string) => void }) {
-  const [province, setProvince] = useState(value.slice(0, 2));
-  const [city, setCity] = useState(value.slice(0, 5));
+function WarehouseRegions({ value, onChange, mappingVersion }: { value: string; onChange: (code: string) => void; mappingVersion: string | null }) {
+  const [province, setProvince] = useState("");
+  const [city, setCity] = useState("");
   const [lists, setLists] = useState<Record<string, { code: string; name: string }[]>>({});
   const [error, setError] = useState("");
-  useEffect(() => { if (value) { setProvince(value.slice(0, 2)); setCity(value.slice(0, 5)); } }, [value]);
+  useEffect(() => {
+    if (!value || !mappingVersion) return;
+    const controller = new AbortController();
+    const params = new URLSearchParams({ source: "jnt-warehouse", level: "provinces", selected: value });
+    shippingRequest<{ province: string; city: string }>("/api/v1/regions?" + params, { signal: controller.signal })
+      .then(path => { if (!controller.signal.aborted) { setProvince(path.province); setCity(path.city); } })
+      .catch(() => { if (!controller.signal.aborted) setError("Pilih ulang gudang dari mapping J&T yang aktif."); });
+    return () => controller.abort();
+  }, [value, mappingVersion]);
   useEffect(() => {
     const controller = new AbortController();
     const requests = [["provinces", ""], ...(province ? [["regencies", province]] : []), ...(city ? [["districts", city]] : [])];
     Promise.all(requests.map(async ([level, parent]) => {
-      const data = await shippingRequest<{ data: { code: string; name: string }[] }>("/api/v1/regions?level=" + level + "&parent=" + parent, { signal: controller.signal });
+      const data = await shippingRequest<{ data: { code: string; name: string }[] }>("/api/v1/regions?" + new URLSearchParams({ source: "jnt-warehouse", level, parent, province }), { signal: controller.signal });
       return [level, data.data] as const;
     })).then(items => { setLists(Object.fromEntries(items)); setError(""); })
       .catch(() => { if (!controller.signal.aborted) setError("Wilayah gagal dimuat. Silakan muat ulang."); });
     return () => controller.abort();
-  }, [province, city]);
+  }, [province, city, mappingVersion]);
   return <div className="grid gap-4 sm:grid-cols-3">
     <label className="text-sm">Provinsi<select required className={field} value={province} onChange={event => { setProvince(event.target.value); setCity(""); onChange(""); }}><option value="">Pilih provinsi</option>{lists.provinces?.map(row => <option key={row.code} value={row.code}>{row.name}</option>)}</select></label>
     <label className="text-sm">Kota/Kabupaten<select required disabled={!province} className={field} value={city} onChange={event => { setCity(event.target.value); onChange(""); }}><option value="">Pilih kota/kabupaten</option>{lists.regencies?.map(row => <option key={row.code} value={row.code}>{row.name}</option>)}</select></label>
     <label className="text-sm">Kecamatan<select required disabled={!city} className={field} value={value} onChange={event => onChange(event.target.value)}><option value="">Pilih kecamatan</option>{lists.districts?.map(row => <option key={row.code} value={row.code}>{row.name}</option>)}</select></label>
+    {!mappingVersion && <p className="text-sm text-zinc-600">Unggah mapping J&T untuk mengisi pilihan wilayah gudang.</p>}
     {error && <p role="status" className="text-sm">{error}</p>}
   </div>;
 }

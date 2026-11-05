@@ -3,8 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { HttpError } from "@/lib/http-error";
 import type { Prisma } from "@prisma/client";
 
-export const districtCodePattern = /^\d{2}\.\d{2}\.\d{2}$/;
-export const tariffAreaPattern = /^[A-Z][A-Z0-9 -]{1,79}$/;
+import { districtCodePattern, jntDistrictCodePattern, tariffAreaPattern } from "./mapping-codes";
+export { districtCodePattern, tariffAreaPattern };
 
 export async function readActiveJntRelease(db: Prisma.TransactionClient = prisma) {
   const release = await db.jntMappingRelease.findUnique({ where: { key: "primary" } });
@@ -12,15 +12,19 @@ export async function readActiveJntRelease(db: Prisma.TransactionClient = prisma
   return { version: release.activeVersion, releaseStamp: release.activeVersion + ":" + release.approvedAt.toISOString() };
 }
 
-export async function getVerifiedJntDistrict(districtCode: string, version?: string, db: Prisma.TransactionClient = prisma) {
+export async function findVerifiedJntDistrict(districtCode: string, version?: string, db: Prisma.TransactionClient = prisma) {
   if (!districtCodePattern.test(districtCode)) throw new HttpError("Kode kecamatan administratif tidak valid", 422);
   const activeVersion = version ?? (await readActiveJntRelease(db)).version;
   const matches = await db.jntL3Mapping.findMany({
-    where: { version: activeVersion, emsifaDistrictCode: districtCode, matchStatus: "EXACT", approvedAt: { not: null } },
+    where: { version: activeVersion, ...(jntDistrictCodePattern.test(districtCode) ? { jntAreaCode: districtCode.slice(4) } : { emsifaDistrictCode: districtCode }), matchStatus: "EXACT", approvedAt: { not: null } },
     take: 2,
   });
   if (matches.length !== 1) throw new HttpError("Kecamatan ini belum memiliki mapping J&T resmi yang unik. Pilih kecamatan lain atau hubungi toko.", 422);
-  const row = matches[0];
+  return matches[0];
+}
+
+export async function getVerifiedJntDistrict(districtCode: string, version?: string, db?: Prisma.TransactionClient) {
+  const row = await findVerifiedJntDistrict(districtCode, version, db);
   return {
     version: row.version,
     sendSiteCode: row.sendSiteCode, originCityCode: row.originCityCode, destAreaCode: row.destAreaCode,

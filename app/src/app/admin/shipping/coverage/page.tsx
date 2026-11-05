@@ -20,14 +20,14 @@ export default async function ShippingCoveragePage() {
   ]);
   const codes=recent.flatMap(r=>r.districtCode?[r.districtCode]:[]);
   const mapped=release&&codes.length?await prisma.jntL3Mapping.findMany({
-    where:{version:release.activeVersion,emsifaDistrictCode:{in:codes},matchStatus:"EXACT",approvedAt:{not:null}},
-    select:{emsifaDistrictCode:true},
+    where:{version:release.activeVersion,OR:[{emsifaDistrictCode:{in:codes}},{jntAreaCode:{in:codes.filter(code=>code.startsWith("JNT-")).map(code=>code.slice(4))}}],matchStatus:"EXACT",approvedAt:{not:null}},
+    select:{emsifaDistrictCode:true,jntAreaCode:true},
   }):[];
-  const matched=new Set(mapped.map(r=>r.emsifaDistrictCode));
+  const matched=new Set(mapped.flatMap(r=>[r.emsifaDistrictCode,"JNT-"+r.jntAreaCode]));
   const missing=recent.filter(r=>!r.districtCode||!matched.has(r.districtCode));
   return <div className="space-y-5">
     <h1 className="font-display text-2xl font-bold">Kesiapan pengiriman J&T Express</h1>
-    <p className="text-sm text-zinc-600">Alamat pelanggan tetap memakai Emsifa sampai desa/kelurahan. Pengiriman menggunakan kecamatan dan kode resmi J&T yang telah divalidasi.</p>
+    <p className="text-sm text-zinc-600">Pilihan wilayah checkout J&T mengikuti provinsi, kota/kabupaten, dan kecamatan dari file mapping aktif.</p>
     <div className="grid gap-3 sm:grid-cols-3">
       {[["Mapping resmi: versi aktif",release?release.activeVersion.slice(0,12):"Belum ada"],["Kecamatan J&T",String(total)],["Kecamatan terverifikasi",String(verified)]].map(([label,value])=><div key={label} className="rounded-2xl bg-white p-4 shadow-sm"><p className="text-xs text-zinc-500">{label}</p><p className="mt-1 break-all text-lg font-bold">{value}</p></div>)}
     </div>

@@ -1,3 +1,4 @@
+import { validateJntLocation } from "@/infrastructure/shipping/jnt/mapping-regions";
 import { lockCampaignPricing } from "@/modules/promotions/campaign-pricing";
 import { createHash } from "node:crypto";
 import { prisma } from "@/lib/prisma";
@@ -64,8 +65,7 @@ async function shippingInquiry(cart: { lines: Array<{ product: { id: string }; q
   if (!Number.isSafeInteger(weightGram) || weightGram <= 0 || weightGram > 2_147_483_647) throw new HttpError("Berat pesanan tidak valid", 422);
   return { destination, weightGram, packages };
 }
-async function checkoutShipping(userId: string, cart: { lines: Array<CheckoutLines[number] & { product: { id: string } }> }, location: SelectedLocation) {
-  const settings = await readShippingSettings();
+async function checkoutShipping(userId: string, cart: { lines: Array<CheckoutLines[number] & { product: { id: string } }> }, location: SelectedLocation, settings: Awaited<ReturnType<typeof readShippingSettings>>) {
   const inquiry = settings.activeJnt ? await shippingInquiry(cart, location) : { destination: location, weightGram: 0, packages: [] };
   let rates: ShippingRate[];
   if (settings.activeJnt) {
@@ -92,9 +92,12 @@ export async function previewCheckout(
   const cart = input.intentId ? await getIntentCheckoutView(input.intentId, userId) : await getCartView(userId);
   if (cart.lines.length === 0) throw new HttpError("Keranjang kosong", 400);
 
-  const location = input.address ? await validateLocation(input.address) : null;
+  const settings = input.address ? await readShippingSettings() : null;
+  const location = !input.address ? null : settings?.activeJnt
+    ? await validateJntLocation(input.address, settings.activeJnt.mappingVersion)
+    : await validateLocation(input.address);
   if (input.shipping && !location) throw new HttpError("Silakan pilih lokasi pengiriman.", 422);
-  const shipping = location ? await checkoutShipping(userId, cart, location) : null;
+  const shipping = location && settings ? await checkoutShipping(userId, cart, location, settings) : null;
   const selected = input.shipping ? shipping?.rates.find(r => r.courier === input.shipping!.courier && r.service === input.shipping!.service) : null;
   if (input.shipping && !selected) throw new HttpError("Layanan pengiriman belum tersedia untuk alamat ini.", 422);
   const accepted = selected ? verifyShippingQuote(input.shipping?.quoteToken, shipping!.fingerprint, selected) : null;
@@ -185,9 +188,12 @@ export async function createOrder(
 
 
   const parsedAddress = addressSchema.parse(input.address);
-  const location = await validateLocation(parsedAddress);
+  const settings = await readShippingSettings();
+  const location = settings.activeJnt
+    ? await validateJntLocation(parsedAddress, settings.activeJnt.mappingVersion)
+    : await validateLocation(parsedAddress);
   const canonicalAddress = { recipientName: parsedAddress.recipientName, phone: parsedAddress.phone, line: parsedAddress.line, ...location };
-  const quotedShipping = await checkoutShipping(userId, cartView, location);
+  const quotedShipping = await checkoutShipping(userId, cartView, location, settings);
   if (quotedShipping.revisionId) {
     const address = [canonicalAddress.line, location.village, location.district, location.city, location.province].filter(Boolean).join(", ");
     if (canonicalAddress.recipientName.length > 30 || address.length > 200) {

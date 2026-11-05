@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 
 const schema = z.object({
   intentId: checkoutIntentId.optional(),
-  address: addressSchema.extend({ city: z.string().optional().default(""), province: z.string().optional().default("") }),
+  address: addressSchema.transform(address => ({ ...address, city: address.city || "", province: address.province || "" })),
   shipping: z.object({ courier: shippingCourierSchema, service: z.string().max(30), cost: z.number().int().nonnegative(), quoteToken: z.string().min(1).max(4096) }),
   bankAccountId: z.string().min(1),
   couponCode: z.string().optional(),

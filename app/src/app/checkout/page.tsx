@@ -1,3 +1,4 @@
+import { readShippingSettings } from "@/modules/shipping/shipping-settings.service";
 import { cookies } from "next/headers";
 import { CHECKOUT_INTENT_COOKIE, checkoutIntentId, claimCheckoutIntent, getIntentCheckoutView } from "@/modules/checkout/checkout-intent";
 import { HttpError } from "@/lib/response";
@@ -31,13 +32,14 @@ export default async function CheckoutPage({ searchParams }: { searchParams: Pro
     }
   }
 
-  const [cart, banks, customer] = await Promise.all([
+  const [cart, banks, customer, shippingSettings] = await Promise.all([
     intent ? directView! : getCartView(user.id),
     listActiveBankAccounts(),
     prisma.customer.findUnique({
       where: { userId: user.id },
       include: { addresses: { where: { isDefault: true }, take: 1 } },
     }),
+    readShippingSettings(),
   ]);
   if (cart.lines.length === 0) redirect("/cart");
 
@@ -53,6 +55,7 @@ export default async function CheckoutPage({ searchParams }: { searchParams: Pro
       <CheckoutClient
         key={intent || "cart"}
         intentId={intent}
+        jntCheckout={!!shippingSettings.activeJnt}
         requestId={randomUUID()}
         subtotal={cart.subtotal}
         expectedLines={cart.lines.map(({ variantId, quantity, unitPrice }) => ({ variantId, quantity, unitPrice }))}
