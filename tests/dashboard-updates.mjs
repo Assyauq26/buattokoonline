@@ -24,12 +24,18 @@ export async function verifyDashboardUpdates({browser,context,page,base,password
   assert.equal((await context.request.post(endpoint,{headers:{Origin:'https://attacker.example'},data:{}})).status(),403);
   assert.equal((await context.request.post(endpoint,{data:{}})).status(),403);
   for(const data of [{command:'id'},{url:'http://169.254.169.254'},{version:'1.0.2;id'},{operation:'apply'}])assert.equal((await context.request.post(endpoint,{headers,data})).status(),422);
-  const checks=await Promise.all([context.request.post(endpoint,{headers,data:{}}),context.request.post(endpoint,{headers,data:{}})]);
+  const mounted=page.waitForResponse(response=>response.url()===endpoint&&response.request().method()==='GET'&&response.status()===200);
+  await page.goto(base+'/admin/settings/updates');await mounted;
+  const checks=await Promise.all([
+    page.waitForResponse(response=>response.url()===endpoint&&response.request().method()==='POST'),
+    (async()=>{await page.getByRole('button',{name:'Periksa Pembaruan',exact:true}).click();return context.request.post(endpoint,{headers,data:{}});})(),
+  ]);
   assert.equal(checks.filter(response=>response.status()===200).length,1);
   assert(checks.some(response=>[409,429].includes(response.status())));
   const status=(await checks.find(response=>response.status()===200).json()).data;
   assert.equal(status.installedVersion,version);assert(status.release);assert.equal(status.execution,'cli');assert.equal(status.compatibility,'pending_cli');assert.match(status.release.sha,/^[a-f0-9]{40}$/);
-  await page.goto(base+'/admin/settings/updates');
+  if(checks[0].status()===200)await expect(page.getByTestId('latest-version')).toHaveText('v'+status.release.version);
+  await page.reload();
   await expect(page.getByRole('heading',{name:'Pembaruan Aplikasi',exact:true})).toBeVisible();
   await expect(page.getByTestId('installed-version')).toHaveText('v'+version);
   await expect(page.getByTestId('latest-version')).toHaveText('v'+status.release.version);

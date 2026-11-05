@@ -169,6 +169,7 @@ try {
   // already proven with application egress blocked. Re-enable it for this check.
   runRoot(['iptables','-D','DOCKER-USER','-s',webNetwork.IPAddress+'/32','!','-d',subnet,'-m','conntrack','--ctstate','NEW','-j','REJECT']);
   await verifyDashboardUpdates({browser,context,page,base,password,sql,version:readFileSync(new URL('../VERSION',import.meta.url),'utf8').trim(),pass});
+  assert.deepEqual(errors,[]);
   await verifyUpdates({context,base,email,password,pass,sql,dc});
 } catch(error) {
   reports.push({name:'Failure',status:'FAIL',message:String(error)});

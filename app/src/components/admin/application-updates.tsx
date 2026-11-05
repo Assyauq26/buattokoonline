@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ExternalLink, RefreshCw } from "lucide-react";
 import type { UpdateStatus } from "@/modules/application-updates/service";
 
@@ -9,13 +9,24 @@ const labels: Record<UpdateStatus["status"], string> = {
 };
 export function ApplicationUpdates({ initial }: { initial: UpdateStatus }) {
   const [status, setStatus] = useState(initial), [checking, setChecking] = useState(false), [error, setError] = useState("");
+  useEffect(() => {
+    // RSC pages and route handlers can have separate module caches. Always read the
+    // authenticated API snapshot on mount/refresh instead of relying on that cache.
+    const controller = new AbortController();
+    fetch("/api/v1/admin/application-updates", { cache: "no-store", signal: controller.signal })
+      .then(async response => { if (!response.ok) throw Error("Status belum dapat dibaca. Gunakan Periksa Pembaruan untuk mencoba lagi."); return response.json(); })
+      .then(result => setStatus(previous => previous.checkedAt && (!result.data.checkedAt || previous.checkedAt > result.data.checkedAt) ? previous : result.data))
+      .catch(() => { if (!controller.signal.aborted) setError("Status belum dapat dibaca. Gunakan Periksa Pembaruan untuk mencoba lagi."); });
+    return () => controller.abort();
+  }, []);
   async function check() {
     setChecking(true); setError("");
     try {
       const response = await fetch("/api/v1/admin/application-updates", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}", cache: "no-store" });
-      const result = await response.json(); if (!response.ok) throw Error(result.error?.message || "Pemeriksaan belum berhasil");
+      const result = await response.json().catch(() => null);
+      if (!response.ok || !result?.data) { setError(result?.error?.message || "Pemeriksaan belum berhasil. Coba lagi nanti."); return; }
       setStatus(result.data);
-    } catch (failure) { setError(failure instanceof Error ? failure.message : "Pemeriksaan terputus. Coba lagi."); }
+    } catch { setError("Koneksi ke toko terputus. Coba lagi setelah tersambung."); }
     finally { setChecking(false); }
   }
   return <div className="mx-auto max-w-4xl space-y-7" data-testid="application-updates">
@@ -25,6 +36,7 @@ export function ApplicationUpdates({ initial }: { initial: UpdateStatus }) {
         <div className="flex flex-wrap justify-between gap-2 py-3"><dt className="text-zinc-600">Versi terpasang</dt><dd className="font-semibold tabular-nums" data-testid="installed-version">v{status.installedVersion}</dd></div>
         <div className="flex flex-wrap justify-between gap-2 py-3"><dt className="text-zinc-600">Rilis stabil terbaru</dt><dd className="font-semibold tabular-nums" data-testid="latest-version">{status.release ? `v${status.release.version}` : "Belum tersedia / belum diperiksa"}</dd></div>
         <div className="flex flex-wrap justify-between gap-2 py-3"><dt className="text-zinc-600">Status</dt><dd className="max-w-full font-medium" role="status" data-testid="update-status">{checking ? "Memeriksa GitHub Releases…" : labels[status.status]}</dd></div>
+        <div className="flex flex-wrap justify-between gap-2 py-3"><dt className="text-zinc-600">Kompatibilitas</dt><dd className="max-w-sm text-zinc-700">Perlu pemeriksaan paket dan database melalui CLI</dd></div>
         {status.release && <div className="flex flex-wrap justify-between gap-2 py-3"><dt className="text-zinc-600">Tanggal rilis</dt><dd>{new Date(status.release.publishedAt).toLocaleDateString("id-ID", { dateStyle: "long", timeZone: "Asia/Jakarta" })}</dd></div>}
       </dl>
       {error && <p role="alert" className="mt-4 rounded-xl bg-red-50 p-4 text-sm leading-6 text-red-800">{error}</p>}
