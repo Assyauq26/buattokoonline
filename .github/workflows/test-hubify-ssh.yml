@@ -1,0 +1,57 @@
+name: Test Hubify SSH connection (read-only)
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hubify-staging-deploy
+  cancel-in-progress: false
+
+jobs:
+  ssh-smoke:
+    if: github.repository == 'Assyauq26/buattokoonline' && github.ref == 'refs/heads/main'
+    name: Verify protected environment, SSH, and restricted helper
+    runs-on: ubuntu-24.04
+    environment: hubify-staging
+    timeout-minutes: 8
+    steps:
+      - name: Check protected environment SSH secrets
+        env:
+          HUBIFY_KEY: ${{ secrets.HUBIFY_SSH_PRIVATE_KEY }}
+          HUBIFY_HOST_KEYS: ${{ secrets.HUBIFY_SSH_KNOWN_HOSTS }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$HUBIFY_KEY" || { echo "::error::Missing HUBIFY_SSH_PRIVATE_KEY in environment hubify-staging"; exit 1; }
+          test -n "$HUBIFY_HOST_KEYS" || { echo "::error::Missing HUBIFY_SSH_KNOWN_HOSTS in environment hubify-staging"; exit 1; }
+          umask 077
+          mkdir -p "$HOME/.ssh"
+          printf '%s\n' "$HUBIFY_KEY" | tr -d '\r' > "$HOME/.ssh/hubify_deploy"
+          printf '%s\n' "$HUBIFY_HOST_KEYS" | tr -d '\r' > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/hubify_deploy" "$HOME/.ssh/known_hosts"
+          grep -Eq '^43[.]173[.]41[.]24 ssh-ed25519 ' "$HOME/.ssh/known_hosts" || {
+            echo "::error::Known hosts must contain verified ED25519 key for 43.173.41.24"; exit 1;
+          }
+          ssh-keygen -y -f "$HOME/.ssh/hubify_deploy" >/dev/null || {
+            echo "::error::The deployment private key cannot be read"; exit 1;
+          }
+          echo "SSH environment secrets and key format: OK (key contents not logged)."
+      - name: Read-only GitHub Actions to Tencent SSH smoke test
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -T -i "$HOME/.ssh/hubify_deploy" \
+            -o IdentitiesOnly=yes -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -o ConnectTimeout=15 \
+            hubifydeploy@43.173.41.24 \
+            'set -eu; test "$(id -un)" = hubifydeploy; test -x /usr/local/sbin/hubify-staging-deploy; sudo -n -l /usr/local/sbin/hubify-staging-deploy >/dev/null; printf "%s\n" "HUBIFY_SSH_SMOKE_PASS"'
+      - name: Read-only HTTPS reachability
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --head --max-time 20 https://hubify.web.id/ | head -n 12
+          echo "HUBIFY_PUBLIC_HTTPS_PASS"
