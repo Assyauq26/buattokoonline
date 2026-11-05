@@ -303,6 +303,12 @@ def public_health(state):
         curl('https://' + state['domain'] + endpoint, extra)
 
 
+def seal_installation():
+    """Repairable cleanup after the durable complete state has revoked setup."""
+    (CONFIG / 'installed').touch(mode=0o600)
+    (CONFIG / 'setup-token').unlink(missing_ok=True)
+
+
 def initialize_store(state, password, tracker):
     with tracker.phase('prepare'):
         create_secrets(state['domain'])
@@ -352,7 +358,7 @@ def initialize_store(state, password, tracker):
             target.write_bytes((ROOT / 'manager' / name).read_bytes())
         run(['systemctl', 'daemon-reload'])
         run(['systemctl', 'enable', '--now', 'single-store-maintenance.timer'])
-        (CONFIG / 'installed').touch(mode=0o600)
-        (CONFIG / 'setup-token').unlink(missing_ok=True)
-    state.update(step=4, complete=True, setup_hash=None, busy=False, message='Toko berhasil dibuat. Konfigurasikan pembayaran dan pengiriman sebelum menerima pesanan.')
-    atomic_json(STATE, state)
+        # Tracker persists completion and the final checkpoint together. The token
+        # remains available for recovery until this durable revocation succeeds.
+        state.update(step=4, complete=True, setup_hash=None, busy=False, message='Toko berhasil dibuat. Konfigurasikan pembayaran dan pengiriman sebelum menerima pesanan.')
+    seal_installation()

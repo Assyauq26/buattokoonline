@@ -56,6 +56,10 @@ export async function installWizard({brand,email,password,pass}){
     assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
     await page.screenshot({path:'test-results/wizard-progress-mobile.png',fullPage:true});
     await page.reload();await expect(page.locator('[data-phase="build"]')).toHaveAttribute('data-status','running',{timeout:10000});
+    await page.route('**/api/state',route=>route.abort(),{times:1});
+    await expect(page.locator('#error')).toContainText('Koneksi ke setup terputus',{timeout:12000});
+    await expect(page.locator('[data-phase="build"]')).toHaveAttribute('data-status','running');
+    await expect(page.locator('#error')).toBeHidden({timeout:10000});
     await page.setViewportSize({width:1100,height:900});
     root(['systemctl','stop','single-store-setup.service']);root(['systemctl','start','single-store-setup.service']);await authorize();
     await expect(page.locator('[data-phase="build"]')).toHaveAttribute('data-status','failed');

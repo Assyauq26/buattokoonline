@@ -26,6 +26,10 @@ os.chown(media, 1000, 1000)
 (core.ROOT / 'manager').mkdir(mode=0o700, exist_ok=True)
 if core.STATE.exists():
     state = core.read_json(core.STATE)
+    if state.get('complete'):
+        core.seal_installation()
+        print('Toko sudah terpasang. Database, akun, dan konfigurasi dipertahankan. Gunakan update.sh untuk pembaruan versi.')
+        raise SystemExit(0)
     if state['local_test'] != local:
         raise SystemExit('Lanjutkan menggunakan mode dan exact Git SHA instalasi pertama. Data tidak diubah.')
     if state['source_sha'] != sha:

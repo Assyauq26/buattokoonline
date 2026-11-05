@@ -1,5 +1,5 @@
-const $=id=>document.getElementById(id);let current,busy=false,lastKey='';
-async function api(path,data){const response=await fetch('/api/'+path,{method:data?'POST':'GET',headers:data?{'Content-Type':'application/json'}:{},body:data?JSON.stringify(data):undefined});const result=await response.json();if(!response.ok)throw Error(result.error||'Proses belum berhasil.');return result;}
+const $=id=>document.getElementById(id);let current,busy=false,lastKey='',polling=false,connectionLost=false;
+async function api(path,data,signal){const response=await fetch('/api/'+path,{method:data?'POST':'GET',headers:data?{'Content-Type':'application/json'}:{},body:data?JSON.stringify(data):undefined,signal});const result=await response.json();if(!response.ok)throw Error(result.error||'Proses belum berhasil.');return result;}
 function renderProgress(state){
   const progress=state.progress;$('installation-progress').hidden=!progress||state.complete;
   if(!progress)return;
@@ -43,4 +43,4 @@ $('domain-next').onclick=()=>act('next',{});document.querySelectorAll('.back').f
 $('admin-form').addEventListener('submit',e=>{e.preventDefault();const data={email:$('email').value,password:$('password').value,confirmation:$('confirmation').value};$('password').value='';$('confirmation').value='';act('admin',data);});
 document.querySelectorAll('.toggle').forEach(button=>button.onclick=()=>{const input=$(button.dataset.target),show=input.type==='password';input.type=show?'text':'password';button.textContent=show?'Sembunyikan':'Lihat';button.setAttribute('aria-pressed',String(show));});
 (async()=>{try{const token=new URLSearchParams(location.hash.slice(1)).get('setup');history.replaceState(null,'',location.pathname);render(token?await api('session',{token}):await api('state'));}catch(error){failure(error);}})();
-setInterval(async()=>{if(!current||current.complete)return;try{const state=await api('state');const key=stateKey(state);if(key!==lastKey)render(state);}catch(error){failure(Error('Koneksi ke setup terputus. Progres terakhir tetap ditampilkan; buka kembali tautan dari server untuk melanjutkan.'));}},2000);
+setInterval(async()=>{if(!current||current.complete||polling)return;polling=true;try{const state=await api('state',undefined,AbortSignal.timeout(5000));if(connectionLost||stateKey(state)!==lastKey)render(state);connectionLost=false;}catch(error){connectionLost=true;failure(Error('Koneksi ke setup terputus. Progres terakhir tetap ditampilkan; buka kembali tautan dari server untuk melanjutkan.'));}finally{polling=false;}},2000);

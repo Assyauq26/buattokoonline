@@ -190,6 +190,7 @@ class Handler(BaseHTTPRequestHandler):
 
 if __name__ == '__main__':
     if state.get('complete'):
+        core.seal_installation()
         raise SystemExit(0)
     server = ThreadingHTTPServer(('127.0.0.1', PORT), Handler)
     server.daemon_threads = True
