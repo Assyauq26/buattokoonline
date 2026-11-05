@@ -11,8 +11,14 @@ concurrency:
   cancel-in-progress: true
 jobs:
   install:
+    strategy:
+      fail-fast: false
+      matrix:
+        profile: [runner, vm2gb]
     runs-on: ubuntu-24.04
     timeout-minutes: 45
+    env:
+      STORE_VM_SSH: ${{ matrix.profile == 'vm2gb' && '1' || '0' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -42,19 +48,34 @@ jobs:
           npm run security:prepare
           npm test
           npx playwright install --with-deps chromium
+      - name: Start real Ubuntu guest with 2 vCPU and 2 GB RAM
+        if: matrix.profile == 'vm2gb'
+        run: bash tests/start-2gb-vm.sh
       - name: Wizard, recovery, store persistence and release updates
         run: node tests/install-vm.mjs
       - name: Service diagnostics on failure
         if: failure()
         run: |
-          if test -f /opt/single-store/deploy/compose.yaml; then
-            sudo docker compose -f /opt/single-store/deploy/compose.yaml ps -a
-            sudo docker compose -f /opt/single-store/deploy/compose.yaml logs --tail=60 app proxy
-          fi
-          sudo journalctl -u single-store-setup.service --no-pager -n 30
+          node --input-type=module - <<'JS'
+          import {runRoot} from './tests/vm-root.mjs';
+          for(const args of [['docker','compose','-f','/opt/single-store/deploy/compose.yaml','ps','-a'],['journalctl','-u','single-store-setup.service','--no-pager','-n','30'],['tail','-n','80','/etc/single-store/operation.log']]){
+            try{console.log(runRoot(args,{timeout:15000}));}catch(error){console.log('Diagnostic unavailable:',args[0]);}
+          }
+          JS
+      - name: Collect and validate actual guest resource measurements
+        if: always() && matrix.profile == 'vm2gb'
+        run: |
+          node --input-type=module - <<'JS'
+          import {runRoot} from './tests/vm-root.mjs';
+          import {mkdirSync,writeFileSync} from 'node:fs';
+          import assert from 'node:assert/strict';
+          const data=JSON.parse(runRoot(['cat','/tmp/store-resource.json'],{timeout:15000}));
+          mkdirSync('test-results',{recursive:true});writeFileSync('test-results/resources-2gb.json',JSON.stringify(data,null,2));console.log(data);
+          assert(data.mem_total_kib>=1900000&&data.mem_total_kib<=2097152);assert.equal(data.vcpus,2);assert(data.swap_total_kib>=1900000);assert.equal(data.oom_kill_delta,0);assert.equal(data.installed,true);
+          JS
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ubuntu-installation-evidence
+          name: ubuntu-installation-evidence-${{ matrix.profile }}
           path: test-results/
           if-no-files-found: ignore

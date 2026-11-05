@@ -40,9 +40,14 @@ def read_json(path):
 
 
 def run(args, input=None, timeout=120, capture=True):
+    env = {**os.environ, 'COMPOSE_PARALLEL_LIMIT': '1'}
     result = subprocess.run([str(x) for x in args], input=input, stdout=subprocess.PIPE if capture else None,
-                            stderr=subprocess.PIPE if capture else None, timeout=timeout, check=False)
+                            stderr=subprocess.PIPE if capture else None, timeout=timeout, check=False, env=env)
     if result.returncode:
+        if input is None and CONFIG.exists():
+            with open(CONFIG / 'operation.log', 'ab') as log:
+                os.chmod(CONFIG / 'operation.log', 0o600)
+                log.write(('Command failed: ' + str(args[0]) + '\n').encode() + (result.stdout or b'')[-50000:] + (result.stderr or b'')[-50000:])
         # Never return command output: it can contain DSNs, submitted data or private paths.
         raise StoreError('Operasi layanan gagal. Periksa log lokal root-only dan jalankan kembali.')
     return (result.stdout or b'').decode('utf8').strip()
@@ -174,7 +179,14 @@ def write_caddy(state, live=False):
         file.flush()
         os.fsync(file.fileno())
     dc(['up', '-d', 'proxy'])
-    dc(['exec', '-T', 'proxy', 'caddy', 'reload', '--config', '/etc/caddy/Caddyfile'])
+    for attempt in range(20):
+        try:
+            dc(['exec', '-T', 'proxy', 'caddy', 'reload', '--config', '/etc/caddy/Caddyfile'])
+            break
+        except StoreError:
+            if attempt == 19:
+                raise
+            time.sleep(1)
 
 
 def verify_domain(state):
@@ -274,7 +286,9 @@ def healthy(local_test=False):
 def initialize_store(state, password=None):
     create_secrets(state['domain'])
     if not state.get('built'):
+        started = time.monotonic()
         dc(['build', 'app', 'tools'], timeout=1800)
+        state['build_seconds'] = round(time.monotonic() - started, 1)
         state['built'] = True
         atomic_json(STATE, state)
     dc(['up', '-d', '--wait', 'db'])

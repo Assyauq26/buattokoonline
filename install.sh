@@ -8,7 +8,15 @@ SOURCE_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 source /etc/os-release
 [[ $ID == ubuntu && $VERSION_ID == 24.04 ]] || { echo 'Ubuntu 24.04 LTS diperlukan.'; exit 1; }
 [[ $(uname -m) == x86_64 || $(uname -m) == aarch64 ]] || exit 1
-[[ $(awk '/MemTotal/ {print $2}' /proc/meminfo) -ge 3800000 ]] || { echo 'RAM minimal 4 GB.'; exit 1; }
+RAM_KIB=$(awk '/MemTotal/ {print $2}' /proc/meminfo)
+SWAP_KIB=$(awk '/SwapTotal/ {print $2}' /proc/meminfo)
+[[ $(nproc) -ge 2 ]] || { echo 'Minimal 2 vCPU diperlukan.'; exit 1; }
+[[ $RAM_KIB -ge 1900000 ]] || { echo 'RAM minimal 2 GB (1900000 KiB) diperlukan.'; exit 1; }
+if [[ $RAM_KIB -lt 3800000 && $SWAP_KIB -lt 1900000 ]]; then
+  echo 'Profil 2 GB memerlukan swap aktif minimal 1900000 KiB (sekitar 2 GiB). Siapkan swap lalu jalankan installer kembali. Periksa dengan free -h dan swapon --show.'
+  exit 1
+fi
+echo "Profil server: $(nproc) vCPU; RAM $RAM_KIB KiB; swap $SWAP_KIB KiB. Build dijalankan dengan satu worker Next.js."
 [[ $(df -Pk /var | awk 'NR==2 {print $4}') -ge 12000000 ]] || { echo 'Ruang kosong minimal 12 GB.'; exit 1; }
 [[ -d /run/systemd/system ]] || { echo 'systemd diperlukan.'; exit 1; }
 exec 9>/run/single-store-install.lock

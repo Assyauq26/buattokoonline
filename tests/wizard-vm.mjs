@@ -1,10 +1,11 @@
 import { execFileSync } from 'node:child_process';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
+import {runRoot} from './vm-root.mjs';
 const require=createRequire(new URL('../app/package.json',import.meta.url));
 const {chromium,expect}=require('@playwright/test');
 const setup='http://127.0.0.1:8787';
-const root=(args)=>execFileSync('sudo',args,{encoding:'utf8',timeout:240000,stdio:['pipe','pipe','pipe']});
+const root=(args)=>runRoot(args,{timeout:240000});
 const state=()=>JSON.parse(root(['cat','/etc/single-store/setup.json']));
 export async function installWizard({brand,email,password,pass}){
   // Capture the root-only setup link rather than emitting its authorization token into CI logs.
@@ -48,7 +49,7 @@ export async function installWizard({brand,email,password,pass}){
     assert.equal(JSON.stringify(state()).includes(password),false);
     if(!state().has_admin){await enterAdmin();}
     await page.locator('#create-store').click();
-    await expect.poll(()=>!!state().has_admin||!!state().complete,{timeout:900000}).toBe(true);
+    await expect.poll(()=>{const s=state();if(!s.busy&&!s.has_admin&&!s.complete)throw Error(s.message||'Build stopped');return!!s.has_admin||!!s.complete;},{timeout:900000}).toBe(true);
     if(!state().complete){
       // Interruption after the bootstrap transaction must preserve the existing administrator.
       root(['systemctl','stop','single-store-setup.service']);

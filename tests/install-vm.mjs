@@ -6,6 +6,7 @@ import { createRequire } from 'node:module';
 import assert from 'node:assert/strict';
 import {installWizard} from './wizard-vm.mjs';
 import {verifyUpdates} from './update-vm.mjs';
+import {runRoot} from './vm-root.mjs';
 const require = createRequire(new URL('../app/package.json', import.meta.url));
 const { chromium, expect } = require('@playwright/test');
 const sharp = require('sharp');
@@ -15,14 +16,14 @@ const password='Aa9!'+randomBytes(24).toString('base64url');
 const email='admin@example.test', brand='Toko Mawar', base='https://localhost';
 const reports=[];mkdirSync('test-results',{recursive:true});
 const composeArgs=['docker','compose','-f','/opt/single-store/deploy/compose.yaml'];
-function dc(args,input){return execFileSync('sudo',[...composeArgs,...args],{input,encoding:'utf8',stdio:['pipe','pipe','pipe'],timeout:180000});}
+function dc(args,input){return runRoot([...composeArgs,...args],{input,encoding:'utf8',stdio:['pipe','pipe','pipe'],timeout:180000});}
 function sql(query){return dc(['exec','-T','db','psql','-U','postgres','-d','store','-At','-v','ON_ERROR_STOP=1'],query).trim();}
 function pass(name){reports.push({name,status:'PASS'});console.log('PASS:',name);writeFileSync('test-results/report.json',JSON.stringify({commit:process.env.GITHUB_SHA,os:'Ubuntu 24.04 disposable GitHub-hosted VM',checks:reports},null,2));}
 await installWizard({brand,email,password,pass});
 pass('Git clone and browser install.sh wizard completed on Ubuntu 24.04');
-assert.equal(execFileSync('sudo',['stat','-c','%a','/etc/single-store'],{encoding:'utf8'}).trim(),'700');
-assert.equal(execFileSync('sudo',['stat','-c','%a','/etc/single-store/runtime.env'],{encoding:'utf8'}).trim(),'600');
-assert.equal(execFileSync('sudo',['systemctl','is-enabled','single-store-maintenance.timer'],{encoding:'utf8'}).trim(),'enabled');
+assert.equal(runRoot(['stat','-c','%a','/etc/single-store'],{encoding:'utf8'}).trim(),'700');
+assert.equal(runRoot(['stat','-c','%a','/etc/single-store/runtime.env'],{encoding:'utf8'}).trim(),'600');
+assert.equal(runRoot(['systemctl','is-enabled','single-store-maintenance.timer'],{encoding:'utf8'}).trim(),'enabled');
 dc(['exec','-T','app','node','scripts/maintenance.mjs']);
 pass('Root-only credentials and local maintenance timer');
 const emptyTables=['Product','Category','Brand','Customer','Order','Review','Coupon','FlashSaleCampaign','JntIntegration','JntL3Mapping','JntMappingRelease','ProductImage','StoreBrandAsset','StoreHeroAsset'];
@@ -33,15 +34,15 @@ assert.equal(sql('SELECT published->\'identity\'->>\'name\' FROM "StoreAppearanc
 assert.equal(sql('SELECT rolsuper::int FROM pg_roles WHERE rolname=\'store_app\';'),'0');
 assert.equal(sql('SELECT (rolcreatedb OR rolcreaterole)::int FROM pg_roles WHERE rolname=\'store_app\';'),'0');
 assert.equal(sql('SELECT rolbypassrls::int FROM pg_roles WHERE rolname=\'store_app\';'),'1');
-assert.equal(execFileSync('sudo',['find','/var/lib/single-store/media','-type','f'],{encoding:'utf8'}).trim(),'');
+assert.equal(runRoot(['find','/var/lib/single-store/media','-type','f'],{encoding:'utf8'}).trim(),'');
 pass('Empty catalog/customer/order/promotion/carrier/media state and least-privilege runtime role');
 // Block new outbound connections from the app on this disposable VM. PostgreSQL and
 // Caddy remain reachable on their Docker subnets; no external service can assist the proof.
 const containerId=dc(['ps','-q','app']).trim();
-const networks=JSON.parse(execFileSync('sudo',['docker','inspect','--format','{{json .NetworkSettings.Networks}}',containerId],{encoding:'utf8'}));
+const networks=JSON.parse(runRoot(['docker','inspect','--format','{{json .NetworkSettings.Networks}}',containerId],{encoding:'utf8'}));
 const webNetwork=networks['single-store_web'];assert(webNetwork?.IPAddress);
-const subnet=execFileSync('sudo',['docker','network','inspect','single-store_web','--format','{{(index .IPAM.Config 0).Subnet}}'],{encoding:'utf8'}).trim();
-execFileSync('sudo',['iptables','-I','DOCKER-USER','-s',webNetwork.IPAddress+'/32','!','-d',subnet,'-m','conntrack','--ctstate','NEW','-j','REJECT']);
+const subnet=runRoot(['docker','network','inspect','single-store_web','--format','{{(index .IPAM.Config 0).Subnet}}'],{encoding:'utf8'}).trim();
+runRoot(['iptables','-I','DOCKER-USER','-s',webNetwork.IPAddress+'/32','!','-d',subnet,'-m','conntrack','--ctstate','NEW','-j','REJECT']);
 dc(['exec','-T','app','node','-e',"fetch('https://example.com',{signal:AbortSignal.timeout(5000)}).then(()=>process.exit(1)).catch(()=>process.exit(0))"]);
 pass('Application outbound internet blocked before storefront/admin/product tests');
 const browser=await chromium.launch({headless:true});
@@ -147,6 +148,8 @@ try {
   mkdirSync('/tmp/store-jnt-proof/reports',{recursive:true,mode:0o700});
   const csvRow=[province.name,city.name,district.name,province.name,city.name,'TST',district.name,'TST01'].map(v=>'"'+v.replaceAll('"','""')+'"').join(',');
   writeFileSync('/tmp/store-jnt-proof/input.csv','Provinsi,Kota,Kecamatan,Provinsi JNT,Kota JNT,Kode Kota JNT,Kecamatan JNT,Kode JNT\n'+csvRow+'\n',{mode:0o600});
+  runRoot(['mkdir','-p','/tmp/store-jnt-proof/reports']);
+  runRoot(['tee','/tmp/store-jnt-proof/input.csv'],{input:readFileSync('/tmp/store-jnt-proof/input.csv')});
   const mappingArgs=['run','--rm','-T','--user','0:0','-v','/tmp/store-jnt-proof/input.csv:/app/resources/jnt-l3-official.csv:ro','-v','/tmp/store-jnt-proof/reports:/app/.jnt-mapping-report'];
   const preview=JSON.parse(dc([...mappingArgs,'tools','node','scripts/jnt/reconcile-l3.mjs','--preview']));assert.equal(preview.exact,1);
   assert.throws(()=>dc([...mappingArgs,'-e','JNT_MAPPING_IMPORT_APPROVED=yes','-e','JNT_MAPPING_EXPECTED_ROWS=2','tools','node','scripts/jnt/reconcile-l3.mjs','--stage']));

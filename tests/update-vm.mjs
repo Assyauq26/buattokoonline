@@ -1,8 +1,9 @@
 import {execFileSync} from 'node:child_process';
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
+import {runRoot} from './vm-root.mjs';
 const require=createRequire(new URL('../app/package.json',import.meta.url));const {expect}=require('@playwright/test');
-function root(args,input){return execFileSync('sudo',args,{input,encoding:'utf8',timeout:900000,stdio:['pipe','pipe','pipe']});}
+function root(args,input){return runRoot(args,{input,timeout:900000});}
 function version(){return JSON.parse(root(['cat','/etc/single-store/version.json'])).version;}
 function fingerprint(sql){return sql(`SELECT json_build_object('brand',(SELECT published->'identity'->>'name' FROM "StoreAppearance"),'products',(SELECT count(*) FROM "Product"),'stock',(SELECT sum("onHand") FROM "Inventory"),'users',(SELECT md5(string_agg(id||email||"passwordHash",',' ORDER BY id)) FROM "User"));`);}
 function media(){return root(['python3','-c',"import pathlib,hashlib,json; p=pathlib.Path('/var/lib/single-store/media'); print(json.dumps({str(f.relative_to(p)):hashlib.sha256(f.read_bytes()).hexdigest() for f in sorted(p.rglob('*')) if f.is_file()},sort_keys=True))"]);}
