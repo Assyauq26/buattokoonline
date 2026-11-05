@@ -12,32 +12,26 @@ spec.loader.exec_module(hubify)
 
 
 class StagingSafetyTests(unittest.TestCase):
-    def test_rejects_incorrect_sha_or_pr(self):
-        for pr, sha in [('0', 'a'*40), ('1', 'invalid'), ('../2', 'a'*40), ('1', 'A'*40)]:
+    def test_rejects_incorrect_sha(self):
+        for sha in ['invalid', 'A'*40, '../' + 'a'*40, '']:
             with self.assertRaises(hubify.core.StoreError):
-                hubify.verify_candidate(pr, sha)
+                hubify.verify_main(sha)
 
-    def test_pr_ownership_exact_sha_and_ci_required(self):
+    def test_main_repository_identity_and_exact_sha(self):
         sha = 'a'*40
-        pr = {
-            'state': 'open',
-            'head': {'sha': sha, 'repo': {'full_name': hubify.REPOSITORY}, 'ref': 'feat/test'},
-            'base': {'repo': {'full_name': hubify.REPOSITORY}, 'ref': 'main'}}
-        runs = {'workflow_runs': [{
-            'head_sha': sha, 'head_branch': 'feat/test', 'conclusion': 'success'}]}
+        valid = {'object': {'type': 'commit', 'sha': sha}}
         with patch.object(hubify, 'github', side_effect=[
-            {'id': hubify.core.REPO_ID, 'full_name': hubify.REPOSITORY}, pr, runs]):
-            self.assertEqual(hubify.verify_candidate('3', sha), pr)
+            {'id': hubify.core.REPO_ID, 'full_name': hubify.REPOSITORY}, valid]):
+            self.assertEqual(hubify.verify_main(sha), valid)
         with patch.object(hubify, 'github', side_effect=[
             {'id': hubify.core.REPO_ID, 'full_name': hubify.REPOSITORY},
-            {**pr, 'head': {**pr['head'], 'sha': 'b'*40}}, runs]):
+            {'object': {'type': 'commit', 'sha': 'b'*40}}]):
             with self.assertRaises(hubify.core.StoreError):
-                hubify.verify_candidate('3', sha)
+                hubify.verify_main(sha)
         with patch.object(hubify, 'github', side_effect=[
-            {'id': hubify.core.REPO_ID, 'full_name': hubify.REPOSITORY}, pr,
-            {'workflow_runs': [{**runs['workflow_runs'][0], 'conclusion': 'failure'}]}]):
+            {'id': hubify.core.REPO_ID, 'full_name': 'other/repository'}, valid]):
             with self.assertRaises(hubify.core.StoreError):
-                hubify.verify_candidate('3', sha)
+                hubify.verify_main(sha)
 
     def test_refuses_other_domains_and_jnt_production(self):
         with tempfile.TemporaryDirectory() as directory:

@@ -2,12 +2,8 @@ name: Deploy to Hubify staging
 on:
   workflow_dispatch:
     inputs:
-      pr_number:
-        description: 'Open PR number (same repository, targeting main)'
-        type: string
-        required: true
       exact_sha:
-        description: 'Exact 40-character HEAD commit SHA with passing verify.yml CI'
+        description: 'Exact 40-character HEAD commit SHA of main'
         type: string
         required: true
       confirmation:
@@ -17,8 +13,6 @@ on:
 
 permissions:
   contents: read
-  actions: read
-  pull-requests: read
 
 concurrency:
   group: hubify-staging-deploy
@@ -26,35 +20,29 @@ concurrency:
 
 jobs:
   deploy:
-    name: Verify SHA and deploy approved staging candidate
-    if: github.repository == 'Assyauq26/buattokoonline'
+    name: Deploy manually authorized main SHA to Hubify
+    if: github.repository == 'Assyauq26/buattokoonline' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     environment: hubify-staging
     steps:
-      - name: Validate exact passing PR commit
+      - name: Verify exact main SHA (CI is optional)
         env:
           GH_TOKEN: ${{ github.token }}
-          PR: ${{ inputs.pr_number }}
           SHA: ${{ inputs.exact_sha }}
           CONFIRMATION: ${{ inputs.confirmation }}
         shell: bash
         run: |
           set -euo pipefail
           [[ "$CONFIRMATION" == 'DEPLOY HUBIFY' ]]
-          [[ "$PR" =~ ^[1-9][0-9]{0,8}$ ]]
           [[ "$SHA" =~ ^[0-9a-f]{40}$ ]]
-          PR_INFO=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR")
-          jq -e --arg sha "$SHA" --arg repo "$GITHUB_REPOSITORY" \
-            '.state == "open" and .head.sha == $sha and .head.repo.full_name == $repo and .base.repo.full_name == $repo and .base.ref == "main"' <<<"$PR_INFO" >/dev/null
-          BRANCH=$(jq -r '.head.ref' <<<"$PR_INFO")
-          RUNS=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/verify.yml/runs?event=pull_request&head_sha=$SHA&per_page=50")
-          jq -e --arg sha "$SHA" --arg branch "$BRANCH" \
-            '[.workflow_runs[] | select(.head_sha == $sha and .head_branch == $branch and .conclusion == "success")] | length > 0' <<<"$RUNS" >/dev/null
-          echo "Verified PR #$PR at exact SHA $SHA with passing CI."
+          REPO=$(gh api "repos/$GITHUB_REPOSITORY" --jq .full_name)
+          test "$REPO" = 'Assyauq26/buattokoonline'
+          HEAD_SHA=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)
+          test "$HEAD_SHA" = "$SHA"
+          echo "Authorized exact main SHA $SHA; no CI-success requirement."
       - name: Deploy via pinned SSH host and restricted server helper
         env:
-          PR: ${{ inputs.pr_number }}
           SHA: ${{ inputs.exact_sha }}
           SSH_KEY: ${{ secrets.HUBIFY_SSH_PRIVATE_KEY }}
           SSH_KNOWN_HOSTS: ${{ secrets.HUBIFY_SSH_KNOWN_HOSTS }}
@@ -73,4 +61,4 @@ jobs:
             -o StrictHostKeyChecking=yes -o BatchMode=yes \
             -o ServerAliveInterval=30 -o ServerAliveCountMax=6 \
             hubifydeploy@43.173.41.24 \
-            sudo -n /usr/local/sbin/hubify-staging-deploy "$PR" "$SHA"
+            sudo -n /usr/local/sbin/hubify-staging-deploy "$SHA"

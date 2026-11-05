@@ -38,24 +38,16 @@ def github(path):
     return json.loads(data)
 
 
-def verify_candidate(pr_number, sha):
-    if not re.fullmatch(r'[1-9][0-9]{0,8}', pr_number) or not re.fullmatch(r'[0-9a-f]{40}', sha):
-        raise core.StoreError('Diperlukan nomor PR dan SHA 40 karakter yang tepat.')
+def verify_main(sha):
+    if not re.fullmatch(r'[0-9a-f]{40}', sha):
+        raise core.StoreError('Diperlukan SHA main 40 karakter yang tepat.')
     repo = github('')
     if repo['id'] != core.REPO_ID or repo['full_name'] != REPOSITORY:
         raise core.StoreError('Identitas repository tidak cocok.')
-    pr = github('pulls/' + pr_number)
-    if (pr['state'] != 'open' or pr['head']['sha'] != sha or
-            pr['head']['repo']['full_name'] != REPOSITORY or
-            pr['base']['repo']['full_name'] != REPOSITORY or
-            pr['base']['ref'] != 'main'):
-        raise core.StoreError('SHA bukan HEAD PR internal terbuka yang menuju main.')
-    runs = github('actions/workflows/verify.yml/runs?event=pull_request&head_sha=' + sha + '&per_page=50')
-    passed = any(r['head_sha'] == sha and r['conclusion'] == 'success' and
-                 r['head_branch'] == pr['head']['ref'] for r in runs['workflow_runs'])
-    if not passed:
-        raise core.StoreError('CI verify.yml belum SUCCESS untuk exact SHA ini.')
-    return pr
+    branch = github('git/ref/heads/main')
+    if branch['object']['type'] != 'commit' or branch['object']['sha'] != sha:
+        raise core.StoreError('SHA bukan HEAD main saat deployment.')
+    return branch
 
 
 def preflight():
@@ -96,17 +88,17 @@ def check_schema(source, installed):
     return candidate, version
 
 
-def prepare_source(pr_number, sha):
+def prepare_source(sha):
     root = core.ROOT / 'staging-sources'
     root.mkdir(mode=0o700, exist_ok=True)
-    source = Path(tempfile.mkdtemp(prefix='pr' + pr_number + '-' + sha[:12] + '-', dir=root))
+    source = Path(tempfile.mkdtemp(prefix='main-' + sha[:12] + '-', dir=root))
     core.run(['git', 'init', '-q', str(source)])
     core.run(['git', '-C', source, 'remote', 'add', 'origin', 'https://github.com/' + REPOSITORY + '.git'])
-    core.run(['git', '-C', source, 'fetch', '--depth=1', 'origin', 'refs/pull/' + pr_number + '/head'], timeout=180)
+    core.run(['git', '-C', source, 'fetch', '--depth=1', 'origin', 'refs/heads/main'], timeout=180)
     core.run(['git', '-C', source, 'checkout', '-q', '--detach', 'FETCH_HEAD'])
     actual = core.run(['git', '-C', source, 'rev-parse', 'HEAD'])
     if actual != sha:
-        raise core.StoreError('Commit fetch berbeda dengan SHA yang disetujui.')
+        raise core.StoreError('HEAD main berubah selama fetch; ulangi dengan SHA terbaru.')
     return source
 
 
@@ -120,10 +112,10 @@ def assert_db_inventory(installed):
         raise core.StoreError('Terdapat migrasi gagal atau belum selesai.')
 
 
-def deploy(pr_number, sha):
+def deploy(sha):
     state, installed = preflight()
-    verify_candidate(pr_number, sha)
-    source = prepare_source(pr_number, sha)
+    verify_main(sha)
+    source = prepare_source(sha)
     inventory, candidate_version = check_schema(source, installed)
     assert_db_inventory(installed)
     compose = source / 'compose.json'
@@ -134,9 +126,9 @@ def deploy(pr_number, sha):
         'status': 'updating', 'staging': True,
         'old_compose': core.read_json(core.COMPOSE), 'from': installed,
         'to': sha, 'backup': None, 'manager_backup': str(previous_manager),
-        'pr_number': int(pr_number)}
+        'ref': 'main'}
     core.atomic_json(JOURNAL, journal)
-    print('Staging PR #' + pr_number + ' @ ' + sha + ' — backup dan deployment dimulai.', flush=True)
+    print('Staging main @ ' + sha + ' — backup dan deployment dimulai.', flush=True)
     try:
         core.write_caddy(state, live=False)
         core.run(['systemctl', 'stop', 'single-store-maintenance.timer', 'single-store-maintenance.service'])
@@ -157,7 +149,7 @@ def deploy(pr_number, sha):
             **installed, 'source_sha': sha, 'migrations': inventory,
             'channel': 'hubify-staging', 'candidate_version': candidate_version})
         core.atomic_json(STAGING_STATE, {
-            'pr_number': int(pr_number), 'sha': sha,
+            'ref': 'main', 'sha': sha,
             'candidate_version': candidate_version, 'deployed_at': int(time.time()),
             'backup_path': journal['backup']})
         journal['status'] = 'complete'
@@ -195,8 +187,8 @@ def rollback():
 def main():
     os.umask(0o077)
     args = sys.argv[1:]
-    if args != ['--rollback'] and len(args) != 2:
-        raise core.StoreError('Gunakan: hubify-staging-deploy PR_NUMBER SHA_40_HEX | --rollback')
+    if args != ['--rollback'] and len(args) != 1:
+        raise core.StoreError('Gunakan: hubify-staging-deploy MAIN_SHA_40_HEX | --rollback')
     with open('/run/single-store-operation.lock', 'a+') as file:
         fcntl.flock(file, fcntl.LOCK_EX | fcntl.LOCK_NB)
         if args == ['--rollback']:
