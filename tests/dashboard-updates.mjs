@@ -6,6 +6,7 @@ const {expect}=require('@playwright/test');
 /** Runs only inside the disposable install-vm harness, never against the Tencent store. */
 export async function verifyDashboardUpdates({browser,context,page,base,password,sql,version,pass}){
   const endpoint=base+'/api/v1/admin/application-updates',headers={Origin:base};
+  await page.setViewportSize({width:1360,height:900});
   const anon=await browser.newContext({ignoreHTTPSErrors:true});
   assert.equal((await anon.request.get(endpoint)).status(),401);await anon.close();
   for(const role of ['Customer','Manager']){
