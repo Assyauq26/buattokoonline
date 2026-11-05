@@ -1,9 +1,11 @@
 import { spawn, execFileSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { mkdirSync, writeFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import assert from 'node:assert/strict';
-import { chromium, expect } from '../app/node_modules/@playwright/test/index.mjs';
-import sharp from '../app/node_modules/sharp/lib/index.js';
+const require = createRequire(new URL('../app/package.json', import.meta.url));
+const { chromium, expect } = require('@playwright/test');
+const sharp = require('sharp');
 
 assert(process.platform==='linux' && process.env.GITHUB_ACTIONS==='true', 'Run only on the disposable CI VM');
 const password=randomBytes(24).toString('base64url');

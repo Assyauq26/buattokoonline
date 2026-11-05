@@ -7,7 +7,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: store-verify-${{ github.ref }}
+  group: store-verify-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 jobs:
   install:
