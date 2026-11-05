@@ -2,9 +2,9 @@ FROM node:22-bookworm-slim AS base
 RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates && rm -rf /var/lib/apt/lists/*
 FROM base AS build
 WORKDIR /app
-COPY package.json package-lock.json ./
+COPY --chown=node:node package.json package-lock.json ./
 RUN npm ci --ignore-scripts --no-audit --no-fund && node node_modules/@prisma/engines/scripts/postinstall.js
-COPY . .
+COPY --chown=node:node . .
 ENV NEXT_TELEMETRY_DISABLED=1 NODE_OPTIONS="--max-old-space-size=1024" UV_THREADPOOL_SIZE=2 MALLOC_ARENA_MAX=2
 RUN npm run build
 

@@ -1,5 +1,7 @@
 import io
+import hashlib
 import json
+import os
 from pathlib import Path
 import sys
 import tarfile
@@ -73,6 +75,30 @@ class InstallerTests(unittest.TestCase):
             self.assertEqual(runtime.split('JWT_SECRET=')[1].splitlines()[0], changed.split('JWT_SECRET=')[1].splitlines()[0])
             self.assertIn('https://melati.example.com', changed)
             self.assertFalse((Path(directory) / 'secret-journal.json').exists())
+
+    def test_release_extraction_permissions_allow_nonroot_container_tools(self):
+        names = ['VERSION','app/Dockerfile','app/package-lock.json','deploy/compose.yaml','installer/core.py','installer/updater.py','update.sh','restore.sh']
+        data = b'fixture'
+        digest = hashlib.sha256(data).hexdigest()
+        sha = hashlib.sha256(b'fixture source').hexdigest()[:40]
+        release = {'version':'1.0.1','sha':sha}
+        installed = {'db_contract':1,'migrations':{}}
+        manifest = {'format':1,'repository':core.REPO,'repository_id':core.REPO_ID,'version':'1.0.1','tag':'v1.0.1','source_sha':sha,'files':{name:digest for name in names},'migrations':{},'compatibility':{'postgres_major':16,'db_contract':1,'minimum_installed_contract':1,'maximum_installed_contract':1,'rollback_compatible':True}}
+        with tempfile.TemporaryDirectory() as directory:
+            package = Path(directory)/'package.tar.gz'
+            with tarfile.open(package,'w:gz') as archive:
+                for name, content in [(name,data) for name in names]+[('release.json',json.dumps(manifest).encode())]:
+                    member=tarfile.TarInfo(name);member.size=len(content);archive.addfile(member,io.BytesIO(content))
+            destination=Path(directory)/'release';destination.mkdir()
+            previous=os.umask(0o077)
+            try:
+                updater.extract_package(package,destination,release,installed)
+            finally:
+                os.umask(previous)
+            self.assertEqual((destination/'app/package-lock.json').read_bytes(),data)
+            if os.name=='posix':
+                self.assertEqual((destination/'app/package-lock.json').stat().st_mode & 0o777,0o644)
+                self.assertEqual((destination/'app').stat().st_mode & 0o777,0o755)
 
 
 if __name__ == '__main__':

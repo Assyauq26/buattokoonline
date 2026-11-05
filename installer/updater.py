@@ -147,7 +147,12 @@ def extract_package(package, destination, release, installed):
                 raise core.StoreError('Checksum isi paket tidak cocok.')
             path = destination / name
             path.parent.mkdir(parents=True, exist_ok=True)
+            for parent in [path.parent, *path.parent.parents]:
+                if parent == destination:
+                    break
+                parent.chmod(0o755)
             path.write_bytes(data)
+            path.chmod(0o644)
     if core.inventory(destination) != manifest['migrations']:
         raise core.StoreError('Inventory migrasi tidak cocok.')
     return manifest
