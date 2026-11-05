@@ -1,0 +1,37 @@
+name: One-time dispatch Hubify PR3 staging
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/dispatch-hubify-pr3-once.yml'
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  dispatch:
+    name: Request protected Hubify staging deployment (one-time)
+    if: github.repository == 'Assyauq26/buattokoonline'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Verify exact open PR HEAD, then dispatch protected deployment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          PR=3
+          SHA=6ccadf507b9ecf0272fbdb5d6683d35026d1e8a1
+          PULL=$(gh api "repos/$REPOSITORY/pulls/$PR")
+          jq -e --arg sha "$SHA" --arg repo "$REPOSITORY" \
+            '.state == "open" and .head.sha == $sha and .head.repo.full_name == $repo and .base.ref == "main"' <<<"$PULL" >/dev/null
+          RUNS=$(gh api "repos/$REPOSITORY/actions/workflows/verify.yml/runs?event=pull_request&head_sha=$SHA&per_page=50")
+          jq -e --arg sha "$SHA" \
+            '[.workflow_runs[] | select(.head_sha == $sha and .conclusion == "success")] | length > 0' <<<"$RUNS" >/dev/null
+          gh workflow run deploy-hubify.yml --repo "$REPOSITORY" --ref main \
+            -f pr_number="$PR" -f exact_sha="$SHA" -f confirmation='DEPLOY HUBIFY'
+          echo 'HUBIFY_DEPLOY_DISPATCHED: PR #3 @ 6ccadf507b9ecf0272fbdb5d6683d35026d1e8a1'
+          echo 'Environment hubify-staging protection and manual approval remain enforced.'
