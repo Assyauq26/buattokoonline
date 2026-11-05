@@ -4,25 +4,22 @@ import { mkdirSync, writeFileSync, readFileSync } from 'node:fs';
 import { gunzipSync } from 'node:zlib';
 import { createRequire } from 'node:module';
 import assert from 'node:assert/strict';
+import {installWizard} from './wizard-vm.mjs';
+import {verifyUpdates} from './update-vm.mjs';
 const require = createRequire(new URL('../app/package.json', import.meta.url));
 const { chromium, expect } = require('@playwright/test');
 const sharp = require('sharp');
 
 assert(process.platform==='linux' && process.env.GITHUB_ACTIONS==='true', 'Run only on the disposable CI VM');
-const password=randomBytes(24).toString('base64url');
+const password='Aa9!'+randomBytes(24).toString('base64url');
 const email='admin@example.test', brand='Toko Mawar', base='https://localhost';
 const reports=[];mkdirSync('test-results',{recursive:true});
 const composeArgs=['docker','compose','-f','/opt/single-store/deploy/compose.yaml'];
 function dc(args,input){return execFileSync('sudo',[...composeArgs,...args],{input,encoding:'utf8',stdio:['pipe','pipe','pipe'],timeout:180000});}
 function sql(query){return dc(['exec','-T','db','psql','-U','postgres','-d','store','-At','-v','ON_ERROR_STOP=1'],query).trim();}
 function pass(name){reports.push({name,status:'PASS'});console.log('PASS:',name);writeFileSync('test-results/report.json',JSON.stringify({commit:process.env.GITHUB_SHA,os:'Ubuntu 24.04 disposable GitHub-hosted VM',checks:reports},null,2));}
-await new Promise((resolve,reject)=>{
-  // The actual installer prompts are supplied through stdin; password never enters arguments or files.
-  const p=spawn('sudo',['bash','/tmp/single-store-clone/install.sh','--local-test'],{stdio:['pipe','inherit','inherit']});
-  p.stdin.end([brand,'localhost',email,password,password,'INSTALL',''].join('\n'));
-  p.on('error',reject);p.on('exit',code=>code===0?resolve():reject(new Error(`install.sh exited ${code}`)));
-});
-pass('Git clone and interactive install.sh completed on Ubuntu 24.04');
+await installWizard({brand,email,password,pass});
+pass('Git clone and browser install.sh wizard completed on Ubuntu 24.04');
 assert.equal(execFileSync('sudo',['stat','-c','%a','/etc/single-store'],{encoding:'utf8'}).trim(),'700');
 assert.equal(execFileSync('sudo',['stat','-c','%a','/etc/single-store/runtime.env'],{encoding:'utf8'}).trim(),'600');
 assert.equal(execFileSync('sudo',['systemctl','is-enabled','single-store-maintenance.timer'],{encoding:'utf8'}).trim(),'enabled');
@@ -160,6 +157,7 @@ try {
   assert.equal(sql('SELECT "activeVersion" FROM "JntMappingRelease";'),preview.version);
   assert.equal(sql('SELECT count(*) FROM "JntIntegration";'),'0');
   pass('Offline J&T mapping review/stage/activation with synthetic CSV; no carrier credentials or calls');
+  await verifyUpdates({context,base,email,password,pass,sql,dc});
 } catch(error) {
   reports.push({name:'Failure',status:'FAIL',message:String(error)});
   writeFileSync('test-results/report.json',JSON.stringify({checks:reports},null,2));

@@ -1,66 +1,11 @@
-name: single-store
-services:
-  db:
-    image: postgres:16-bookworm
-    restart: unless-stopped
-    env_file: /etc/single-store/postgres.env
-    volumes:
-      - postgres:/var/lib/postgresql/data
-      - /etc/single-store/init.sql:/docker-entrypoint-initdb.d/01-store.sql:ro
-    networks: [database]
-    healthcheck:
-      test: [CMD-SHELL, "pg_isready -U postgres -d store"]
-      interval: 5s
-      timeout: 5s
-      retries: 30
-  app:
-    build:
-      context: ../app
-      target: runtime
-    restart: unless-stopped
-    env_file: /etc/single-store/runtime.env
-    ports: ["127.0.0.1:3000:3000"]
-    volumes:
-      - /var/lib/single-store/media:/media
-    networks: [database, web]
-    depends_on:
-      db:
-        condition: service_healthy
-    security_opt: ["no-new-privileges:true"]
-    cap_drop: [ALL]
-    healthcheck:
-      test: [CMD, node, -e, "fetch('http://127.0.0.1:3000/api/v1/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
-      interval: 10s
-      timeout: 10s
-      retries: 12
-      start_period: 30s
-  tools:
-    profiles: [tools]
-    build:
-      context: ../app
-      target: tools
-    env_file: /etc/single-store/migration.env
-    networks: [database]
-    depends_on:
-      db:
-        condition: service_healthy
-  proxy:
-    image: caddy:2-alpine
-    restart: unless-stopped
-    ports: ["80:80", "443:443", "443:443/udp"]
-    volumes:
-      - /etc/single-store/Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
-    networks: [web]
-    depends_on:
-      app:
-        condition: service_healthy
-volumes:
-  postgres:
-  caddy_data:
-  caddy_config:
-networks:
-  database:
-    internal: true
-  web:
+{
+  "name":"single-store",
+  "services":{
+    "db":{"image":"postgres:16-bookworm","restart":"unless-stopped","env_file":"/etc/single-store/postgres.env","volumes":["postgres:/var/lib/postgresql/data","/etc/single-store/init.sql:/docker-entrypoint-initdb.d/01-store.sql:ro"],"networks":["database"],"healthcheck":{"test":["CMD-SHELL","pg_isready -U postgres -d store"],"interval":"5s","timeout":"5s","retries":30}},
+    "app":{"build":{"context":"../app","target":"runtime"},"image":"single-store-app:installed","restart":"unless-stopped","env_file":"/etc/single-store/runtime.env","ports":["127.0.0.1:3000:3000"],"volumes":["/var/lib/single-store/media:/media"],"networks":["database","web"],"depends_on":{"db":{"condition":"service_healthy"}},"security_opt":["no-new-privileges:true"],"cap_drop":["ALL"],"healthcheck":{"test":["CMD","node","-e","fetch('http://127.0.0.1:3000/api/v1/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"],"interval":"10s","timeout":"10s","retries":12,"start_period":"30s"}},
+    "tools":{"profiles":["tools"],"build":{"context":"../app","target":"tools"},"image":"single-store-tools:installed","env_file":"/etc/single-store/migration.env","networks":["database"],"depends_on":{"db":{"condition":"service_healthy"}}},
+    "proxy":{"image":"caddy:2-alpine","restart":"unless-stopped","ports":["80:80","443:443","443:443/udp"],"volumes":["/etc/single-store/Caddyfile:/etc/caddy/Caddyfile:ro","caddy_data:/data","caddy_config:/config"],"networks":["web"]}
+  },
+  "volumes":{"postgres":{},"caddy_data":{},"caddy_config":{}},
+  "networks":{"database":{"internal":true},"web":{}}
+}
