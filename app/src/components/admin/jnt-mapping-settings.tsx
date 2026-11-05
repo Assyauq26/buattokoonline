@@ -71,6 +71,10 @@ export function JntMappingSettings({ state, onChange }: { state: MappingStatus |
       <label className="text-sm">Baris header<input type="number" min={1} max={12000} value={headerRow} className="block w-24 rounded bg-zinc-100 p-2" onChange={event => {
         setHeaderRow(Number(event.target.value)); resetPreview();
       }} /></label>
+      {file?.name.toLowerCase().endsWith(".xlsx") && !preview && <label className="text-sm">Nama sheet (opsional)
+        <input value={sheet} maxLength={80} placeholder="Sheet pertama" className="block w-40 rounded bg-zinc-100 p-2"
+          onChange={event => { setSheet(event.target.value); resetPreview(); }} />
+      </label>}
       {file?.name.toLowerCase().endsWith(".csv") && <label className="text-sm">Pemisah CSV<select className="block rounded bg-zinc-100 p-2" value={delimiter} onChange={event => {
         setDelimiter(event.target.value as "," | ";"); resetPreview();
       }}><option value=",">Koma</option><option value=";">Titik koma</option></select></label>}

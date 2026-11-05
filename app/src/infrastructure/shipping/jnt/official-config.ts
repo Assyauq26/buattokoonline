@@ -7,7 +7,7 @@ import type { AuthUser } from "@/lib/auth/session";
 import { writeAudit } from "@/modules/audit/audit.service";
 import type { Prisma } from "@prisma/client";
 import { assertJntScope, installationBinding, localJntSettings, mayManageLocalJnt, sellerConfigurationSchema, sellerDraftSchema } from "./seller-config";
-import { mappedWarehouse } from "./verified-mapping";
+import { mappedWarehouse, readActiveJntRelease } from "./verified-mapping";
 import { validTariffProof } from "./tariff-proof";
 
 export const jntEnvironment = z.enum(["sandbox", "production"]);
@@ -176,14 +176,15 @@ export async function resolveJntDraft(input: z.infer<typeof jntSettingsInput>, d
     const value = candidate || previous?.config.credentials[key];
     if (value) merged[key] = value;
   }
-  const { version, ...origin } = await mappedWarehouse(input.seller.warehouse.districtCode, undefined, db);
+  const { version, releaseStamp } = await readActiveJntRelease(db);
+  const { originSite, originCityCode } = await mappedWarehouse(input.seller.warehouse.districtCode, version, db);
   const config = jntConfigSchema.safeParse({
     endpoints: input.endpoints, credentials: merged, sharedCancellation: input.sharedCancellation,
-    seller: { warehouse: { ...input.seller.warehouse, ...origin }, services: input.seller.services },
+    seller: { warehouse: { ...input.seller.warehouse, originSite, originCityCode }, services: input.seller.services },
   });
   if (!config.success) throw new HttpError("Lengkapi seluruh kredensial J&T", 422);
   validateJntConfig(config.data, input.environment);
-  return { config: config.data, version, previousProof: previous?.tariffProof };
+  return { config: config.data, version, releaseStamp, previousProof: previous?.tariffProof };
 }
 
 export async function readJntPublicStatus(environment: JntEnvironment) {
@@ -201,12 +202,12 @@ export async function saveJntSettings(input: z.infer<typeof jntSettingsInput>, a
   await prisma.$transaction(async tx => {
     await tx.$queryRaw`SELECT id FROM "ShippingSettings" WHERE id = 1 FOR SHARE`;
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${"jnt-settings:" + input.environment}))::text`;
-    const { config, version, previousProof } = await resolveJntDraft(input, tx);
+    const { config, releaseStamp, previousProof } = await resolveJntDraft(input, tx);
     const proof = input.tariffProof || previousProof;
-    if (input.tariffProof && !validTariffProof(input.tariffProof, config, input.environment, version)) {
+    if (input.tariffProof && !validTariffProof(input.tariffProof, config, input.environment, releaseStamp)) {
       throw new HttpError("Hasil uji tarif telah kedaluwarsa atau input berubah. Uji kembali.", 409);
     }
-    const tariffProof = validTariffProof(proof, config, input.environment, version) ? proof : null;
+    const tariffProof = validTariffProof(proof, config, input.environment, releaseStamp) ? proof : null;
     const data = { encryptedConfig: encrypt(config, input.environment), updatedBy: actorId, tariffProof };
     // Preserve the legacy authorization flag for historical orders.
     await tx.jntIntegration.upsert({ where: { environment: input.environment },

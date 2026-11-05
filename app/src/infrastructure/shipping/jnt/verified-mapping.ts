@@ -6,10 +6,15 @@ import type { Prisma } from "@prisma/client";
 export const districtCodePattern = /^\d{2}\.\d{2}\.\d{2}$/;
 export const tariffAreaPattern = /^[A-Z][A-Z0-9 -]{1,79}$/;
 
+export async function readActiveJntRelease(db: Prisma.TransactionClient = prisma) {
+  const release = await db.jntMappingRelease.findUnique({ where: { key: "primary" } });
+  if (!release) throw new HttpError("Aktifkan versi mapping wilayah J&T terlebih dahulu", 503);
+  return { version: release.activeVersion, releaseStamp: release.activeVersion + ":" + release.approvedAt.toISOString() };
+}
+
 export async function getVerifiedJntDistrict(districtCode: string, version?: string, db: Prisma.TransactionClient = prisma) {
   if (!districtCodePattern.test(districtCode)) throw new HttpError("Kode kecamatan administratif tidak valid", 422);
-  const activeVersion = version ?? (await db.jntMappingRelease.findUnique({ where: { key: "primary" } }))?.activeVersion;
-  if (!activeVersion) throw new HttpError("Aktifkan versi mapping wilayah J&T terlebih dahulu", 503);
+  const activeVersion = version ?? (await readActiveJntRelease(db)).version;
   const matches = await db.jntL3Mapping.findMany({
     where: { version: activeVersion, emsifaDistrictCode: districtCode, matchStatus: "EXACT", approvedAt: { not: null } },
     take: 2,

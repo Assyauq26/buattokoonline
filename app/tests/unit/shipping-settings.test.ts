@@ -41,6 +41,11 @@ describe("single-store shipping settings", () => {
     expect(workbook.sheets).toEqual(["Synthetic", "Formula"]);
     expect(workbook.rows[0].cells).toEqual(["Custom Province", "Synthetic City"]);
     await expect(parseMappingFile("fixture.xlsx", file, "Formula")).rejects.toThrow(/Formula/);
+    const oversizedZip = Buffer.from(file);
+    const entry = oversizedZip.indexOf(Buffer.from([0x50, 0x4b, 0x01, 0x02]));
+    expect(entry).toBeGreaterThan(0);
+    oversizedZip.writeUInt32LE(16 * 1024 * 1024 + 1, entry + 24);
+    await expect(parseMappingFile("fixture.xlsx", oversizedZip)).rejects.toThrow();
     await expect(parseMappingFile("fake.xlsx", Buffer.from("foo"))).rejects.toThrow();
     await expect(parseMappingFile("fake.csv", Buffer.alloc(2 * 1024 * 1024 + 1))).rejects.toThrow(/2 MiB/);
   });

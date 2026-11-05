@@ -30,7 +30,7 @@ export async function POST(req: Request) {
     const value = parsed.data;
     const minute = Math.floor(Date.now() / 60000);
     await consumeAuthBucket("jnt-test:" + minute + ":" + user.id, 5, new Date((minute + 2) * 60000));
-    const { config, version } = await resolveJntDraft(value.draft);
+    const { config, version, releaseStamp } = await resolveJntDraft(value.draft);
     const environment = value.draft.environment;
     let result: { status: string; message: string; tariffProof?: string } = {
       status: "SAFE_PROBE_UNAVAILABLE", message: "Konfigurasi valid. J&T tidak mendokumentasikan uji autentikasi aman untuk operasi ini.",
@@ -46,7 +46,7 @@ export async function POST(req: Request) {
           !Number.isSafeInteger(rates[0].cost) || rates[0].cost <= 0 || rates[0].cost > 2_147_483_647) {
         throw new HttpError("J&T belum mengembalikan tarif EZ yang valid", 502);
       }
-      result = { status: "AUTHENTICATED", message: "Cek tarif EZ berhasil.", tariffProof: issueTariffProof(config, environment, version) };
+      result = { status: "AUTHENTICATED", message: "Cek tarif EZ berhasil.", tariffProof: issueTariffProof(config, environment, releaseStamp) };
     }
     if (value.endpoint === "tracking") {
       requireProbeEnvironment(environment);

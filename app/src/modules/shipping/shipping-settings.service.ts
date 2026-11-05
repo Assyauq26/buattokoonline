@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { HttpError } from "@/lib/http-error";
 import { writeAudit } from "@/modules/audit/audit.service";
 import { activeJntConfig, decryptJntConfig, jntEnvironment, readJntSettings, requireCarrierEnvironment, requireEz, validateJntConfig, type JntEnvironment } from "@/infrastructure/shipping/jnt/official-config";
-import { mappedWarehouse } from "@/infrastructure/shipping/jnt/verified-mapping";
+import { mappedWarehouse, readActiveJntRelease } from "@/infrastructure/shipping/jnt/verified-mapping";
 import { validTariffProof } from "@/infrastructure/shipping/jnt/tariff-proof";
 import { flatShippingRate } from "./shipping-settings-input";
 
@@ -54,14 +54,15 @@ async function jntChecklist(environment: JntEnvironment, db: Prisma.TransactionC
   const warehouse = await check("Mapping resmi aktif dan gudang pengirim", async () => {
     const district = state?.config.seller?.warehouse.districtCode;
     if (!district) throw new HttpError("Pilih kecamatan gudang dari mapping resmi", 422);
-    const origin = await mappedWarehouse(district, undefined, db);
+    const { version, releaseStamp } = await readActiveJntRelease(db);
+    const origin = await mappedWarehouse(district, version, db);
     if (!await db.jntMappingImport.findUnique({ where: { version: origin.version }, select: { version: true } })) {
       throw new HttpError("Unggah dan aktifkan mapping dengan lima kode J&T yang terpisah", 422);
     }
-    return origin;
+    return { ...origin, releaseStamp };
   });
   await check("Cek tarif EZ untuk konfigurasi tersimpan", () => {
-    if (!warehouse || !state || !validTariffProof(state.tariffProof, state.config, environment, warehouse.version)) {
+    if (!warehouse || !state || !validTariffProof(state.tariffProof, state.config, environment, warehouse.releaseStamp)) {
       throw new HttpError("Uji tarif draft dengan mapping aktif, lalu simpan hasilnya. Hasil berlaku 24 jam untuk aktivasi.", 422);
     }
   });

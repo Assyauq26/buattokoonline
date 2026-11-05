@@ -154,6 +154,7 @@ function JntEnvironmentSettings({ environment, setEnvironment, mapping, setMappi
     </fieldset>
     <fieldset disabled={busy || !stored} className="space-y-4 rounded-2xl bg-white p-4 shadow-sm sm:p-6">
       <h2 className="font-semibold">Alamat Gudang Pengirim</h2>
+      <p className="text-sm text-zinc-600">Gunakan referensi persetujuan J&T untuk memastikan layanan EZ yang dipakai toko masih berlaku.</p>
       <JntDistrictPicker key={mapping?.activeVersion} label="Kecamatan gudang" value={warehouse.districtCode}
         onChange={districtCode => { setWarehouse(previous => ({ ...previous, districtCode })); edited(); }}
         version={mapping?.activeVersion} showOrigin />

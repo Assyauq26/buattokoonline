@@ -25,7 +25,7 @@ beforeEach(() => {
   vi.stubEnv("JWT_SECRET", "test-only-".repeat(5));
   vi.stubEnv("JNT_API_ENV", "sandbox");
   mock.user = { id: "local-admin", roles: ["Admin"], permissions: ["shipping.update"] };
-  mock.resolve.mockResolvedValue({ config, version: "synthetic-mapping" });
+  mock.resolve.mockResolvedValue({ config, version: "synthetic-mapping", releaseStamp: "synthetic-mapping:1" });
   mock.rate.mockResolvedValue([{ courier: "J&T Express", service: "EZ", cost: 10000 }]);
 });
 afterEach(() => { vi.unstubAllEnvs(); vi.resetAllMocks(); });
@@ -63,12 +63,13 @@ describe("local seller connection probes", () => {
     expect(JSON.stringify(data)).not.toContain("SYNTHETIC-DRAFT");
     expect(mock.resolve).toHaveBeenCalledWith(draft);
     expect(mock.rate).toHaveBeenCalledWith(expect.objectContaining({ originSite: "SYNTHETIC CITY", destinationArea: "SYNTHETIC DISTRICT" }), config);
-    expect(validTariffProof(data.tariffProof, config, "sandbox", "synthetic-mapping")).toBe(true);
-    expect(validTariffProof(data.tariffProof, config, "production", "synthetic-mapping")).toBe(false);
+    expect(validTariffProof(data.tariffProof, config, "sandbox", "synthetic-mapping:1")).toBe(true);
+    expect(validTariffProof(data.tariffProof, config, "sandbox", "synthetic-mapping:2")).toBe(false);
+    expect(validTariffProof(data.tariffProof, config, "production", "synthetic-mapping:1")).toBe(false);
     expect(validTariffProof(data.tariffProof, config, "sandbox", "other-mapping")).toBe(false);
     const changed = structuredClone(config);
     changed.seller!.warehouse.address = "Changed warehouse";
-    expect(validTariffProof(data.tariffProof, changed, "sandbox", "synthetic-mapping")).toBe(false);
+    expect(validTariffProof(data.tariffProof, changed, "sandbox", "synthetic-mapping:1")).toBe(false);
   });
   it("fails closed on empty, invalid, duplicate and zero rates", async () => {
     for (const rates of [[], [{ courier: "J&T Express", service: "EZ", cost: 0 }],
