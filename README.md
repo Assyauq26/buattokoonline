@@ -51,6 +51,10 @@ penyedia DNS. Progres tetap tersimpan bila browser/SSH terputus.
    bcrypt dijalankan sekali; akun existing dipertahankan saat recovery.
 4. **Selesai** — buka storefront/dashboard. Setup pertama dicabut permanen.
 
+Finalisasi menampilkan sembilan checkpoint backend, fase aktif dan indikator build
+indeterminate. Jumlah tahapan selesai bukan estimasi waktu. Refresh mempertahankan
+progres; fase terputus menyediakan petunjuk finalisasi ulang.
+
 Toko baru mempunyai **0 produk, kategori seller, pelanggan, pesanan, review, voucher,
 kampanye flash sale, upload dan kredensial J&T**. Hanya akun admin, peran/izin dan
 identitas toko dibuat. Draft Dekorasi Toko mengikuti dashboard; storefront memakai
@@ -62,6 +66,12 @@ sama**. Jangan menghapus direktori atau volume. Lihat docs/operations.md.
 dianggap sebagai sertifikat HTTPS domain publik.
 
 ## Setelah instalasi dan update
+
+Admin dengan izin `audit.read` dapat membuka **Pengaturan → Pembaruan Aplikasi**
+(`/admin/settings/updates`) untuk melihat versi aktif, memeriksa rilis GitHub resmi
+dan membaca changelog. Pemasangan tetap melalui CLI: kompatibilitas paket/database
+diverifikasi oleh updater lokal. Tidak ada akses Docker/root dari aplikasi web.
+Lihat [audit kandidat v1.0.1](docs/v1.0.1-audit.md) untuk batas fitur dan pengujiannya.
 
 Atur rekening, sender email/Resend dan tarif pengiriman menggunakan akun seller.
 Pendaftaran pelanggan memerlukan OTP email; checkout memerlukan tarif yang valid.

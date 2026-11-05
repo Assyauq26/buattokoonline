@@ -77,6 +77,12 @@ J&T API dijelaskan pada [jnt.md](jnt.md). Tinjau draf kebijakan toko sebelum men
 
 ## Backup dan pembaruan manual
 
+Admin berizin audit dapat memeriksa versi/changelog di Pengaturan → Pembaruan
+Aplikasi. Pemeriksaan dashboard tidak memasang paket atau mengakses Docker/root.
+Versi berasal dari image yang sedang berjalan; snapshot rilis dapat diperiksa ulang
+sesudah restart. Jalankan perintah pemasangan pada SSH/console server. Audit dan
+batas keamanan kandidat dijelaskan di [v1.0.1-audit.md](v1.0.1-audit.md).
+
 Backup selalu mencakup database, media, dan konfigurasi/kunci enkripsi sebagai satu
 set. Simpan backup terenkripsi di lokasi lain dengan akses terbatas. Contoh dump:
 

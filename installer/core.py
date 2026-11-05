@@ -303,46 +303,62 @@ def public_health(state):
         curl('https://' + state['domain'] + endpoint, extra)
 
 
-def initialize_store(state, password=None):
-    create_secrets(state['domain'])
-    if not state.get('built'):
-        started = time.monotonic()
-        dc(['build', 'app', 'tools'], timeout=1800)
-        state['build_seconds'] = round(time.monotonic() - started, 1)
-        state['built'] = True
-        atomic_json(STATE, state)
-    dc(['up', '-d', '--wait', 'db'])
-    dc(['run', '--rm', '-T', 'tools', 'npm', 'run', 'db:migrate'])
-    existing = json.loads(sql('SELECT json_build_object(\'users\',(SELECT count(*) FROM "User"),\'identity\',(SELECT count(*) FROM "StoreAppearance"));'))
-    if existing == {'users': 0, 'identity': 0}:
-        if password is None:
-            raise StoreError('Buat akun admin untuk melanjutkan. Password sebelumnya tidak disimpan.')
-        payload = ('\0'.join([state['name'], state['admin_email'], password])).encode()
-        dc(['run', '--rm', '-T', 'tools', 'npm', 'run', 'bootstrap'], payload)
-        del payload
-    elif not state.get('bootstrap_started') or existing['users'] != 1 or existing['identity'] != 1:
-        raise StoreError('Database sudah berisi identitas lain. Bootstrap tidak dijalankan ulang.')
-    else:
-        # A crash after the DB commit is recovered without changing the administrator.
-        if sql('SELECT published->\'identity\'->>\'name\' FROM "StoreAppearance";') != state['name']:
-            raise StoreError('Identitas database tidak cocok dengan progres instalasi.')
-    state['has_admin'] = True
-    atomic_json(STATE, state)
-    grant_runtime()
-    (CONFIG / 'init.sql').write_text('-- Initialized; credentials live in root-only environment files.\n')
-    dc(['up', '-d', '--wait', 'app'])
-    healthy(state['local_test'])
-    write_caddy(state, live=True)
-    public_health(state)
-    version = (ROOT / 'manager/VERSION').read_text().strip()
-    atomic_json(CONFIG / 'version.json', {'version': version, 'source_sha': state['source_sha'], 'db_contract': 1,
-                                       'migrations': inventory(ROOT)})
-    for name in ['single-store-maintenance.service', 'single-store-maintenance.timer']:
-        target = Path('/etc/systemd/system') / name
-        target.write_bytes((ROOT / 'manager' / name).read_bytes())
-    run(['systemctl', 'daemon-reload'])
-    run(['systemctl', 'enable', '--now', 'single-store-maintenance.timer'])
+def seal_installation():
+    """Repairable cleanup after the durable complete state has revoked setup."""
     (CONFIG / 'installed').touch(mode=0o600)
-    state.update(step=4, complete=True, setup_hash=None, busy=False, message='Toko berhasil dibuat. Konfigurasikan pembayaran dan pengiriman sebelum menerima pesanan.')
-    atomic_json(STATE, state)
     (CONFIG / 'setup-token').unlink(missing_ok=True)
+
+
+def initialize_store(state, password, tracker):
+    with tracker.phase('prepare'):
+        create_secrets(state['domain'])
+        run(['docker', 'version', '--format', '{{.Server.Version}}'])
+        run(['docker', 'compose', 'version'])
+    with tracker.phase('build'):
+        if not state.get('built'):
+            started = time.monotonic()
+            dc(['build', 'app', 'tools'], timeout=1800)
+            state['build_seconds'] = round(time.monotonic() - started, 1)
+            state['built'] = True
+            atomic_json(STATE, state)
+    with tracker.phase('database'):
+        dc(['up', '-d', '--wait', 'db'])
+    with tracker.phase('migrations'):
+        dc(['run', '--rm', '-T', 'tools', 'npm', 'run', 'db:migrate'])
+    with tracker.phase('administrator'):
+        existing = json.loads(sql('SELECT json_build_object(\'users\',(SELECT count(*) FROM "User"),\'identity\',(SELECT count(*) FROM "StoreAppearance"));'))
+        if existing == {'users': 0, 'identity': 0}:
+            if password is None:
+                raise StoreError('Buat akun admin untuk melanjutkan. Password sebelumnya tidak disimpan.')
+            payload = ('\0'.join([state['name'], state['admin_email'], password])).encode()
+            dc(['run', '--rm', '-T', 'tools', 'npm', 'run', 'bootstrap'], payload)
+            del payload
+        elif not state.get('bootstrap_started') or existing['users'] != 1 or existing['identity'] != 1:
+            raise StoreError('Database sudah berisi identitas lain. Bootstrap tidak dijalankan ulang.')
+        else:
+            # A crash after the DB commit is recovered without changing the administrator.
+            if sql('SELECT published->\'identity\'->>\'name\' FROM "StoreAppearance";') != state['name']:
+                raise StoreError('Identitas database tidak cocok dengan progres instalasi.')
+        state['has_admin'] = True
+        atomic_json(STATE, state)
+        grant_runtime()
+        (CONFIG / 'init.sql').write_text('-- Initialized; credentials live in root-only environment files.\n')
+    with tracker.phase('activate'):
+        dc(['up', '-d', '--wait', 'app'])
+        write_caddy(state, live=True)
+    with tracker.phase('health'):
+        healthy(state['local_test'])
+        public_health(state)
+    with tracker.phase('finish'):
+        version = (ROOT / 'manager/VERSION').read_text().strip()
+        atomic_json(CONFIG / 'version.json', {'version': version, 'source_sha': state['source_sha'], 'db_contract': 1,
+                                           'migrations': inventory(ROOT)})
+        for name in ['single-store-maintenance.service', 'single-store-maintenance.timer']:
+            target = Path('/etc/systemd/system') / name
+            target.write_bytes((ROOT / 'manager' / name).read_bytes())
+        run(['systemctl', 'daemon-reload'])
+        run(['systemctl', 'enable', '--now', 'single-store-maintenance.timer'])
+        # Tracker persists completion and the final checkpoint together. The token
+        # remains available for recovery until this durable revocation succeeds.
+        state.update(step=4, complete=True, setup_hash=None, busy=False, message='Toko berhasil dibuat. Konfigurasikan pembayaran dan pengiriman sebelum menerima pesanan.')
+    seal_installation()

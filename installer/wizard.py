@@ -11,12 +11,15 @@ import secrets
 import threading
 import time
 import core
+import progress as install_progress
 
 PORT = 8787
 ASSETS = Path(__file__).parent / 'ui'
 state = core.read_json(core.STATE)
+install_progress.interrupt(state)
 state['busy'] = False  # An interrupted worker is resumed explicitly by its owner.
 core.atomic_json(core.STATE, state)
+tracker = install_progress.Tracker(state, lambda: core.atomic_json(core.STATE, state))
 session = secrets.token_urlsafe(32)
 pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
 mutex = threading.Lock()
@@ -25,7 +28,7 @@ attempts = []
 
 def public_state():
     keys = ['step', 'name', 'domain', 'www', 'ips', 'status', 'evidence', 'busy', 'message', 'complete', 'local_test', 'has_admin']
-    return {k: state.get(k) for k in keys}
+    return {**{k: state.get(k) for k in keys}, 'progress': install_progress.public(state.get('progress'))}
 
 
 def submit(task):
@@ -163,14 +166,16 @@ class Handler(BaseHTTPRequestHandler):
                         raise core.StoreError('Gunakan email admin dari percobaan pertama. Password tidak pernah disimpan.')
                     state['admin_email'] = email
                 def finalize():
+                    tracker.begin()
                     # Recheck DNS, hostname, certificate and server challenge at the sensitive boundary.
-                    status, evidence = core.verify_domain(state)
-                    state.update(status=status, evidence=evidence)
-                    if status != 'Domain berhasil terhubung':
-                        raise core.StoreError('Verifikasi domain berubah. Kembali ke pemeriksaan domain sebelum membuat admin.')
+                    with tracker.phase('verify'):
+                        status, evidence = core.verify_domain(state)
+                        state.update(status=status, evidence=evidence)
+                        if status != 'Domain berhasil terhubung':
+                            raise core.StoreError('Verifikasi domain berubah. Periksa DNS/HTTPS, lalu lanjutkan finalisasi kembali.')
                     state['bootstrap_started'] = True
                     core.atomic_json(core.STATE, state)
-                    core.initialize_store(state, password)
+                    core.initialize_store(state, password, tracker)
                     core.run(['systemctl', 'disable', 'single-store-setup.service'])
                     threading.Timer(60, server.shutdown).start()
                 submit(finalize)
@@ -185,6 +190,7 @@ class Handler(BaseHTTPRequestHandler):
 
 if __name__ == '__main__':
     if state.get('complete'):
+        core.seal_installation()
         raise SystemExit(0)
     server = ThreadingHTTPServer(('127.0.0.1', PORT), Handler)
     server.daemon_threads = True

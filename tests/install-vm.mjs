@@ -6,6 +6,7 @@ import { createRequire } from 'node:module';
 import assert from 'node:assert/strict';
 import {installWizard} from './wizard-vm.mjs';
 import {verifyUpdates} from './update-vm.mjs';
+import {verifyDashboardUpdates} from './dashboard-updates.mjs';
 import {runRoot} from './vm-root.mjs';
 const require = createRequire(new URL('../app/package.json', import.meta.url));
 const { chromium, expect } = require('@playwright/test');
@@ -164,6 +165,11 @@ try {
   assert.equal(sql('SELECT "activeVersion" FROM "JntMappingRelease";'),preview.version);
   assert.equal(sql('SELECT count(*) FROM "JntIntegration";'),'0');
   pass('Offline J&T mapping review/stage/activation with synthetic CSV; no carrier credentials or calls');
+  // Optional release inspection explicitly needs GitHub; the store flow above was
+  // already proven with application egress blocked. Re-enable it for this check.
+  runRoot(['iptables','-D','DOCKER-USER','-s',webNetwork.IPAddress+'/32','!','-d',subnet,'-m','conntrack','--ctstate','NEW','-j','REJECT']);
+  await verifyDashboardUpdates({browser,context,page,base,password,sql,version:readFileSync(new URL('../VERSION',import.meta.url),'utf8').trim(),pass});
+  assert.deepEqual(errors,[]);
   await verifyUpdates({context,base,email,password,pass,sql,dc});
 } catch(error) {
   reports.push({name:'Failure',status:'FAIL',message:String(error)});
