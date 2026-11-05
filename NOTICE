@@ -1,0 +1,20 @@
+Single-store ecommerce template
+Copyright 2026 Assyauq26 and contributors
+
+Adapted, with the repository owner's authorization, from the store application in
+https://github.com/Assyauq26/Gheverhan
+Source revision: 0ce1f130b65cd8cbf2f1f3832cfda935632ff502
+
+This distribution modifies the store runtime, bootstrap, branding, J&T ownership,
+database names and installation workflow. It does not include the source project's
+platform, agent, production databases, credentials, photographs or seller media.
+The source project's brand is acknowledged here only as provenance, not as the
+identity of a newly installed store.
+
+Third-party licenses remain in effect for their respective components:
+- Lumen auth primitives: MIT; app/src/components/auth/lumen/LICENSE
+- React runtime backport: MIT; app/scripts/webpack/react-backports.LICENSE
+- Braces mitigation: MIT; app/scripts/security/LICENSE.braces
+- Administrative region data: Emsifa and Cahya DSN, MIT; see
+  app/src/modules/regions/data/NOTICE.md and LICENSE.cahyadsn
+- npm dependencies: their published package licenses, preserved in installed images.

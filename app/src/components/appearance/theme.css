@@ -1,0 +1,657 @@
+/* Only explicitly published/preview themes activate these overrides. Legacy has no variables. */
+.storefront-root[data-theme-active="true"] {
+  background: var(--store-pageBg);
+  color: var(--store-text);
+  font-family: var(--font-sans);
+}
+.storefront-root[data-theme-active="true"] :is(.bg-white, .bg-background) {
+  background-color: var(--store-card);
+}
+.storefront-root[data-theme-active="true"]
+  :is(.bg-surface, .bg-gray-50, .bg-zinc-50, .bg-gray-100) {
+  background-color: var(--store-surface);
+}
+.storefront-root[data-theme-active="true"]
+  :is(.text-ink, .text-black, .text-gray-900, .text-zinc-900) {
+  color: var(--store-text);
+}
+.storefront-root[data-theme-active="true"]
+  :is(.text-ink-soft, .text-gray-600, .text-zinc-600) {
+  color: var(--store-secondaryText);
+}
+.storefront-root[data-theme-active="true"]
+  :is(
+    .text-ink-muted,
+    .text-gray-400,
+    .text-gray-500,
+    .text-zinc-400,
+    .text-zinc-500
+  ) {
+  color: var(--store-disabledText);
+}
+.storefront-root[data-theme-active="true"]
+  :is(
+    .border-line,
+    .border-input,
+    .border-border,
+    .border-gray-200,
+    .border-zinc-200
+  ) {
+  border-color: var(--store-border);
+}
+.storefront-root[data-theme-active="true"]
+  main
+  :is(a, button).bg-black:not([data-button-variant]) {
+  background: var(--store-primary);
+  color: var(--store-primaryText);
+}
+.storefront-root[data-theme-active="true"]
+  a:is(:hover, :focus-visible, [aria-current="page"], [data-active="true"]) {
+  color: var(--store-linkHover);
+}
+.storefront-root[data-theme-active="true"] a:active {
+  color: var(--store-link);
+}
+.storefront-root[data-theme-active="true"]
+  main
+  a.text-white:not([data-button-variant]):is(
+    :hover,
+    :focus-visible,
+    [aria-current="page"],
+    [data-active="true"]
+  ) {
+  color: var(--store-primaryText);
+  background: var(--store-primaryHover);
+}
+.storefront-root[data-theme-active="true"] :focus-visible {
+  outline: 2px solid var(--store-focus);
+  outline-offset: 3px;
+  --tw-ring-color: var(--store-focus);
+}
+.storefront-root[data-theme-active="true"] :is(input, select, textarea) {
+  background: var(--store-field);
+  color: var(--store-fieldText);
+  border-color: var(--store-border);
+}
+.storefront-root[data-theme-active="true"] :is(button, [role="button"]) {
+  border-radius: var(--store-button-radius);
+}
+.storefront-root[data-theme-active="true"] [data-button-variant="default"],
+.storefront-root[data-theme-active="true"] .pdp-buy-pill {
+  background: var(--store-gradient-buttons, var(--store-primary));
+  color: var(--store-gradient-buttons-text, var(--store-primaryText));
+}
+.storefront-root[data-theme-active="true"]
+  :is([data-button-variant="default"], .pdp-buy-pill):hover {
+  background: var(--store-primaryHover);
+  color: var(--store-primaryText);
+}
+.storefront-root[data-theme-active="true"]
+  :is([data-button-variant="default"], .pdp-buy-pill):active {
+  background: var(--store-primaryPressed);
+}
+.storefront-root[data-theme-active="true"] [data-button-variant="outline"] {
+  background: var(--store-outline);
+  color: var(--store-outlineText);
+  border-color: var(--store-border);
+}
+.storefront-root[data-theme-active="true"]
+  [data-button-variant="outline"]:hover {
+  background: var(--store-outlineHover);
+}
+.storefront-root[data-theme-active="true"] [data-button-variant="secondary"] {
+  background: var(--store-secondary);
+  color: var(--store-secondaryForeground);
+}
+.storefront-root[data-theme-active="true"]
+  [data-button-variant="secondary"]:hover {
+  background: var(--store-secondaryHover);
+}
+.storefront-root[data-theme-active="true"]
+  [data-button-variant="secondary"]:active {
+  background: var(--store-secondaryPressed);
+}
+.storefront-root[data-theme-active="true"] :disabled {
+  background: var(--store-disabled);
+  color: var(--store-disabledText);
+  opacity: 1;
+}
+.storefront-root[data-theme-active="true"] > header {
+  background: var(--store-gradient-header, var(--store-header));
+  color: var(--store-gradient-header-text, var(--store-headerText));
+}
+.storefront-root[data-theme-active="true"] > header :is(a, span, nav) {
+  color: inherit;
+}
+.storefront-root[data-theme-active="true"] > footer {
+  background: var(--store-gradient-footer, var(--store-footer));
+  color: var(--store-gradient-footer-text, var(--store-footerText));
+}
+.storefront-root[data-theme-active="true"] > footer :is(p, span, a, svg) {
+  color: inherit;
+}
+.storefront-root[data-theme-active="true"] [data-testid="bottom-nav"] {
+  background: var(--store-nav);
+  color: var(--store-navText);
+}
+.storefront-root[data-theme-active="true"] [data-testid="bottom-nav"] a {
+  color: var(--store-navText);
+}
+.storefront-root[data-theme-active="true"]
+  [data-testid="bottom-nav"]
+  a[aria-current="page"] {
+  background: var(--store-navActive);
+  color: var(--store-navActiveText);
+}
+.storefront-root[data-theme-active="true"]
+  :is([data-testid="header-cart-count"], [data-testid="bottom-cart-count"]) {
+  background: var(--store-badge);
+  color: var(--store-badgeText);
+}
+.storefront-root[data-theme-active="true"]
+  :is(.text-red-500, .text-red-600, .text-destructive) {
+  color: var(--store-error);
+}
+.storefront-root[data-theme-active="true"] :is(.text-green-600, .text-success) {
+  color: var(--store-success);
+}
+.storefront-root[data-theme-active="true"] :is(.text-blue-600, .text-info) {
+  color: var(--store-info);
+}
+.storefront-root[data-theme-active="true"]
+  :is(.text-yellow-600, .text-warning) {
+  color: var(--store-warning);
+}
+.storefront-root[data-theme-active="true"] [data-theme-target="promo"] {
+  background: var(--store-gradient-promo, var(--store-promo));
+  color: var(--store-gradient-promo-text, var(--store-promoText));
+}
+.storefront-root[data-theme-active="true"] [data-theme-target="hero"] {
+  background: var(--store-gradient-hero, var(--store-surface));
+}
+.storefront-root[data-theme-active="true"] [data-theme-target="highlightCard"] {
+  background: var(--store-gradient-highlightCard, var(--store-card));
+  color: var(--store-gradient-highlightCard-text, var(--store-text));
+}
+.storefront-root[data-theme-active="true"] :is(.rounded-2xl, .rounded-3xl) {
+  border-radius: var(--store-radius);
+}
+.storefront-root[data-theme-active="true"] :is(.shadow-sm, .shadow-lg) {
+  box-shadow: var(--store-shadow);
+}
+/* No structural border utilities on shells: --store-border remains a control
+ * token. Pill elevation is independent of card shadows, including legacy. */
+.storefront-root [data-testid="bottom-nav"][data-style="pill"] {
+  box-shadow: var(--store-shell-shadow, 0 4px 16px rgb(0 0 0 / .08));
+}
+.storefront-root [data-testid="bottom-nav"][data-style="bar"] {
+  box-shadow: var(--store-shell-shadow, 0 -2px 12px rgb(0 0 0 / .05));
+}
+.storefront-root[data-theme-active="true"] .pdp-page {
+  --pdp-black: var(--store-text);
+  --pdp-muted: var(--store-secondaryText);
+}
+.storefront-root[data-theme-active="true"]
+  :is(.pdp-sheet, .pdp-quantity-stepper, .pdp-cart-pill, .pdp-choice-pill) {
+  background: var(--store-card);
+  color: var(--store-text);
+  border-color: var(--store-border);
+}
+.storefront-root[data-theme-active="true"]
+  :is(.pdp-divider, .pdp-detail-row, .pdp-gallery-thumb) {
+  border-color: var(--store-border);
+}
+.storefront-root[data-theme-active="true"]
+  :is(.pdp-gallery-frame, .pdp-gallery-thumb, .pdp-swatch) {
+  background: var(--store-surface);
+}
+.storefront-root[data-theme-active="true"]
+  .pdp-choice-pill[aria-pressed="true"] {
+  background: var(--store-selected);
+  color: var(--store-selectedText);
+  border-color: var(--store-selected);
+  box-shadow: inset 0 0 0 0.5px var(--store-selected);
+}
+.storefront-root[data-theme-active="true"] .pdp-choice-pill:hover {
+  border-color: var(--store-focus);
+}
+.storefront-root[data-theme-active="true"] .pdp-topbar-center {
+  background: transparent;
+  color: inherit;
+}
+.storefront-root[data-theme-active="true"] .pdp-header-action {
+  background: transparent;
+  color: inherit !important;
+}
+.storefront-root[data-theme-active="true"] .pdp-page :focus-visible {
+  outline-color: var(--store-focus);
+}
+.storefront-root > header[data-layout="centered"] > .container:first-of-type {
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.storefront-root > header[data-layout="centered"] [data-testid="logo"] {
+  text-align: center;
+}
+.storefront-root > header[data-layout="compact"] > .container {
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+}
+.storefront-root [data-testid="bottom-nav"][data-style="bar"] {
+  bottom: 0;
+  width: 100%;
+  max-width: 100%;
+  border-radius: 0;
+  justify-content: space-around;
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+}
+.storefront-root[data-theme-active="true"] [data-theme-role="price"] {
+  color: var(--store-price);
+}
+.storefront-root[data-theme-active="true"] [data-badge-variant="sale"] {
+  background: var(--store-badge);
+  color: var(--store-badgeText);
+}
+.storefront-root[data-theme-active="true"]
+  [data-theme-target="promo"]
+  :is(h2, p, span) {
+  color: var(--store-gradient-promo-text, var(--store-promoText));
+}
+.storefront-root[data-theme-active="true"] [data-theme-target="hero"]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: var(--store-gradient-hero, transparent);
+  opacity: 0.55;
+}
+.storefront-root[data-theme-active="true"] [class~="border-line/70"] {
+  border-color: rgb(var(--store-border-rgb) / 0.7);
+}
+.storefront-root[data-theme-active="true"] [class~="bg-white/95"] {
+  background-color: rgb(var(--store-card-rgb) / 0.95);
+}
+.storefront-root[data-theme-active="true"]
+  :is(
+    .bg-red-50,
+    .bg-red-100,
+    .bg-green-50,
+    .bg-green-100,
+    .bg-blue-50,
+    .bg-blue-100,
+    .bg-amber-50,
+    .bg-amber-100
+  ) {
+  background-color: var(--store-card);
+  border-color: var(--store-border);
+}
+.storefront-root[data-theme-active="true"] [data-testid="logo"] {
+  min-width: 0;
+  max-width: 42%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.storefront-root[data-theme-active="true"] [data-testid="logo"] > span > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.storefront-root[data-theme-active="true"] .text-xs {
+  font-size: calc(0.75rem * var(--store-font-scale));
+}
+.storefront-root[data-theme-active="true"] .text-sm {
+  font-size: calc(0.875rem * var(--store-font-scale));
+}
+.storefront-root[data-theme-active="true"] .text-base {
+  font-size: calc(1rem * var(--store-font-scale));
+}
+.storefront-root[data-theme-active="true"] .text-lg {
+  font-size: calc(1.125rem * var(--store-font-scale));
+}
+.storefront-root[data-theme-active="true"] .text-xl {
+  font-size: calc(1.25rem * var(--store-font-scale));
+}
+.storefront-root[data-theme-active="true"] .text-2xl {
+  font-size: calc(1.5rem * var(--store-font-scale));
+}
+.storefront-root[data-theme-active="true"] .text-3xl {
+  font-size: calc(1.875rem * var(--store-font-scale));
+}
+.storefront-root[data-theme-active="true"] [data-button-variant="accent"] {
+  background: var(--store-accent);
+  color: var(--store-accentForeground);
+}
+.storefront-root[data-theme-active="true"]
+  [data-button-variant="accent"]:hover {
+  background: var(--store-accentHover);
+}
+.storefront-root[data-theme-active="true"]
+  [data-button-variant="accent"]:active {
+  background: var(--store-accentPressed);
+}
+.storefront-root[data-theme-active="true"]
+  [data-button-variant="outline"]:active {
+  background: var(--store-outlinePressed);
+}
+.storefront-root[data-theme-active="true"] a:active {
+  color: var(--store-linkPressed);
+}
+.storefront-root[data-theme-active="true"] main svg {
+  color: var(--store-icon);
+}
+.storefront-root[data-theme-active="true"]
+  [data-theme-role="price"][data-discount="true"] {
+  color: var(--store-discount);
+}
+.storefront-root[data-theme-active="true"] > header {
+  background-color: var(--store-gradient-header-fallback, var(--store-header));
+  background-image: var(--store-gradient-header, none);
+}
+.storefront-root[data-theme-active="true"] > footer {
+  background-color: var(--store-gradient-footer-fallback, var(--store-footer));
+  background-image: var(--store-gradient-footer, none);
+}
+.storefront-root[data-theme-active="true"] [data-theme-target="promo"] {
+  background-color: var(--store-gradient-promo-fallback, var(--store-promo));
+  background-image: var(--store-gradient-promo, none);
+}
+.storefront-root[data-theme-active="true"] [data-theme-target="hero"] {
+  background-color: var(--store-gradient-hero-fallback, var(--store-surface));
+}
+.storefront-root[data-theme-active="true"] [data-theme-target="highlightCard"] {
+  background-color: var(
+    --store-gradient-highlightCard-fallback,
+    var(--store-card)
+  );
+  background-image: var(--store-gradient-highlightCard, none);
+}
+.storefront-root[data-theme-active="true"]
+  :is([data-button-variant="default"], .pdp-buy-pill) {
+  background-color: var(
+    --store-gradient-buttons-fallback,
+    var(--store-primary)
+  );
+  background-image: var(--store-gradient-buttons, none);
+}
+.storefront-root[data-theme-active="true"]
+  :is([data-button-variant="default"], .pdp-buy-pill):is(
+    :hover,
+    :active,
+    :disabled
+  ) {
+  background-image: none;
+}
+.storefront-root[data-theme-active="true"] [role="dialog"] {
+  background: var(--store-modal);
+  color: var(--store-modalText);
+}
+.storefront-root
+  > header[data-logo-position="center"]
+  > .container:first-of-type {
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.storefront-root > header[data-logo-position="center"] [data-testid="logo"] {
+  flex-basis: 100%;
+  max-width: 100%;
+  text-align: center;
+}
+.storefront-root
+  > header[data-logo-position="center"]
+  [data-testid="logo"]
+  > span {
+  justify-content: center;
+}
+.storefront-root > header[data-layout="centered"] [data-testid="logo"] {
+  flex-basis: 100%;
+  max-width: 100%;
+  text-align: center;
+}
+.storefront-root > header[data-layout="centered"] [data-testid="logo"] > span {
+  justify-content: center;
+}
+.storefront-root[data-theme-active="true"]
+  a[data-button-variant="default"]:is(:hover, :focus-visible) {
+  background-color: var(--store-primaryHover);
+  color: var(--store-primaryText);
+}
+.storefront-root[data-theme-active="true"]
+  a[data-button-variant="default"]:active {
+  background-color: var(--store-primaryPressed);
+  color: var(--store-primaryText);
+}
+.storefront-root[data-theme-active="true"]
+  :is(button, a)[data-button-variant]:disabled,
+.storefront-root[data-theme-active="true"]
+  :is(.pdp-buy-pill, .pdp-cart-pill):disabled {
+  background: var(--store-disabled);
+  color: var(--store-disabledText);
+  opacity: 1;
+}
+.storefront-root[data-theme-active="true"][data-gradient-highlight-card="true"]
+  [data-theme-target="highlightCard"]
+  :is(h3, p, a, [class*="text-ink"], [data-theme-role="price"]) {
+  color: var(--store-gradient-highlightCard-text);
+}
+.storefront-root[data-theme-active="true"][data-gradient-highlight-card="true"]
+  [data-theme-target="highlightCard"]
+  a
+  svg {
+  color: var(--store-gradient-highlightCard-text);
+}
+.storefront-root[data-theme-active="true"]
+  input:is([type="checkbox"], [type="radio"]) {
+  accent-color: var(--store-selected);
+}
+.storefront-root[data-theme-active="true"] :is(input, textarea)::placeholder {
+  color: var(--store-disabledText);
+  opacity: 1;
+}
+.storefront-root[data-theme-active="true"] a {
+  color: var(--store-link);
+}
+/* Contextual foregrounds keep shell, navigation and CTA labels independent of body links. */
+.storefront-root[data-theme-active="true"] > header a {
+  color: var(--store-gradient-header-text, var(--store-headerText));
+}
+.storefront-root[data-theme-active="true"] > footer a {
+  color: var(--store-gradient-footer-text, var(--store-footerText));
+}
+/* Explicit component roles take precedence over legacy utility colors. */
+.storefront-root > header [hidden] {
+  display: none !important;
+}
+.storefront-root[data-theme-active="true"]
+  main
+  :is(a, button).bg-black:not([data-button-variant]):hover {
+  background: var(--store-primaryHover);
+  color: var(--store-primaryText);
+}
+.storefront-root[data-theme-active="true"]
+  main
+  :is(a, button).bg-black:not([data-button-variant]):active {
+  background: var(--store-primaryPressed);
+  color: var(--store-primaryText);
+}
+.storefront-root[data-theme-active="true"]
+  main
+  button.bg-black:not([data-button-variant]):disabled {
+  background: var(--store-disabled);
+  color: var(--store-disabledText);
+}
+.storefront-root[data-theme-active="true"]
+  :is(button, [data-button-variant])
+  svg {
+  color: inherit;
+}
+.storefront-root[data-theme-active="true"] [data-button-variant="ghost"]:hover {
+  background: var(--store-surface);
+  color: var(--store-text);
+}
+.storefront-root[data-theme-active="true"]
+  [data-button-variant="ghost"]:active {
+  background: var(--store-secondaryPressed);
+  color: var(--store-secondaryForeground);
+}
+.storefront-root[data-theme-active="true"] [data-button-variant="destructive"] {
+  background: var(--store-error);
+  color: var(--store-error-foreground);
+}
+.storefront-root[data-theme-active="true"]
+  [data-button-variant="destructive"]:hover {
+  background: var(--store-error-hover);
+}
+.storefront-root[data-theme-active="true"]
+  [data-button-variant="destructive"]:active {
+  background: var(--store-error-pressed);
+}
+.storefront-root[data-theme-active="true"] [data-button-variant="success"] {
+  background: var(--store-success);
+  color: var(--store-success-foreground);
+}
+.storefront-root[data-theme-active="true"]
+  [data-button-variant="success"]:hover {
+  background: var(--store-success-hover);
+}
+.storefront-root[data-theme-active="true"]
+  [data-button-variant="success"]:active {
+  background: var(--store-success-pressed);
+}
+.storefront-root[data-theme-active="true"] [data-theme-target="highlightCard"] {
+  border-radius: var(--store-radius);
+  box-shadow: var(--store-shadow);
+}
+.storefront-root[data-theme-active="true"]
+  [data-theme-target="highlightCard"]
+  .rounded-xl {
+  border-radius: var(--store-radius);
+}
+.storefront-root[data-theme-active="true"][data-gradient-highlight-card="true"]
+  [data-theme-target="highlightCard"]
+  [data-theme-role="rating"]
+  svg {
+  color: var(--store-gradient-highlightCard-text);
+  fill: currentColor;
+}
+.storefront-root[data-theme-active="true"] [data-theme-role="rating"] svg {
+  fill: currentColor;
+}
+.storefront-root[data-theme-active="true"] :is(dialog, [role="dialog"]) {
+  background: var(--store-modal);
+  color: var(--store-modalText);
+}
+.storefront-root[data-theme-active="true"] :is(input, select, textarea):focus {
+  border-color: var(--store-focus);
+}
+.storefront-root[data-theme-active="true"] > header a:focus-visible {
+  outline-color: var(--store-gradient-header-text, var(--store-focus));
+}
+.storefront-root[data-theme-active="true"] > footer a:focus-visible {
+  outline-color: var(--store-gradient-footer-text, var(--store-focus));
+}
+.storefront-root[data-theme-active="true"][data-gradient-highlight-card="true"]
+  [data-theme-target="highlightCard"]
+  a:focus-visible {
+  outline-color: var(--store-gradient-highlightCard-text);
+}
+.storefront-root [data-testid="bottom-nav"][data-style="bar"] a {
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 56px;
+  height: auto;
+  gap: 0.25rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: 0.75rem;
+}
+.storefront-root
+  [data-testid="bottom-nav"][data-style="bar"]
+  a
+  > span:last-child {
+  max-width: 100%;
+  opacity: 1;
+  transform: none;
+  font-size: 0.625rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: auto;
+}
+.storefront-root[data-theme-active="true"] :is(.text-red-700, .text-red-800) {
+  color: var(--store-error);
+}
+.storefront-root[data-theme-active="true"]
+  :is(.text-green-700, .text-green-800) {
+  color: var(--store-success);
+}
+.storefront-root[data-theme-active="true"] :is(.text-blue-700, .text-blue-800) {
+  color: var(--store-info);
+}
+.storefront-root[data-theme-active="true"]
+  :is(.text-amber-700, .text-amber-800, .text-yellow-700) {
+  color: var(--store-warning);
+}
+.storefront-root[data-theme-active="true"]
+  [data-button-variant="destructive"]:is(:hover, :active, :focus-visible) {
+  color: var(--store-error-foreground);
+}
+.storefront-root[data-theme-active="true"]
+  [data-button-variant="success"]:is(:hover, :active, :focus-visible) {
+  color: var(--store-success-foreground);
+}
+/* Shell links use their own foreground even when the page and shell have opposite palettes. */
+.storefront-root[data-theme-active="true"]
+  > header
+  a:not([data-button-variant]):is(:hover, :active, :focus-visible) {
+  color: var(--store-gradient-header-text, var(--store-headerText));
+  background-color: transparent;
+}
+.storefront-root[data-theme-active="true"]
+  > footer
+  a:not([data-button-variant]):is(:hover, :active, :focus-visible) {
+  color: var(--store-gradient-footer-text, var(--store-footerText));
+  background-color: transparent;
+  text-decoration: underline;
+}
+.storefront-root[data-theme-active="true"]
+  :is(dialog, [role="dialog"])
+  a:not([data-button-variant]) {
+  color: var(--store-modalText);
+}
+.storefront-root[data-theme-active="true"]
+  :is(dialog, [role="dialog"])
+  a:not([data-button-variant]):is(:hover, :active, :focus-visible) {
+  color: var(--store-modalText);
+  background-color: transparent;
+  text-decoration: underline;
+}
+.storefront-root[data-theme-active="true"]
+  [role="search"]
+  button:not(:disabled):hover {
+  background: var(--store-secondaryHover);
+  color: var(--store-secondaryForeground);
+}
+
+/*
+ * Original Toko storefront: interactive controls still use the
+ * AA-checked border token, while product cards and search use subtle
+ * decorative outlines. Scope this to published themes AND the studio preview,
+ * so existing published Monochrome snapshots get the same fix without writes.
+ */
+.storefront-root[data-theme-active="true"] article[data-theme-target="highlightCard"] {
+  border-color: var(--store-decorative-border);
+  border-radius: var(--store-radius);
+  box-shadow: var(--store-shadow);
+}
+.storefront-root[data-theme-active="true"] article[data-theme-target="highlightCard"]:hover {
+  box-shadow: var(--store-shadow-hover);
+}
+.storefront-root[data-theme-active="true"] article[data-theme-target="highlightCard"] .rounded-xl {
+  border-radius: var(--store-media-radius);
+}
+.storefront-root[data-theme-active="true"] [data-testid="search-bar"] input[data-testid="search-input"] {
+  background-color: var(--store-surface);
+  border-color: var(--store-search-border);
+}
+.storefront-root[data-theme-active="true"] [data-testid="search-bar"] input[data-testid="search-input"]:focus-visible {
+  border-color: var(--store-focus);
+}

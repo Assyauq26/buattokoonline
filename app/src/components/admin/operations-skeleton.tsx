@@ -1,0 +1,1 @@
+export function OperationsSkeleton() { return <div role="status" aria-label="Memuat data operasional" className="motion-safe:animate-pulse space-y-5"><div className="h-8 w-48 rounded bg-line" />{[1, 2, 3, 4].map(i => <div key={i} className="h-24 rounded-xl bg-line" />)}<span className="sr-only">Memuat data…</span></div>; }
