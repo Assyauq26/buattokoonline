@@ -26,16 +26,25 @@ Provinsi,Kota,Kecamatan,Provinsi JNT,Kota JNT,Kode Kota JNT,Kecamatan JNT,Kode J
 
 Simpan root-only di `/etc/single-store/jnt-l3-official.csv`. Jalankan helper dalam
 tools dengan bind mount file tersebut ke `/app/resources/jnt-l3-official.csv`.
-Gunakan `--preview` untuk review hasil, `--stage` dengan `JNT_MAPPING_IMPORT_APPROVED=yes`,
+Gunakan `--preview` untuk review hasil, `--stage` dengan `JNT_MAPPING_IMPORT_APPROVED=yes`
+dan `JNT_MAPPING_EXPECTED_ROWS` jumlah baris data yang telah diperiksa (tanpa header),
 lalu `--activate` dengan flag tersebut, `JNT_MAPPING_APPROVED_VERSION` persis hash
 hasil preview dan `JNT_MAPPING_REVIEWER` identitas admin. Hanya pemetaan exact dan
 unik yang diaktifkan. Jangan menyetujui dugaan wilayah sebagai mapping carrier.
 
 ```bash
-sudo docker compose -f /opt/single-store/deploy/compose.yaml run --rm \
+sudo install -d -m 700 /var/lib/single-store/jnt-reports
+sudo docker compose -f /opt/single-store/deploy/compose.yaml run --rm --user 0:0 \
   -v /etc/single-store/jnt-l3-official.csv:/app/resources/jnt-l3-official.csv:ro \
+  -v /var/lib/single-store/jnt-reports:/app/.jnt-mapping-report \
   tools node scripts/jnt/reconcile-l3.mjs --preview
 ```
+
+Untuk `--stage`/`--activate`, tambahkan flag `-e NAMA_VARIABEL=nilai` sebelum `tools`
+untuk variabel persetujuan di atas. CLI sementara dijalankan sebagai root di container
+agar dapat membaca CSV root-only; service aplikasi tetap berjalan sebagai user biasa.
+Laporan tersimpan di `/var/lib/single-store/jnt-reports`. Jumlah baris tidak dikunci
+ke dataset toko sumber; gunakan hanya data carrier yang memang berhak digunakan toko.
 
 Transport mempertahankan allowlist HTTPS J&T, batas waktu, validasi signature,
 validasi berat, kepemilikan pesanan, dan ledger request. Hasil AWB tidak pasti

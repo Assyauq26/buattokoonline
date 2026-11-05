@@ -1,6 +1,7 @@
 import { spawn, execFileSync } from 'node:child_process';
 import { randomBytes, randomUUID } from 'node:crypto';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync, readFileSync } from 'node:fs';
+import { gunzipSync } from 'node:zlib';
 import { createRequire } from 'node:module';
 import assert from 'node:assert/strict';
 const require = createRequire(new URL('../app/package.json', import.meta.url));
@@ -27,7 +28,7 @@ assert.equal(execFileSync('sudo',['stat','-c','%a','/etc/single-store/runtime.en
 assert.equal(execFileSync('sudo',['systemctl','is-enabled','single-store-maintenance.timer'],{encoding:'utf8'}).trim(),'enabled');
 dc(['exec','-T','app','node','scripts/maintenance.mjs']);
 pass('Root-only credentials and local maintenance timer');
-const emptyTables=['Product','Category','Brand','Customer','Order','Review','Coupon','FlashSaleCampaign','JntIntegration','ProductImage','StoreBrandAsset','StoreHeroAsset'];
+const emptyTables=['Product','Category','Brand','Customer','Order','Review','Coupon','FlashSaleCampaign','JntIntegration','JntL3Mapping','JntMappingRelease','ProductImage','StoreBrandAsset','StoreHeroAsset'];
 for(const table of emptyTables) assert.equal(sql(`SELECT count(*) FROM "${table}";`),'0',table);
 assert.equal(sql('SELECT count(*) FROM "User";'),'1');
 assert.equal(sql('SELECT count(*) FROM "Role" WHERE name = \'Super Admin\';'),'0');
@@ -50,6 +51,7 @@ const browser=await chromium.launch({headless:true});
 let context;
 try {
   context=await browser.newContext({ignoreHTTPSErrors:true,viewport:{width:1360,height:900}});
+  context.setDefaultTimeout(30000);context.setDefaultNavigationTimeout(30000);
   const page=await context.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
   // All browser traffic stays on this store, even while every external request is blocked.
   const external=[];
@@ -67,6 +69,8 @@ try {
   await page.getByRole('button',{name:'Masuk',exact:true}).click();
   await expect(page).toHaveURL(/\/admin$/,{timeout:30000});
   await expect(page.locator('aside')).toContainText(brand);
+  await expect(page.getByTestId('dashboard-products')).toHaveText('0');
+  await expect(page.getByTestId('dashboard-orders')).toHaveText('0');
   await page.screenshot({path:'test-results/admin-login.png',fullPage:true});
   pass('Administrator created by installer can log in through dashboard UI');
   const jnt=await (await context.request.get(base+'/api/v1/admin/integrations/jnt?environment=sandbox')).json();
@@ -83,6 +87,7 @@ try {
   await expect(page.locator('#product-images img')).toHaveCount(1,{timeout:30000});
   await page.getByTestId('publish-product').click();
   await expect(page.getByTestId('product-status')).toContainText('Terbit',{timeout:30000});
+  await page.evaluate(()=>window.scrollTo(0,0));
   await page.screenshot({path:'test-results/product-created.png',fullPage:true});
   assert.equal(sql('SELECT count(*) FROM "Product";'),'1');
   assert.equal(sql('SELECT "onHand" FROM "Inventory";'),'7');
@@ -111,9 +116,17 @@ try {
   const anon=await browser.newContext({ignoreHTTPSErrors:true});
   const denied=await anon.request.get(base+'/api/v1/admin/store-appearance');assert.equal(denied.status(),401);await anon.close();
   pass('Anonymous admin reads and cross-origin writes are rejected');
+  await page.goto('about:blank');
   dc(['restart','db','app','proxy']);
   await expect.poll(async()=>{try{return (await context.request.get(base+'/api/v1/ready')).status();}catch{return 0;}},{timeout:120000}).toBe(200);
-  await page.goto(base+'/admin');await expect(page.locator('aside')).toContainText('Toko Melati');
+  // Restarting Docker bridges can briefly invalidate Chromium's existing network path.
+  // Retry only this read/navigation, retaining the same browser session cookies.
+  await expect(async()=>{
+    await page.goto(base+'/admin');
+    await expect(page.locator('aside')).toContainText('Toko Melati');
+    await expect(page.getByTestId('dashboard-products')).toHaveText('1');
+  }).toPass({timeout:60000,intervals:[1000,2000,5000]});
+  await page.screenshot({path:'test-results/admin-after-restart.png',fullPage:true});
   assert.equal(sql('SELECT count(*) FROM "Product";'),'1');assert.equal(sql('SELECT "onHand" FROM "Inventory";'),'7');
   assert.equal((await context.request.get(base+imagePath)).status(),200);
   await page.goto(base+'/');await expect(page).toHaveTitle('Toko Melati');await expect(page.locator('body')).toContainText('Produk Uji Mawar');
@@ -123,6 +136,23 @@ try {
   assert.deepEqual(external,[]);assert.deepEqual(errors,[]);
   const html=await page.content();assert(!/Ghever|JetSeller|Buat Toko Online Sendiri|BTOS/i.test(html));
   pass('No external browser dependency, source store branding or browser runtime errors');
+  // Exercise the seller's offline import tooling with public region names and synthetic
+  // carrier codes. No private carrier dataset, credential or live request is used.
+  const reference=JSON.parse(gunzipSync(readFileSync(new URL('../app/src/modules/regions/data/snapshot.json.gz',import.meta.url))).toString());
+  const province=reference.provinces.data[0],city=reference['regencies/'+province.code].data[0],district=reference['districts/'+city.code].data[0];
+  mkdirSync('/tmp/store-jnt-proof/reports',{recursive:true,mode:0o700});
+  const csvRow=[province.name,city.name,district.name,province.name,city.name,'TST',district.name,'TST01'].map(v=>'"'+v.replaceAll('"','""')+'"').join(',');
+  writeFileSync('/tmp/store-jnt-proof/input.csv','Provinsi,Kota,Kecamatan,Provinsi JNT,Kota JNT,Kode Kota JNT,Kecamatan JNT,Kode JNT\n'+csvRow+'\n',{mode:0o600});
+  const mappingArgs=['run','--rm','-T','--user','0:0','-v','/tmp/store-jnt-proof/input.csv:/app/resources/jnt-l3-official.csv:ro','-v','/tmp/store-jnt-proof/reports:/app/.jnt-mapping-report'];
+  const preview=JSON.parse(dc([...mappingArgs,'tools','node','scripts/jnt/reconcile-l3.mjs','--preview']));assert.equal(preview.exact,1);
+  assert.throws(()=>dc([...mappingArgs,'-e','JNT_MAPPING_IMPORT_APPROVED=yes','-e','JNT_MAPPING_EXPECTED_ROWS=2','tools','node','scripts/jnt/reconcile-l3.mjs','--stage']));
+  assert.equal(sql('SELECT count(*) FROM "JntL3Mapping";'),'0');
+  const reviewedArgs=[...mappingArgs,'-e','JNT_MAPPING_IMPORT_APPROVED=yes','-e','JNT_MAPPING_EXPECTED_ROWS=1'];
+  dc([...reviewedArgs,'tools','node','scripts/jnt/reconcile-l3.mjs','--stage']);
+  dc([...reviewedArgs,'-e','JNT_MAPPING_APPROVED_VERSION='+preview.version,'-e','JNT_MAPPING_REVIEWER=synthetic-test','tools','node','scripts/jnt/reconcile-l3.mjs','--activate']);
+  assert.equal(sql('SELECT "activeVersion" FROM "JntMappingRelease";'),preview.version);
+  assert.equal(sql('SELECT count(*) FROM "JntIntegration";'),'0');
+  pass('Offline J&T mapping review/stage/activation with synthetic CSV; no carrier credentials or calls');
 } catch(error) {
   reports.push({name:'Failure',status:'FAIL',message:String(error)});
   writeFileSync('test-results/report.json',JSON.stringify({checks:reports},null,2));

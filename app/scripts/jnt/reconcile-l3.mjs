@@ -1,6 +1,6 @@
 /**
  * Offline J&T L3 ↔ Emsifa v2 deterministic crosswalk.
- * Usage (from frontend/):
+ * Usage (from app/):
  *   node scripts/jnt/reconcile-l3.mjs --preview
  *   JNT_MAPPING_IMPORT_APPROVED=yes node scripts/jnt/reconcile-l3.mjs --stage
  *   JNT_MAPPING_IMPORT_APPROVED=yes JNT_MAPPING_APPROVED_VERSION=<sha> \
@@ -68,7 +68,7 @@ export function reconcile() {
   const all=parseCsv(raw);
   if(JSON.stringify(all[0])!==JSON.stringify(columns))throw Error("Unexpected J&T L3 header");
   const data=all.slice(1);
-  if(data.length!==7128)throw Error("J&T L3 row count changed; independent review needed");
+  if(data.length<1||data.length>100000)throw Error("J&T L3 must contain 1–100000 reviewed rows");
   const districtIndex=reference();
   const codes=new Set();
   const candidates=data.map((r,i)=>{
@@ -118,10 +118,11 @@ async function main() {
         .map(row=>[row.sourceRow,row.province,row.city,row.district,row.jntAreaCode,row.matchStatus].map(v=>'"'+String(v).replaceAll('"','""')+'"').join(",")).join("\n") + "\n");
     console.log(JSON.stringify(report,null,2));return;
   }
-  // Stage/activate are explicit, protected write operations. Never run on Preview CI.
+  // Stage/activate require the store operator's reviewed row count and exact file version.
   const {assertSafeDatabaseOperation}=await import("../assert-safe-db-operation.mjs");
   assertSafeDatabaseOperation();
-  if(process.env.JNT_MAPPING_IMPORT_APPROVED!=="yes"||process.env.VERCEL_ENV==="preview")throw Error("Approval required for mapping database writes");
+  if(process.env.JNT_MAPPING_IMPORT_APPROVED!=="yes")throw Error("Approval required for mapping database writes");
+  if(!/^[1-9][0-9]{0,5}$/.test(process.env.JNT_MAPPING_EXPECTED_ROWS||"") || Number(process.env.JNT_MAPPING_EXPECTED_ROWS)!==rows.length)throw Error("Set JNT_MAPPING_EXPECTED_ROWS to the reviewed row count before importing");
   const {PrismaClient}=await import("@prisma/client");
   const db=new PrismaClient();
   try {
