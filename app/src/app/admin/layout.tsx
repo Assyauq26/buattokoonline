@@ -1,4 +1,5 @@
 import { StoreWordmark } from "@/components/brand/store-wordmark";
+import { readDraft } from "@/modules/appearance/service";
 import "@/components/admin/variation-editor.css";
 import { OperationNotice } from "@/components/admin/operation-notice";
 import Link from "@/components/ui/navigation";
@@ -12,7 +13,12 @@ import { isJntSettingsAdministrator } from "@/infrastructure/shipping/jnt/offici
 import { Bell, ChevronDown, Search, Store } from "lucide-react";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Admin", robots: { index: false } };
+export async function generateMetadata() {
+  const user = await getCurrentUser(false);
+  if (!user?.isAdmin) return { title: { absolute: "Admin" }, robots: { index: false } };
+  const { config } = await readDraft();
+  return { title: { absolute: `Admin | ${config.identity.name}`, template: `%s | ${config.identity.name}` }, robots: { index: false } };
+}
 
 function Initials({ name }: { name: string }) {
   const letters = name.trim().split(/\s+/).slice(0, 2).map(part => part[0] || "").join("").toUpperCase();

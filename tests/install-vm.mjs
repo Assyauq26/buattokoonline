@@ -75,7 +75,7 @@ try {
   await page.goto(base+'/admin/products/new');
   await page.getByRole('button',{name:'Gunakan varian sederhana',exact:true}).click();
   await page.getByLabel('Nama produk',{exact:true}).fill('Produk Uji Mawar');
-  await page.getByLabel('Harga normal (Rp)',{exact:true}).fill('125000');
+  await page.locator('#product-price').fill('125000');
   await page.locator('#variant-0-sku').fill('MAWAR-UJI-001');
   await page.locator('#variant-0-stock').fill('7');
   await page.locator('#package-weight').fill('300');
@@ -89,6 +89,7 @@ try {
   const imagePath=sql('SELECT url FROM "ProductImage" LIMIT 1;');
   const publicImage=await context.request.get(base+imagePath);assert.equal(publicImage.status(),200);assert((await publicImage.body()).length>100);
   await page.goto(base+'/product/produk-uji-mawar');await expect(page.locator('h1')).toContainText('Produk Uji Mawar');
+  assert.equal(JSON.parse(await page.locator('script[type="application/ld+json"]').textContent()).brand.name,brand);
   pass('Add product, upload photo, publish, inventory and public product/image routes');
   const logoUpload=await context.request.post(base+'/api/v1/admin/store-branding',{headers:{Origin:base},multipart:{requestId:randomUUID(),image:{name:'logo-test.png',mimeType:'image/png',buffer:png}}});
   assert.equal(logoUpload.status(),201);const logoId=(await logoUpload.json()).data.id;
@@ -98,6 +99,7 @@ try {
   const saved=await context.request.post(base+'/api/v1/admin/store-appearance',{headers:{Origin:base},data:{kind:'save',config:draft,draftVersion:appearance.data.draftVersion,publishedVersion:appearance.data.publishedVersion}});
   assert.equal(saved.status(),200);const savedData=(await saved.json()).data;
   await page.goto(base+'/admin');await expect(page.locator('aside')).toContainText('Toko Melati');
+  await expect(page).toHaveTitle('Admin | Toko Melati');
   await expect(page.locator('aside img[src*="/api/v1/admin/store-branding/"]')).toHaveCount(1);
   await page.goto(base+'/');await expect(page).toHaveTitle(brand);await expect(page.locator('body')).not.toContainText('Toko Melati');
   const published=await context.request.post(base+'/api/v1/admin/store-appearance',{headers:{Origin:base},data:{kind:'publish',draftVersion:savedData.draftVersion,publishedVersion:savedData.publishedVersion}});

@@ -1,4 +1,5 @@
 import { StoreLogo } from "@/components/appearance/context";
+import { getPublishedAppearance } from "@/modules/appearance/published";
 import { ProductInformationSheet } from "@/components/storefront/product-information-sheet";
 import { ProductSizeChart } from "@/components/storefront/product-size-chart";
 import { notFound } from "next/navigation";
@@ -65,9 +66,10 @@ export async function generateMetadata({
 
 export default async function ProductPage({ params }: ProductRouteProps) {
   const { slug } = await params;
-  const [product, user] = await Promise.all([
+  const [product, user, appearance] = await Promise.all([
     getProductBySlug(slug),
     getStorefrontUserContext(),
+    getPublishedAppearance(),
   ]);
   if (!product) notFound();
   const [related, wishIds] = await Promise.all([
@@ -113,7 +115,7 @@ export default async function ProductPage({ params }: ProductRouteProps) {
     name: product.name,
     image: product.images.map((i) => i.url),
     description: product.description,
-    brand: { "@type": "Brand", name: product.brand?.name ?? "Toko Online" },
+    brand: { "@type": "Brand", name: product.brand?.name ?? appearance.config.identity.name },
     aggregateRating: {
       "@type": "AggregateRating",
       ratingValue: product.ratingAvg,
@@ -178,7 +180,7 @@ export default async function ProductPage({ params }: ProductRouteProps) {
           <ProductInformationSheet>
             <div className="pdp-info">
               <div className="mb-1.5 text-sm font-medium text-zinc-400">
-                {product.brand?.name ?? "Toko Online"}
+                {product.brand?.name ?? appearance.config.identity.name}
               </div>
               <h1 className="pdp-heading text-[1.75rem] font-extrabold leading-tight text-zinc-950 sm:text-[2rem]">
                 {product.name}
