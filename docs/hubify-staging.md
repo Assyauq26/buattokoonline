@@ -1,6 +1,9 @@
 # Deploy `main` ke Hubify
 
-Hubify adalah toko staging publik di [hubify.web.id](https://hubify.web.id).
+Hubify adalah satu-satunya lingkungan pengembangan aplikasi toko di [hubify.web.id](https://hubify.web.id).
+Nama file, environment, channel, dan helper yang mengandung `staging` di bawah
+adalah identitas deployment lama yang masih aktif, bukan lingkungan tambahan.
+Jangan menghapus atau menggantinya sebelum migrasi deployment Hubify diotorisasi.
 Gunakan data pengujian dan jadwalkan kemungkinan downtime saat build atau migrasi.
 Deploy Hubify memakai commit terkini dari `main` di `Assyauq26/buattokoonline`.
 Workflow dan helper VPS memeriksa SHA tanpa bergantung pada status PR atau CI.
