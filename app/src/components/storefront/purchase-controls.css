@@ -1,0 +1,304 @@
+/* Customer controls only. Strong focus/selection tokens stay independent of decorative borders. */
+.storefront-root .quantity-stepper {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  box-sizing: border-box;
+  border: 1px solid var(--store-decorative-border, #e5e5e5);
+  border-radius: var(--store-button-radius, 9999px);
+  background: var(--store-field, #fff);
+  color: var(--store-fieldText, #171717);
+}
+.storefront-root .quantity-stepper button {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  border-radius: inherit;
+  background: transparent;
+  color: inherit;
+}
+.storefront-root .quantity-stepper output {
+  min-width: 2ch;
+  padding: 0 4px;
+  text-align: center;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+.storefront-root .quantity-stepper button:disabled {
+  opacity: 0.4;
+  background: transparent;
+  color: inherit;
+}
+.storefront-root .quantity-stepper button:hover:not(:disabled) {
+  background: var(--store-surface, #f5f5f5);
+}
+.storefront-root
+  :is(
+    .quantity-stepper button,
+    .purchase-close,
+    .purchase-option
+  ):focus-visible {
+  outline: 2px solid var(--store-focus, #171717);
+  outline-offset: 3px;
+}
+.storefront-root[data-theme-active] .purchase-option {
+  min-height: 44px;
+  max-width: 100%;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.45rem 0.8rem;
+  border: 1px solid var(--store-decorative-border, #dedede);
+  border-radius: var(--store-button-radius, 9999px);
+  background: var(--store-card, #fff);
+  color: var(--store-text, #171717);
+  font-size: 0.875rem;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.storefront-root[data-theme-active] .purchase-option[aria-pressed="true"] {
+  background: var(--store-selected, #171717);
+  color: var(--store-selectedText, #fff);
+  border-color: var(--store-selected, #171717);
+}
+.storefront-root .purchase-option:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.storefront-root .purchase-swatch {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  overflow: hidden;
+  border-radius: var(--store-button-radius, 9999px);
+  background: var(--store-surface, #f5f5f5);
+  color: var(--store-text, #171717);
+}
+.storefront-root .purchase-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgb(0 0 0 / 0.38);
+  animation: purchase-fade 0.18s ease-out;
+}
+.storefront-root .purchase-sheet {
+  position: fixed;
+  z-index: 101;
+  inset: auto 0 0;
+  width: 100%;
+  max-height: 90dvh;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 16px 20px max(20px, env(safe-area-inset-bottom));
+  border-radius: var(--store-radius, 24px) var(--store-radius, 24px) 0 0;
+  background: var(--store-modal, #fff);
+  color: var(--store-modalText, #171717);
+  box-shadow: var(--store-shell-shadow, 0 -6px 30px rgb(0 0 0 / 0.1));
+  animation: purchase-rise 0.24s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.storefront-root .purchase-sheet > [data-testid="quick-add-variant-sheet"] {
+  overflow: hidden;
+}
+.storefront-root .purchase-sheet-scroll {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  min-height: 0;
+  padding: 0 3px 16px;
+}
+.storefront-root .purchase-sheet-footer {
+  flex-shrink: 0;
+  padding-top: 12px;
+}
+.storefront-root .purchase-close {
+  position: absolute;
+  right: 10px;
+  top: 8px;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--store-button-radius, 9999px);
+}
+.storefront-root .purchase-drag-handle {
+  display: block;
+  flex-shrink: 0;
+  width: 36px;
+  height: 4px;
+  border-radius: 9999px;
+  margin: 0 auto 16px;
+  background: currentColor;
+  opacity: 0.15;
+}
+.storefront-root .purchase-thumbnail {
+  position: relative;
+  flex-shrink: 0;
+  width: 76px;
+  height: 80px;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  border-radius: var(--store-media-radius, 12px);
+  background: var(--store-surface, #f5f5f5);
+  font-size: 0.65rem;
+}
+.storefront-root .purchase-summary {
+  padding: 12px;
+  border: 1px solid var(--store-decorative-border, #e8e8e8);
+  border-radius: var(--store-radius, 16px);
+}
+.storefront-root :is(.cart-item, .cart-summary) {
+  border: 1px solid var(--store-decorative-border, #eee);
+  background: var(--store-card, #fff);
+}
+@media (min-width: 768px) {
+  .storefront-root .purchase-sheet {
+    inset: 50% auto auto 50%;
+    transform: translate(-50%, -50%);
+    width: min(540px, calc(100% - 48px));
+    max-height: 85dvh;
+    border-radius: var(--store-radius, 24px);
+    animation: purchase-fade 0.18s ease-out;
+    padding: 24px;
+  }
+}
+@keyframes purchase-rise {
+  from {
+    transform: translateY(24px);
+    opacity: 0.4;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+@keyframes purchase-fade {
+  from {
+    opacity: 0.4;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .storefront-root :is(.purchase-sheet, .purchase-backdrop) {
+    animation: none;
+  }
+}
+.storefront-root .purchase-preview {
+  padding: 20px;
+  border-radius: var(--store-radius, 16px);
+  background: var(--store-modal, #fff);
+  color: var(--store-modalText, #171717);
+}
+.storefront-root .purchase-thumbnail {
+  color: var(--store-text, #171717);
+}
+/* Keep mobile cart totals and checkout inside the themed Ringkasan card.
+   A floating region detached the values and obscured neighbouring content. */
+.storefront-root .native-cart,
+.storefront-root .native-cart > * {
+  min-width: 0;
+}
+
+/* Purchase intent remains recognizable while incomplete. Anchor the published
+   primary to dark ink so red/light palettes cannot turn disabled CTAs pastel.
+   Scoped to purchase CTAs so admin, fields and cart controls keep their states. */
+:is(.storefront-root,.storefront-checkout-root) :is(.pdp-buy-pill, .pdp-cart-pill, .purchase-submit, .checkout-submit)[data-button-variant]:disabled,
+.storefront-root[data-theme-active="true"] :is(.pdp-buy-pill, .pdp-cart-pill, .purchase-submit, .checkout-submit)[data-button-variant]:disabled {
+  background:color-mix(in srgb, var(--store-primary, #171717) 65%, #111418);
+  color:var(--store-primaryText, #fff);
+  border-color:transparent;
+  opacity:1;
+  box-shadow:none;
+  cursor:not-allowed;
+  transform:none;
+}
+
+.storefront-root .product-card { container-type:inline-size; }
+/* Rich price rows size the grid from its actual container, including narrow PDP
+   columns and preview iframes; cap at four columns without shrinking text. */
+.storefront-root .grid:has(> .product-card[data-wide-price]) {
+  grid-template-columns:repeat(auto-fill,minmax(min(100%,max(16rem,calc((100% - 3rem)/4))),1fr));
+}
+/* One natural price row. Reserve only the cart and gaps, then budget typography
+   from the rendered amount lengths; never change a listing's tracks. */
+ .storefront-root .product-card {--product-price-normal:1rem;align-self:start;}
+.storefront-root .product-card-purchase {display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:2px;align-items:center;}
+.storefront-root .product-card-prices {display:flex;gap:2px;align-items:center;min-width:0;justify-content:flex-start;}
+.storefront-root .product-card-price {flex-shrink:0;}
+.storefront-root .product-card-original {flex-shrink:0;}
+.storefront-root .product-card[data-featured] .product-card-purchase {grid-template-columns:minmax(0,1fr);}
+.storefront-root .product-card[data-featured] {--product-price-normal:.875rem;}
+.storefront-root .product-card[data-featured] .product-card-price {min-height:0;}
+.storefront-root .featured-card-track .product-card[data-featured] {height:100%;width:100%;align-self:stretch;}
+.storefront-root .featured-card-track .product-card-body {flex:1;}
+.storefront-root .featured-card-track .product-card-purchase {margin-top:auto;padding-top:8px;min-height:28px;}
+.storefront-root :is(.product-card-price,.product-card-original) { white-space:nowrap; font-variant-numeric:tabular-nums; }
+.storefront-root .product-card-price {font-size:calc(var(--product-price-normal)*var(--product-price-scale,1));}
+.storefront-root .product-card-original {font-size:calc(min(.75rem,calc(var(--product-price-normal)*.8))*var(--product-price-scale,1));}
+:is(.storefront-root,.storefront-checkout-root) .checkout-purchase-bar { display:grid; gap:.75rem; }
+:is(.storefront-root,.storefront-checkout-root) .checkout-sticky-total { display:none; }
+@media(max-width:767px) {
+ :is(.storefront-root,.storefront-checkout-root) .checkout-form { padding-bottom:calc(8rem + env(safe-area-inset-bottom,0px)); }
+ :is(.storefront-root,.storefront-checkout-root) .checkout-purchase-bar {
+   position:fixed;inset:auto 0 0;z-index:40;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:center;
+   padding:.75rem 1rem calc(.75rem + env(safe-area-inset-bottom,0px));
+   background:var(--store-nav,var(--store-card,#fff));color:var(--store-navText,var(--store-text,#171717));
+   box-shadow:var(--store-shell-shadow,0 -4px 22px rgb(0 0 0 / .06));
+ }
+ :is(.storefront-root,.storefront-checkout-root) .checkout-sticky-total { display:flex;min-width:0;flex-direction:column;gap:.25rem; }
+ :is(.storefront-root,.storefront-checkout-root) .checkout-sticky-total strong {font-size:clamp(.875rem,4vw,1.125rem);white-space:nowrap; font-variant-numeric:tabular-nums;}
+ :is(.storefront-root,.storefront-checkout-root) .checkout-submit { padding-inline:.75rem; }
+}
+.storefront-root .order-review-entry {border:1px solid var(--store-decorative-border,#eee);border-radius:var(--store-radius,16px);padding:1rem;background:var(--store-card,#fff);}
+.storefront-root .review-rating button {height:44px;width:44px;border-radius:var(--store-button-radius,9999px);color:var(--store-primary,#171717);}
+.storefront-root .review-rating button[aria-pressed="true"] svg {fill:currentColor;}
+
+.storefront-root .review-rating label {color:var(--store-primary,#171717);}
+.storefront-root .review-rating .review-star-filled {fill:currentColor;}
+.storefront-root .review-rating label:has(input:focus-visible) {outline:2px solid var(--store-focus,#171717);outline-offset:2px;}
+.storefront-root[data-theme-active="true"] .review-rating svg {color:inherit;}
+
+/* Keep money readable when a two-column card cannot fit a44px action target. */
+@media(max-width:339px) {
+ .storefront-root .grid:has(> .product-card) {grid-template-columns:minmax(0,1fr);}
+}
+@media(max-width:479px) {
+ .storefront-root .grid > .product-card[data-wide-price] {grid-column:1/-1;}
+}
+
+/* Listing tracks belong to the listing, never to a card's price length.
+   Keep the featured carousel and tablet/desktop track rules unchanged. */
+@media(max-width:767px) {
+ .storefront-root .product-listing-grid.grid:has(> .product-card) {
+   grid-template-columns:repeat(2,minmax(0,1fr));
+ }
+ .storefront-root .product-listing-grid.grid > .product-card {
+   grid-column:auto;
+   min-width:0;
+ }
+ .storefront-root .product-listing-grid .product-card-purchase,
+ .storefront-root .product-listing-grid .product-card-prices {column-gap:2px;}
+}
+
+.storefront-root .product-card-prices:not(:has(.product-card-original)) {justify-content:flex-start;}
+
+/* Region dialog remains inside the themed storefront root, including checkout. */
+:is(.storefront-root,.storefront-checkout-root) .region-trigger {display:flex;align-items:center;gap:12px;width:100%;min-height:76px;padding:16px;border:1px solid var(--store-decorative-border,#e5e5e5);border-radius:var(--store-radius,12px);background:var(--store-field,#fff);color:var(--store-fieldText,#171717);}
+:is(.storefront-root,.storefront-checkout-root) .region-overlay {position:fixed;inset:0;z-index:110;background:rgb(0 0 0 / .4);}
+:is(.storefront-root,.storefront-checkout-root) .region-dialog {position:fixed;z-index:111;top:50%;left:50%;transform:translate(-50%,-50%);display:flex;flex-direction:column;gap:12px;width:calc(100% - 24px);max-width:540px;max-height:calc(100dvh - 32px - env(safe-area-inset-top) - env(safe-area-inset-bottom));padding:20px;border:1px solid var(--store-decorative-border,#e5e5e5);border-radius:var(--store-radius,20px);background:var(--store-modal,#fff);color:var(--store-modalText,#171717);box-shadow:0 12px 40px rgb(0 0 0 / .18);}
+:is(.storefront-root,.storefront-checkout-root) .region-close {display:grid;place-items:center;width:44px;height:44px;flex-shrink:0;border-radius:50%;}
+:is(.storefront-root,.storefront-checkout-root) .region-steps {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px;}
+:is(.storefront-root,.storefront-checkout-root) .region-steps button {min-width:0;min-height:48px;padding:8px;text-align:left;font-size:12px;border-bottom:2px solid var(--store-decorative-border,#e5e5e5);}
+:is(.storefront-root,.storefront-checkout-root) .region-steps button[aria-current] {border-color:var(--store-focus,#171717);}
+:is(.storefront-root,.storefront-checkout-root) .region-steps button:disabled {opacity:.45;cursor:not-allowed;}
+:is(.storefront-root,.storefront-checkout-root) .region-options {min-height:100px;max-height:40dvh;overflow-y:auto;overscroll-behavior:contain;}
+:is(.storefront-root,.storefront-checkout-root) .region-option {display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;min-height:48px;padding:12px 8px;text-align:left;font-size:14px;border-bottom:1px solid var(--store-decorative-border,#eee);}
+:is(.storefront-root,.storefront-checkout-root) .region-option svg {flex-shrink:0;}
+:is(.storefront-root,.storefront-checkout-root) .region-option[aria-pressed=true], :is(.storefront-root,.storefront-checkout-root) .region-option:hover {background:var(--store-surface,#f5f5f5);}
+:is(.storefront-root,.storefront-checkout-root) :is(.region-trigger,.region-close,.region-option,.region-steps button):focus-visible {outline:2px solid var(--store-focus,#171717);outline-offset:2px;}

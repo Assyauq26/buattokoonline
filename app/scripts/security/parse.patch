@@ -1,0 +1,18 @@
+--- braces/lib/parse.js
++++ braces/lib/parse.js
+@@ -145,6 +145,7 @@
+     if (value === CHAR_LEFT_PARENTHESES) {
+       block = push({ type: 'paren', nodes: [] });
+       stack.push(block);
++      if (stack.length > 128) throw new SyntaxError('STORE_BRACES_DEPTH: maximum nesting exceeded');
+       push({ type: 'text', value });
+       continue;
+     }
+@@ -211,6 +212,7 @@
+ 
+       block = push(brace);
+       stack.push(block);
++      if (stack.length > 128) throw new SyntaxError('STORE_BRACES_DEPTH: maximum nesting exceeded');
+       push({ type: 'open', value });
+       continue;
+     }

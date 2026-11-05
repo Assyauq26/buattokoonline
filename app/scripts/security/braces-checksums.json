@@ -1,0 +1,18 @@
+{
+  "parse.js": {
+    "original": "e572166565f15fa6ad9865ae49d678218e32aabfd1b3720f6d0d43d39800d310",
+    "patched": "78d8a5b034bc3bb3accaf6768037cefaa840ad636e20c6b34bb3a086013ec7f8"
+  },
+  "compile.js": {
+    "original": "dc98f22eee3d511785d92a00758d5f0d48efed5f5813bdecc2de430c529b5c9f",
+    "patched": "070439c189e3e9b05db5b43d2c7ff55d4c8c098ca72036c5fb75d6081b347e87"
+  },
+  "expand.js": {
+    "original": "41ccc196ebfa7b7781a634e721eb744e4e7bcb54cba427a7e3d6806a1b9e58f7",
+    "patched": "d4647487b176aae4b07919334d570dc8360c797926442a8c739a5c7ba32347cc"
+  },
+  "stringify.js": {
+    "original": "379f22d77bfa1478341ccd49c5e4267464aabcbba03558bab332aac23fc6f23a",
+    "patched": "c42b695f3cc31ed0fb76cedd33bc24a8d6f7e16391d87834dd235d01df072f84"
+  }
+}

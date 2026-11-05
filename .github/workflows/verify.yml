@@ -1,0 +1,54 @@
+name: Single-store Ubuntu installation
+on:
+  push:
+    branches: [main, 'codex/**']
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: store-verify-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  install:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - name: Verify clone and repository boundaries
+        run: |
+          git clone --no-local . /tmp/single-store-clone
+          cd /tmp/single-store-clone
+          git diff --exit-code
+          node tests/repository-boundary.mjs
+          bash -n install.sh
+      - name: Dependencies and unit tests
+        working-directory: app
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          node node_modules/@prisma/engines/scripts/postinstall.js
+          npx prisma generate
+          npm run typecheck
+          npm run security:prepare
+          npm test
+          npx playwright install --with-deps chromium
+      - name: Install using prompts and verify browser/database/restart
+        run: node tests/install-vm.mjs
+      - name: Service diagnostics on failure
+        if: failure()
+        run: |
+          if test -f /opt/single-store/deploy/compose.yaml; then
+            sudo docker compose -f /opt/single-store/deploy/compose.yaml ps -a
+            sudo docker compose -f /opt/single-store/deploy/compose.yaml logs --tail=60 app proxy
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ubuntu-installation-evidence
+          path: test-results/
+          if-no-files-found: ignore
