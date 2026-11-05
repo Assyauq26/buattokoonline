@@ -1,8 +1,6 @@
 name: Single-store Ubuntu installation
 on:
-  push:
-    branches: [main]
-  pull_request:
+  # CI runs only when the repository owner explicitly starts this workflow.
   workflow_dispatch:
 permissions:
   contents: read

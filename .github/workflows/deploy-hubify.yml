@@ -1,10 +1,18 @@
 name: Deploy to Hubify staging
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
+    inputs:
+      exact_sha:
+        description: 'Exact 40-character HEAD commit SHA of main'
+        type: string
+        required: true
+      confirmation:
+        description: 'Type DEPLOY HUBIFY to acknowledge staging downtime'
+        type: string
+        required: true
 
-permissions: {}
+permissions:
+  contents: read
 
 concurrency:
   group: hubify-staging-deploy
@@ -12,26 +20,35 @@ concurrency:
 
 jobs:
   deploy:
-    name: Deploy the current main commit to Hubify
-    if: >-
-      github.repository == 'Assyauq26/buattokoonline' &&
-      github.ref == 'refs/heads/main' &&
-      (github.event_name == 'workflow_dispatch' || vars.HUBIFY_AUTO_DEPLOY == 'true')
+    name: Deploy manually authorized main SHA to Hubify
+    if: github.repository == 'Assyauq26/buattokoonline' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 45
-    environment:
-      name: hubify-staging
-      url: https://hubify.web.id
+    environment: hubify-staging
     steps:
+      - name: Verify exact main SHA (CI is optional)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ inputs.exact_sha }}
+          CONFIRMATION: ${{ inputs.confirmation }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$CONFIRMATION" == 'DEPLOY HUBIFY' ]]
+          [[ "$SHA" =~ ^[0-9a-f]{40}$ ]]
+          REPO=$(gh api "repos/$GITHUB_REPOSITORY" --jq .full_name)
+          test "$REPO" = 'Assyauq26/buattokoonline'
+          HEAD_SHA=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)
+          test "$HEAD_SHA" = "$SHA"
+          echo "Authorized exact main SHA $SHA; no CI-success requirement."
       - name: Deploy via pinned SSH host and restricted server helper
         env:
-          SHA: ${{ github.sha }}
+          SHA: ${{ inputs.exact_sha }}
           SSH_KEY: ${{ secrets.HUBIFY_SSH_PRIVATE_KEY }}
           SSH_KNOWN_HOSTS: ${{ secrets.HUBIFY_SSH_KNOWN_HOSTS }}
         shell: bash
         run: |
           set -euo pipefail
-          [[ "$SHA" =~ ^[0-9a-f]{40}$ ]]
           test -n "$SSH_KEY"
           test -n "$SSH_KNOWN_HOSTS"
           umask 077
@@ -42,7 +59,8 @@ jobs:
           grep -Eq '^43[.]173[.]41[.]24 ssh-ed25519 ' "$HOME/.ssh/known_hosts"
           ssh -T -i "$HOME/.ssh/hubify_deploy" -o IdentitiesOnly=yes \
             -o StrictHostKeyChecking=yes -o BatchMode=yes \
-            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=15 \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o GlobalKnownHostsFile=/dev/null \
+            -o HostKeyAlgorithms=ssh-ed25519 -o ConnectTimeout=15 \
             -o ServerAliveInterval=30 -o ServerAliveCountMax=6 \
             hubifydeploy@43.173.41.24 \
-            sudo -n /usr/local/sbin/hubify-staging-deploy --main "$SHA"
+            sudo -n /usr/local/sbin/hubify-staging-deploy "$SHA"

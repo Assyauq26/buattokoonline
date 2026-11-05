@@ -14,7 +14,7 @@ spec.loader.exec_module(hubify)
 
 class StagingSafetyTests(unittest.TestCase):
     def test_rejects_legacy_or_invalid_arguments(self):
-        for args in (['3', 'a'*40], ['--main', 'invalid'], ['--main', 'A'*40], ['--main'], ['--rollback', 'extra']):
+        for args in (['3', 'a'*40], ['invalid'], ['A'*40], [], ['--rollback', 'extra']):
             with patch.object(sys, 'argv', ['hubify-staging-deploy', *args]), \
                  patch.object(hubify.os, 'umask'), self.assertRaises(hubify.core.StoreError):
                 hubify.main()

@@ -204,15 +204,14 @@ def rollback():
 def main():
     os.umask(0o077)
     args = sys.argv[1:]
-    if args != ['--rollback'] and (
-            len(args) != 2 or args[0] != '--main' or not re.fullmatch(r'[0-9a-f]{40}', args[1])):
-        raise core.StoreError('Gunakan: hubify-staging-deploy --main SHA_40_HEX | --rollback')
+    if args != ['--rollback'] and (len(args) != 1 or not re.fullmatch(r'[0-9a-f]{40}', args[0])):
+        raise core.StoreError('Gunakan: hubify-staging-deploy MAIN_SHA_40_HEX | --rollback')
     with open('/run/single-store-operation.lock', 'a+') as file:
         fcntl.flock(file, fcntl.LOCK_EX | fcntl.LOCK_NB)
         if args == ['--rollback']:
             rollback()
         else:
-            deploy(args[1])
+            deploy(args[0])
 
 
 if __name__ == '__main__':

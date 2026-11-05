@@ -38,11 +38,13 @@ menggunakan helper milik root. Simpan akses Docker dan shell root pada akun oper
 ## Deploy setelah merge
 
 1. Merge perubahan aplikasi ke `main`.
-2. Jalankan **Actions → Deploy to Hubify staging → Run workflow** dari `main`,
-   atau jalankan perintah berikut dari repositori GitHub yang sesuai.
+2. Jalankan **Actions → Deploy to Hubify staging → Run workflow** dari `main`.
+   Isi `exact_sha` dengan SHA HEAD `main` dan ketik `DEPLOY HUBIFY` untuk
+   konfirmasi. Dari terminal, gunakan:
 
    ```bash
-   gh workflow run deploy-hubify.yml --ref main
+   sha=$(gh api repos/Assyauq26/buattokoonline/git/ref/heads/main --jq .object.sha)
+   gh workflow run deploy-hubify.yml --ref main -f exact_sha="$sha" -f confirmation='DEPLOY HUBIFY'
    ```
 
 3. Setujui deployment jika GitHub Environment masih memakai **Required reviewers**.
@@ -55,18 +57,9 @@ menggunakan helper milik root. Simpan akses Docker dan shell root pada akun oper
    Workflow bisa dijalankan ulang setelah commit terpasang untuk memeriksa
    kesehatan aplikasi tanpa rebuild.
 
-Setelah deploy pertama berhasil, aktifkan deploy setiap push ke `main`
-dengan variabel repositori berikut.
-
-```bash
-gh variable set HUBIFY_AUTO_DEPLOY --repo Assyauq26/buattokoonline --body true
-```
-
-Untuk deploy tanpa klik persetujuan, operator dapat menghapus **Required reviewers**
-khusus environment `hubify-staging` setelah memastikan deployment branches
-dibatasi ke `main`. Dengan auto-deploy, perubahan yang masuk `main` memicu deploy,
-termasuk direct push. Batasi siapa yang boleh menulis ke `main` sesuai kebutuhan.
-Workflow GitHub Releases dan updater toko tetap memakai prosedur rilis sendiri.
+CI verifikasi dapat dijalankan secara manual melalui workflow
+**Single-store Ubuntu installation**. Deploy Hubify dapat dijalankan langsung
+setelah merge. GitHub Releases dan updater toko memakai prosedur rilis sendiri.
 
 ## Migrasi Issue #5 dan rollback
 
