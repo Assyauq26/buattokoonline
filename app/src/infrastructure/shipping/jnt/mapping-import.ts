@@ -1,4 +1,5 @@
 import "server-only";
+import { mappingRegionIdentity } from "./mapping-region-identity";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -19,8 +20,8 @@ export const mappingColumns = z.object({
   sendSiteCode: column, originCityCode: column, destAreaCode: column, destinationCityCode: column, receiverArea: column,
 }).strict();
 type Columns = z.infer<typeof mappingColumns>;
-const normalize = (text: string) => text.normalize("NFC").trim().replace(/\s+/g, " ").toLowerCase();
-const identity = (province: string, city: string, district: string) => JSON.stringify([province, city, district].map(normalize));
+const identity = mappingRegionIdentity;
+
 type Region = { code: string; name: string };
 let regions: { byName: Map<string, string[]>; byCode: Map<string, string> } | undefined;
 
@@ -75,10 +76,15 @@ export async function inspectMapping(filename: string, file: Buffer, input: {
       const sendSiteCode = get("sendSiteCode"), originCityCode = get("originCityCode"), destAreaCode = get("destAreaCode");
       const jntCityCode = get("destinationCityCode"), jntAreaCode = get("receiverArea");
       const code = get("districtCode"), key = identity(province, city, district);
+      if (code && !districtCodePattern.test(code)) {
+        report.invalid++;
+        issue(number, "districtCode harus berupa kode kecamatan internal (contoh 11.05.01). Kosongkan kolom ini untuk pencocokan otomatis berdasarkan nama wilayah.");
+        continue;
+      }
       const matches = code ? (districtCodePattern.test(code) && byCode.get(code) === key ? [code] : []) : (byName.get(key) ?? []);
       if (matches.length !== 1) {
         if (matches.length) report.ambiguous++; else report.unmatched++;
-        issue(number, matches.length ? "Wilayah ambigu. Sertakan kode kecamatan internal." : "Hierarki wilayah tidak cocok dengan referensi toko.");
+        issue(number, matches.length ? "Wilayah ambigu. Sertakan kode kecamatan internal." : "Wilayah tidak ditemukan: " + province + " / " + city + " / " + district + (code ? " (districtCode " + code + " tidak sesuai hierarki)." : ". Periksa nama atau gunakan kode kecamatan internal."));
         continue;
       }
       const emsifaDistrictCode = matches[0];
