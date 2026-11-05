@@ -62,7 +62,7 @@ function JntEnvironmentSettings({ environment, setEnvironment, mapping, setMappi
           order: (environment === "sandbox" ? "https://demo-ecommerce.inuat-jntexpress.id" : "https://api.jet.co.id") + "/jts-idn-ecommerce-api/api/order/create",
           cancellation: (environment === "sandbox" ? "https://demo-ecommerce.inuat-jntexpress.id" : "https://api.jet.co.id") + "/jts-idn-ecommerce-api/api/order/cancel",
           tariff: (environment === "sandbox" ? "https://demo-general.inuat-jntexpress.id" : "https://partner-track.jet.co.id") + "/jandt_track/inquiry.action",
-          tracking: (environment === "sandbox" ? "https://demo-general.inuat-jntexpress.id" : "https://partner-track.jet.co.id") + "/jandt_track/track/trackAction!tracking.action",
+          tracking: environment === "sandbox" ? "https://demo-general.inuat-jntexpress.id/jandt_track/track/trackAction!tracking.action" : "https://secure-jk.jet.co.id/jandt-order-web/track/trackAction!tracking.action",
         });
         setSharedCancellation(data.configured && data.sharedCancellation);
         if (data.seller) {

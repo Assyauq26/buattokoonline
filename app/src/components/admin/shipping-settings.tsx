@@ -50,7 +50,14 @@ export function ShippingSettings({ manualFlat, activeEnvironment }: Pick<Shippin
           if (!active && configured) {
             setBusy(true);
             try {
-              const saved = await shippingRequest<ShippingStatus>("/api/v1/admin/shipping/settings", shippingJson("PUT", { method: "jnt", environment: activeEnvironment || "production" }));
+              const environments = activeEnvironment ? [activeEnvironment] : ["production", "sandbox"];
+              let readyEnvironment: string | undefined;
+              for (const environment of environments) {
+                const status = await shippingRequest<ShippingStatus>("/api/v1/admin/shipping/settings?environment=" + environment);
+                if (status.checks.length && status.checks.every(check => check.ready)) { readyEnvironment = environment; break; }
+              }
+              if (!readyEnvironment) throw new Error("Belum ada konfigurasi J&T yang siap.");
+              const saved = await shippingRequest<ShippingStatus>("/api/v1/admin/shipping/settings", shippingJson("PUT", { method: "jnt", environment: readyEnvironment }));
               setActive(saved.activeEnvironment); setNotice("Pengiriman Manual dinonaktifkan; J&T aktif.");
             } catch (error) { setNotice("Simpan konfigurasi J&T yang siap digunakan terlebih dahulu. " + (error as Error).message); }
             finally { setBusy(false); }
