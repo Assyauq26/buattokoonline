@@ -95,6 +95,8 @@ JNT_INTEGRATION_ENCRYPTION_KEY=$JNT_KEY
 CRON_SECRET=$CRON_SECRET
 PAYMENT_PROVIDER=manual
 SHIPPING_PROVIDER=manual
+REGION_DATA_MODE=snapshot
+PRODUCT_MEDIA_CLEANUP_ENABLED=1
 PASSWORD_RESET_BASE_URL=https://$STORE_DOMAIN
 ENV
 cat > "$CONFIG_DIR/migration.env" <<ENV
@@ -135,6 +137,10 @@ SQL
 # init.sql is not needed again; retain no extra plaintext credential copy.
 printf '%s\n' '-- Initialized; credentials are stored in root-only environment files.' > "$CONFIG_DIR/init.sql"
 compose up -d --wait app proxy
+install -m 0644 "$SOURCE_DIR/deploy/single-store-maintenance.service" /etc/systemd/system/single-store-maintenance.service
+install -m 0644 "$SOURCE_DIR/deploy/single-store-maintenance.timer" /etc/systemd/system/single-store-maintenance.timer
+systemctl daemon-reload
+systemctl enable --now single-store-maintenance.timer
 touch "$CONFIG_DIR/installed"
 printf '\nToko %s berhasil dipasang.\nStorefront: https://%s\nDashboard: https://%s/admin\n' "$STORE_NAME" "$STORE_DOMAIN" "$STORE_DOMAIN"
 if $LOCAL_TEST; then

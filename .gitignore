@@ -10,8 +10,8 @@ node_modules/
 *.sql.gz
 *.dump
 .postgres/
-data/
-media/
+/data/
+/media/
 test-results/
 playwright-report/
 .jnt-mapping-report/

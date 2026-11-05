@@ -20,6 +20,11 @@ await new Promise((resolve,reject)=>{
   p.on('error',reject);p.on('exit',code=>code===0?resolve():reject(new Error(`install.sh exited ${code}`)));
 });
 pass('Git clone and interactive install.sh completed on Ubuntu 24.04');
+assert.equal(execFileSync('sudo',['stat','-c','%a','/etc/single-store'],{encoding:'utf8'}).trim(),'700');
+assert.equal(execFileSync('sudo',['stat','-c','%a','/etc/single-store/runtime.env'],{encoding:'utf8'}).trim(),'600');
+assert.equal(execFileSync('sudo',['systemctl','is-enabled','single-store-maintenance.timer'],{encoding:'utf8'}).trim(),'enabled');
+dc(['exec','-T','app','node','scripts/maintenance.mjs']);
+pass('Root-only credentials and local maintenance timer');
 const emptyTables=['Product','Category','Brand','Customer','Order','Review','Coupon','FlashSaleCampaign','JntIntegration','ProductImage','StoreBrandAsset','StoreHeroAsset'];
 for(const table of emptyTables) assert.equal(sql(`SELECT count(*) FROM "${table}";`),'0',table);
 assert.equal(sql('SELECT count(*) FROM "User";'),'1');

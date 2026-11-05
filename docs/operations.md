@@ -7,6 +7,9 @@
 - `/var/lib/single-store/media`: upload persisten, UID 1000.
 - Volume Docker `single-store_postgres`: database toko ini.
 - Volume `single-store_caddy_data`: sertifikat dan akun ACME.
+- Timer systemd `single-store-maintenance.timer`: kedaluwarsa pesanan belum dibayar
+  dan pembersihan upload sementara kedaluwarsa setiap menit, hanya di server ini.
+  Referensi wilayah dibaca dari snapshot lokal; pembaruan data dilakukan manual.
 
 ```bash
 sudo docker compose -f /opt/single-store/deploy/compose.yaml ps

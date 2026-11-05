@@ -6,7 +6,7 @@ const secret = "dummy-cleanup-cron-secret-only";
 const request = (authorization = `Bearer ${secret}`) => new Request("https://example.test/api/internal/cron/product-media-cleanup", { headers: { authorization } });
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.stubEnv("VERCEL_ENV", "production");
+  vi.stubEnv("NODE_ENV", "production");
   vi.stubEnv("PRODUCT_MEDIA_CLEANUP_ENABLED", "1");
   vi.stubEnv("CRON_SECRET", secret);
   cleanup.mockResolvedValue({ scanned: 5, cancelled: 2, deleted: 3, failed: 0 });
@@ -19,7 +19,7 @@ describe("dormant product media cleanup cron", () => {
     expect(cleanup).not.toHaveBeenCalled();
   });
   it.each(["preview", "development", ""])("refuses non-production environment %s", async value => {
-    vi.stubEnv("VERCEL_ENV", value);
+    vi.stubEnv("NODE_ENV", value);
     expect((await GET(request())).status).toBe(503);
     expect(cleanup).not.toHaveBeenCalled();
   });

@@ -4,12 +4,12 @@ import { handle, fail, ok } from "@/lib/response";
 
 export const dynamic = "force-dynamic";
 
-/** Dormant until an operator approves activation; no schedule is installed here. */
+/** Local scheduled cleanup only; published media is never selected. */
 export async function GET(req: Request) {
   return handle(async () => {
     if (
       process.env.PRODUCT_MEDIA_CLEANUP_ENABLED !== "1" ||
-      process.env.VERCEL_ENV !== "production"
+      process.env.NODE_ENV !== "production"
     ) return fail("Cleanup belum diaktifkan", 503);
     const secret = process.env.CRON_SECRET || "";
     if (secret.length < 16) return fail("Cron belum dikonfigurasi", 503);

@@ -1,0 +1,9 @@
+[Unit]
+Description=Expire unpaid orders and clean expired staged uploads for this store
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/docker compose -f /opt/single-store/deploy/compose.yaml exec -T app node scripts/maintenance.mjs
+TimeoutStartSec=120

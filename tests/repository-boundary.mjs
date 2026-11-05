@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
 const files=execFileSync('git',['ls-files','-z'],{encoding:'utf8'}).split('\0').filter(Boolean);
+assert(files.includes('app/src/modules/regions/data/snapshot.json.gz'), 'Offline region reference must be included in a fresh clone');
 for(const file of files){
   assert(!/^(?:platform|agent|landing|backend|\.postgres|media)\//.test(file),`Excluded system: ${file}`);
   assert(!/(^|\/)\.env(?:\.|$)|\.(?:dump|pem|key|p12)$|prisma\/seed\./.test(file),`Forbidden data/secret file: ${file}`);
