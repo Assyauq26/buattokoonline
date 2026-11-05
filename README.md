@@ -88,6 +88,15 @@ drift/migrasi gagal memerlukan rekonsiliasi operator sebelum update berikutnya.
 - [J&T milik toko](docs/jnt.md)
 - [Provenance dan lisensi](docs/provenance.md)
 
+## Kebijakan CI dan deploy
+
+CI verifikasi tidak berjalan otomatis untuk push atau pull request. Pemilik repository
+menjalankannya hanya melalui GitHub Actions > **Single-store Ubuntu installation** >
+**Run workflow** jika memang diminta. Merge tidak menunggu CI. Deploy Hubify
+menggunakan aksi manual untuk exact HEAD SHA `main` dan tetap menjaga backup,
+validasi migrasi, rollback, serta pemeriksaan runtime. Lihat
+[prosedur Hubify](docs/hubify-staging.md).
+
 ## Pengembangan
 
 Node.js 22, PostgreSQL 16, Python 3.12 untuk installer/updater.
