@@ -45,6 +45,7 @@ jobs:
           node node_modules/@prisma/engines/scripts/postinstall.js
           npx prisma generate
           npm run typecheck
+          npm run lint
           npm run security:prepare
           npm test
           npx playwright install --with-deps chromium

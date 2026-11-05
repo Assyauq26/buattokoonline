@@ -45,7 +45,22 @@ export async function installWizard({brand,email,password,pass}){
     await page.screenshot({path:'test-results/wizard-3-admin.png',fullPage:true});
     await page.locator('#create-store').click();
     await expect.poll(()=>!!state().bootstrap_started,{timeout:120000}).toBe(true);
+    await expect.poll(()=>state().progress?.phases.find(p=>p.id==='build').status,{timeout:30000}).toBe('running');
+    await expect(page.locator('[data-phase="build"]')).toHaveAttribute('data-status','running',{timeout:10000});
+    const projected=(await (await context.request.get(setup+'/api/state')).json());
+    assert.equal(projected.progress.completed,2);assert.equal(projected.progress.total,9);
+    for(const secret of [password,root(['cat','/etc/single-store/setup-token']).trim(),state().setup_hash,state().proof])assert(!JSON.stringify(projected).includes(secret));
+    await page.screenshot({path:'test-results/wizard-progress-desktop.png',fullPage:true});
+    await page.setViewportSize({width:390,height:844});
+    await expect(page.locator('#installation-progress')).toBeVisible();
+    assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+    await page.screenshot({path:'test-results/wizard-progress-mobile.png',fullPage:true});
+    await page.reload();await expect(page.locator('[data-phase="build"]')).toHaveAttribute('data-status','running',{timeout:10000});
+    await page.setViewportSize({width:1100,height:900});
     root(['systemctl','stop','single-store-setup.service']);root(['systemctl','start','single-store-setup.service']);await authorize();
+    await expect(page.locator('[data-phase="build"]')).toHaveAttribute('data-status','failed');
+    await expect(page.locator('#checkpoint-recovery')).toBeVisible();
+    await page.screenshot({path:'test-results/wizard-progress-recovery.png',fullPage:true});
     assert.equal(JSON.stringify(state()).includes(password),false);
     if(!state().has_admin){await enterAdmin();}
     await page.locator('#create-store').click();
@@ -58,6 +73,7 @@ export async function installWizard({brand,email,password,pass}){
     }
     await expect(page.locator('#step4')).toBeVisible({timeout:300000});
     await expect(page.getByRole('heading',{name:'Toko Online Kamu Berhasil Dibuat!'})).toBeVisible();
+    assert.equal(state().progress.phases.filter(p=>p.status==='completed').length,9);
     await page.screenshot({path:'test-results/wizard-4-complete.png',fullPage:true});
     assert.equal((await context.request.post(setup+'/api/admin',{headers,data:{}})).status(),410);
     const anonymous=await browser.newContext();assert.equal((await anonymous.request.post(setup+'/api/session',{headers,data:{token:'invalid'}})).status(),410);await anonymous.close();

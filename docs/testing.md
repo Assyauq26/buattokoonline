@@ -75,7 +75,7 @@ tidak ada rollback database penuh yang diklaim.
 - [Dashboard awal kosong](evidence/admin-empty.png)
 - [Storefront sesudah restart](evidence/storefront-after-restart.png)
 
-Paket release resmi belum diterbitkan. CLI produksi menampilkan status tersebut
+Saat bukti Tencent di atas diambil, paket release resmi belum diterbitkan. CLI menampilkan status tersebut
 dan menolak paket fixture CI. Pengujian updater fixture dibatasi ke instalasi
 LOCAL_TEST di CI; tidak diaktifkan pada Tencent. Data yang tersisa di VPS uji
 adalah satu produk/foto sintetis dan satu admin uji, bukan data toko sumber.

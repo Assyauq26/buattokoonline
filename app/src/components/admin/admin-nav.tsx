@@ -5,7 +5,7 @@ import Link from "@/components/ui/navigation";
 import {
   Boxes, ChevronRight, CreditCard,
   Landmark, LayoutGrid, Megaphone, Menu, Package, ScrollText,
-  ShoppingBag, Store, Truck, Users, PlugZap,
+  ShoppingBag, Store, Truck, Users, PlugZap, RefreshCw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PERMISSIONS } from "@/lib/auth/permissions";
@@ -25,9 +25,11 @@ const links = [
   { href: "/admin/integrations/jnt", label: "Integrasi J&T Express", icon: PlugZap, permission: null },
   { href: "/admin/bank-accounts", label: "Rekening Bank", icon: Landmark, permission: PERMISSIONS.BANK_MANAGE },
   { href: "/admin/audit", label: "Audit Log", icon: ScrollText, permission: PERMISSIONS.AUDIT_READ },
+  { href: "/admin/settings/updates", label: "Pembaruan Aplikasi", icon: RefreshCw, permission: PERMISSIONS.AUDIT_READ },
 ] as const;
 
-function allowed(permissions: string[], item: (typeof links)[number], canManageJnt: boolean) {
+function allowed(permissions: string[], item: (typeof links)[number], canManageJnt: boolean, canReadUpdates = false) {
+  if (item.href === "/admin/settings/updates") return canReadUpdates;
   if (item.href === "/admin/integrations/jnt") return canManageJnt;
   if (item.href === "/admin/marketing")
     return permissions.includes(PERMISSIONS.PROMOTION_CREATE) || permissions.includes(PERMISSIONS.PROMOTION_UPDATE);
@@ -40,9 +42,9 @@ function activeLink(pathname: string, href: string, exact?: boolean) {
     : pathname === href || pathname.startsWith(href + "/");
 }
 
-export function AdminNav({ permissions, canManageJnt = false }: { permissions: string[]; canManageJnt?: boolean }) {
+export function AdminNav({ permissions, canManageJnt = false, canReadUpdates = false }: { permissions: string[]; canManageJnt?: boolean; canReadUpdates?: boolean }) {
   const pathname = usePathname();
-  const visible = links.filter(item => allowed(permissions, item, canManageJnt));
+  const visible = links.filter(item => allowed(permissions, item, canManageJnt, canReadUpdates));
   return (
     <nav aria-label="Navigasi admin" className="flex flex-col gap-1 px-4 py-2">
       {visible.map((item, index) => {
@@ -50,6 +52,7 @@ export function AdminNav({ permissions, canManageJnt = false }: { permissions: s
         const Icon = item.icon;
         return (
           <div key={item.href} className={cn(index === 6 && "mt-4 border-t border-line pt-4")}>
+            {item.href === "/admin/settings/updates" && <p className="px-4 pb-2 pt-5 text-xs font-medium text-zinc-600">Pengaturan</p>}
             <Link
               href={item.href}
               prefetch={false}
@@ -62,7 +65,7 @@ export function AdminNav({ permissions, canManageJnt = false }: { permissions: s
               )}
             >
               <Icon size={19} strokeWidth={active ? 2.25 : 1.9} aria-hidden="true" />
-              <span className="flex-1">{("display" in item && item.display) || item.label}</span>
+              <span className={cn("flex-1", item.href === "/admin/settings/updates" && "whitespace-normal")}>{("display" in item && item.display) || item.label}</span>
               {item.href !== "/admin" && <ChevronRight size={15} className={active ? "text-white/80" : "text-zinc-400"} aria-hidden="true" />}
             </Link>
           </div>
@@ -73,10 +76,10 @@ export function AdminNav({ permissions, canManageJnt = false }: { permissions: s
 }
 
 /** Five-icon mobile navigation shown in the supplied dashboard reference. */
-export function AdminMobileBottomNav({ permissions, canManageJnt = false }: { permissions: string[]; canManageJnt?: boolean }) {
+export function AdminMobileBottomNav({ permissions, canManageJnt = false, canReadUpdates = false }: { permissions: string[]; canManageJnt?: boolean; canReadUpdates?: boolean }) {
   const pathname = usePathname();
   const pinned = links.filter(item => ["/admin", "/admin/products", "/admin/orders", "/admin/inventory"].includes(item.href) && allowed(permissions, item, canManageJnt));
-  const extra = links.filter(item => !pinned.some(p => p.href === item.href) && allowed(permissions, item, canManageJnt));
+  const extra = links.filter(item => !pinned.some(p => p.href === item.href) && allowed(permissions, item, canManageJnt, canReadUpdates));
   return (
     <nav aria-label="Navigasi bawah admin" className="fixed inset-x-0 bottom-0 z-40 bg-white/95 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 shadow-[0_-10px_30px_rgb(0_0_0_/_0.11)] backdrop-blur-lg md:hidden">
       <div className="mx-auto flex w-full max-w-xl items-end justify-between gap-1">
