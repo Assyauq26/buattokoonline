@@ -1,15 +1,16 @@
-import { getJntRegions } from "@/infrastructure/shipping/jnt/mapping-regions";
+import { getJntRegions, searchJntRegions } from "@/infrastructure/shipping/jnt/mapping-regions";
 import { findVerifiedJntDistrict, readActiveJntRelease } from "@/infrastructure/shipping/jnt/verified-mapping";
 import { readShippingSettings } from "@/modules/shipping/shipping-settings.service";
 import { getCurrentUser } from "@/lib/auth/session";
 import { isJntSettingsAdministrator } from "@/infrastructure/shipping/jnt/official-config";
 import { z } from "zod";
 import { ok, handle, HttpError } from "@/lib/response";
-import { getRegions } from "@/modules/regions/region.service";
+import { getRegions, searchRegions } from "@/modules/regions/region.service";
 import { regionLevels } from "@/modules/regions/region.validation";
 export async function GET(request: Request) {
   return handle(async () => {
     const params = new URL(request.url).searchParams;
+    const query = params.has("q") ? z.string().trim().min(2).max(80).parse(params.get("q")) : null;
     const level = z.enum(regionLevels).parse(params.get("level"));
     const source = params.get("source");
     if (source === "jnt-checkout" || source === "jnt-warehouse") {
@@ -28,11 +29,11 @@ export async function GET(request: Request) {
       } else {
         version = (await readShippingSettings()).activeJnt?.mappingVersion ?? null;
       }
-      const response = ok(await getJntRegions(version, level, params.get("parent") || "", params.get("province") || ""));
+      const response = ok(query ? { results: await searchJntRegions(version, query) } : await getJntRegions(version, level, params.get("parent") || "", params.get("province") || ""));
       response.headers.set("Cache-Control", "private, no-store");
       return response;
     }
-    const data = await getRegions(level, params.get("parent") || "");
+    const data = query ? { results: searchRegions(query) } : await getRegions(level, params.get("parent") || "");
     const response = ok(data);
     response.headers.set("Cache-Control", "public, max-age=300, stale-while-revalidate=3600");
     return response;

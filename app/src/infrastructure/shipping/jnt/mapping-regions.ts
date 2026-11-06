@@ -1,8 +1,27 @@
 import "server-only";
+import { matchingRegionPaths } from "@/modules/regions/region-search";
 import { prisma } from "@/lib/prisma";
 import { HttpError } from "@/lib/http-error";
 import { jntLocationSchema, type RegionLevel, type RegionList, type SelectedLocation } from "@/modules/regions/region.validation";
 import { findVerifiedJntDistrict } from "./verified-mapping";
+
+export async function searchJntRegions(version: string | null, query: string) {
+  if (!version) return [];
+  const rows = await prisma.jntL3Mapping.findMany({
+    where: {
+      version, approvedAt: { not: null }, matchStatus: "EXACT",
+      sendSiteCode: { not: null }, originCityCode: { not: null }, destAreaCode: { not: null },
+      OR: ["province", "city", "district"].map(field => ({ [field]: { contains: query, mode: "insensitive" as const } })),
+    },
+    select: { province: true, city: true, district: true, jntAreaCode: true },
+    orderBy: [{ province: "asc" }, { city: "asc" }, { district: "asc" }],
+  });
+  return matchingRegionPaths(rows.map(row => [
+    { code: row.province, name: row.province },
+    { code: row.city, name: row.city },
+    { code: "JNT-" + row.jntAreaCode, name: row.district },
+  ]), query, version);
+}
 
 export async function getJntRegions(version: string | null, level: RegionLevel, parent: string, province: string): Promise<RegionList> {
   const list: RegionList = { data: [], source: "jnt-mapping", updatedAt: version ?? "" };

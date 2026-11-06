@@ -43,3 +43,46 @@
   .checkout-shell .region-dialog { padding: 16px; }
   .checkout-product-image { width: 76px; height: 76px; }
 }
+
+/* Checkout location controls override the storefront's pill-button theme. */
+.checkout-shell.storefront-root[data-theme-active="true"] button.region-trigger,
+.checkout-shell button.region-trigger {
+  border: 1px solid #c9cbd0;
+  border-radius: 12px;
+  box-shadow: none;
+}
+.checkout-shell.storefront-root[data-theme-active="true"] .region-dialog,
+.checkout-shell .region-dialog {
+  border: 0;
+}
+.checkout-shell.storefront-root[data-theme-active="true"] .region-dialog .region-steps button,
+.checkout-shell.storefront-root[data-theme-active="true"] .region-dialog .region-option,
+.checkout-shell .region-dialog .region-steps button,
+.checkout-shell .region-dialog .region-option {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+}
+.checkout-shell .region-dialog .region-steps button {
+  border-bottom: 2px solid transparent;
+}
+.checkout-shell.storefront-root[data-theme-active="true"] .region-dialog .region-steps button[aria-current],
+.checkout-shell .region-dialog .region-steps button[aria-current] {
+  border-bottom: 2px solid currentColor;
+}
+.checkout-shell .region-dialog .region-option {
+  border-bottom: 1px solid #e5e7eb;
+}
+@media (max-width: 600px) {
+  .checkout-shell .region-dialog {
+    top: auto;
+    bottom: 0;
+    left: 0;
+    transform: none;
+    width: 100%;
+    max-width: none;
+    border-radius: 24px 24px 0 0;
+    padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+  }
+}

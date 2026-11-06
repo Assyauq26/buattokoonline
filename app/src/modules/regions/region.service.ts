@@ -1,4 +1,5 @@
 import "server-only";
+import { matchingRegionPaths } from "./region-search";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { gunzipSync } from "node:zlib";
@@ -14,6 +15,16 @@ function localList(key: string) {
   const list = snapshot[key];
   if (!list) throw new HttpError("Wilayah tidak ditemukan", 422);
   return { ...list, fallback: true };
+}
+
+export function searchRegions(query: string) {
+  const provinces = localList("provinces");
+  const paths = provinces.data.flatMap(province =>
+    localList(`regencies/${province.code}`).data.flatMap(city =>
+      localList(`districts/${city.code}`).data.map(district => [province, city, district])
+    )
+  );
+  return matchingRegionPaths(paths, query, provinces.updatedAt);
 }
 /** One provider request per key, bounded memory and 24h TTL; bundled v2 snapshot survives outages/restarts. */
 export async function getRegions(level: RegionLevel, parent = ""): Promise<RegionList> {
