@@ -59,6 +59,6 @@ export async function validateLocation(value: unknown): Promise<SelectedLocation
     if (!region) throw new HttpError("Kombinasi wilayah tidak valid. Pilih lokasi kembali.", 422);
     names.push(region.name); dates.push(list.updatedAt); postalCode = region.postalCode;
   }
-  if (postalCode && postalCode !== loc.postalCode) throw new HttpError("Kode pos tidak sesuai desa/kelurahan.", 422);
-  return { ...loc, province: names[0], city: names[1], district: names[2], village: names[3], regionSource: "emsifa-v2", regionUpdatedAt: dates.sort()[0] };
+  if (postalCode && loc.postalCode && postalCode !== loc.postalCode) throw new HttpError("Kode pos tidak sesuai desa/kelurahan.", 422);
+  return { ...loc, postalCode: postalCode || loc.postalCode, province: names[0], city: names[1], district: names[2], village: names[3], regionSource: "emsifa-v2", regionUpdatedAt: dates.sort()[0] };
 }

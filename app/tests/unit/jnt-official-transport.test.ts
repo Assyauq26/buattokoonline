@@ -40,7 +40,7 @@ describe("official J&T API transport (network mocked)", () => {
     expect(hash).toMatch(/^[A-Za-z0-9+/]+=*$/);
     expect(Buffer.from(hash, "base64").toString("utf8")).toMatch(/^[a-f0-9]{32}$/);
   });
-  it("accepts only matching HBO production rates, never a default or fake price", async () => {
+  it("preserves services returned by J&T and rejects invalid prices", async () => {
     const mock = vi.fn().mockResolvedValue(respond({
       is_success: "true", message: "",
       content: JSON.stringify([{ cost: "14500", name: "HBO", productType: "HBO" }]),
@@ -57,7 +57,7 @@ describe("official J&T API transport (network mocked)", () => {
     expect(form.get("sign")).toBe(officialJntSignature(form.get("data") || "", "SYNTHETIC-KEY"));
     expect(options.redirect).toBe("error");
     mock.mockResolvedValueOnce(respond({ is_success: "true", content: JSON.stringify([{ name: "EZ", cost: "14500" }]) }));
-    await expect(checkJntRate({ originSite: "BATANG", destinationArea: "WARUNGASEM", weightGram: 3000, productType: "HBO" })).rejects.toThrow();
+    await expect(checkJntRate({ originSite: "BATANG", destinationArea: "WARUNGASEM", weightGram: 3000, productType: "HBO" })).resolves.toEqual([{ courier: "J&T Express", service: "EZ", cost: 14500, mode: "official" }]);
     mock.mockResolvedValueOnce(respond({ is_success: "true", content: JSON.stringify([{ name: "HBO", cost: "-10" }]) }));
     await expect(checkJntRate({ originSite: "BATANG", destinationArea: "WARUNGASEM", weightGram: 3000, productType: "HBO" })).rejects.toThrow();
   });
@@ -83,6 +83,13 @@ describe("official J&T API transport (network mocked)", () => {
     expect(body.get("data_sign")).toBe(officialJntSignature(body.get("data_param") || "", "SYNTHETIC-SIGNING-KEY"));
     mock.mockResolvedValueOnce(respond({ success: true, detail: [{ orderid: "OTHER", status: "Sukses", awb_no: "JO9001348812" }] }));
     await expect(createJntOrder(createPayload)).rejects.toThrow(/tidak mengonfirmasi/);
+  });
+  it("sends the documented no-postcode value without dropping the village address", async () => {
+    const mock = vi.fn().mockResolvedValue(respond({ success: true, detail: [{ orderid: "GHV-TEST-001", status: "Sukses", awb_no: "JO9001348812" }] }));
+    vi.stubGlobal("fetch", mock);
+    await createJntOrder({ ...createPayload, receiver_zip: "00000", receiver_addr: "Jalan contoh 1, Ujong Baroh, Johan Pahlawan" });
+    const body = new URLSearchParams(mock.mock.calls[0][1].body);
+    expect(JSON.parse(body.get("data_param") || "{}").detail[0]).toMatchObject({ receiver_zip: "00000", receiver_addr: "Jalan contoh 1, Ujong Baroh, Johan Pahlawan" });
   });
   it("does not mistake HTTP 200 and success true for accepted cancellation", async () => {
     const mock = vi.fn().mockResolvedValue(respond({

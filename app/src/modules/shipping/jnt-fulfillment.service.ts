@@ -87,7 +87,7 @@ export async function createJntAwb(orderId: string, actorId: string, input: {pic
       throw new HttpError("Resi resmi hanya untuk order J&T yang lunas, dikemas, dan bertarif resmi",409);
     }
     if(!order.address?.districtCode || !order.address.phone ||
-       !order.address.recipientName || !order.address.postalCode)throw new HttpError("Alamat pesanan belum lengkap",422);
+       !order.address.recipientName)throw new HttpError("Alamat pesanan belum lengkap",422);
     if(order.shipment)throw new HttpError("Shipment sudah ada; selesaikan rekonsiliasi terlebih dahulu",409);
     await assertNoActiveRefund(tx,order.payment.id);
     const { config, environment, mappingVersion } = await historicJntConfig(order.jntCheckoutRevisionId, tx);
@@ -97,13 +97,15 @@ export async function createJntAwb(orderId: string, actorId: string, input: {pic
     if(order.shippingWeightGram==null||order.shippingWeightGram<=0||order.shippingWeightGram>100_000)throw new HttpError("Berat pesanan tidak valid",422);
     const qty=order.items.reduce((sum,i)=>sum+i.quantity,0);
     if(qty<1||qty>100||order.subtotal<1||order.subtotal>99_999_999)throw new HttpError("Jumlah atau nilai paket di luar batas API J&T",422);
-    if(!/^\d{5}$/.test(order.address.postalCode))throw new HttpError("Kode pos tidak valid",422);
+    if(order.address.postalCode && !/^\d{5}$/.test(order.address.postalCode))throw new HttpError("Kode pos tidak valid",422);
     const address=[order.address.line,order.address.village,order.address.district,order.address.city,order.address.province]
       .filter(Boolean).join(", ");
     const values={
       ...sender,orderid:externalId(orderId),
       receiver_name:order.address.recipientName,receiver_phone:phoneNumber(order.address.phone),
-      receiver_addr:address,receiver_zip:order.address.postalCode,
+      // J&T documents 00000 as the supported value when no postal code was supplied.
+      // https://developer.jet.co.id/documentation (API BASIC ORDER, receiver_zip)
+      receiver_addr:address,receiver_zip:order.address.postalCode || "00000",
       destination_code:mapped.destinationCityCode,receiver_area:mapped.receiverArea,
       qty,weight:Math.ceil(order.shippingWeightGram/10)/100,
       goodsdesc:"BARANG",servicetype:1 as const,insurance:0,

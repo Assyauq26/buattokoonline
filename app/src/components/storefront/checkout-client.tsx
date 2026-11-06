@@ -97,7 +97,7 @@ export function CheckoutClient({
     if (!address?.district) return null;
     const schema = jntCheckout ? jntLocationSchema : locationSchema;
     const parsed = schema.safeParse({ ...address, villageCode: jntCheckout ? address.villageCode ?? "" : address.villageCode });
-    if (!parsed.success || (!jntCheckout && !address.village)) return null;
+    if (!parsed.success || !address.village) return null;
     return { ...address, ...parsed.data, district: address.district, village: address.village ?? "",
       regionSource: jntCheckout ? "jnt-mapping" : "emsifa-v2", regionUpdatedAt: address.regionUpdatedAt || "" };
   });
@@ -281,7 +281,7 @@ export function CheckoutClient({
           <h2 className="font-display text-lg font-bold text-ink">Alamat Pengiriman</h2>
           <RegionSelectorDialog jntCheckout={jntCheckout} value={location} onChange={value => { setLocation(value); setRateIdx(-1); setRates([]); }} />
           {!location && address && <p className="text-sm text-ink-soft">Alamat tersimpan: {address.city}, {address.province}. Lengkapi wilayah melalui Pilih Lokasi; detail jalan Anda tetap tersimpan.</p>}
-          {["provinceCode", "cityCode", "districtCode", "villageCode", "province", "city", "postalCode"].map(name => <input key={name} type="hidden" name={name} value={location?.[name as keyof SelectedLocation] || ""} />)}
+          {["provinceCode", "cityCode", "districtCode", "villageCode", "province", "city", "village", "postalCode"].map(name => <input key={name} type="hidden" name={name} value={location?.[name as keyof SelectedLocation] || ""} />)}
           <div>
             <Label htmlFor="checkout-street">Detail alamat lengkap</Label>
             <Textarea

@@ -86,3 +86,44 @@
     padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
   }
 }
+
+/* Full-page location selection keeps search above the mobile keyboard. */
+.checkout-shell.storefront-root[data-theme-active="true"] .region-dialog.region-page,
+.checkout-shell .region-dialog.region-page {
+  position: fixed; inset: var(--region-top, 0px) 0 auto; transform: none;
+  width: 100%; max-width: none; height: var(--region-height, 100dvh); max-height: none;
+  display: flex; flex-direction: column; gap: 0; padding: 0; border: 0;
+  border-radius: 0; box-shadow: none; background: #f8f8f8; color: #202124; overflow: hidden;
+}
+.checkout-shell.storefront-root[data-theme-active="true"] .region-page-header,
+.checkout-shell .region-page-header { flex: 0 0 auto; padding: 16px 16px 18px; background: #fff; border-bottom: 1px solid #eee; }
+.checkout-shell .region-page-title { display: flex; align-items: center; gap: 16px; margin-bottom: 18px; }
+.checkout-shell .region-page-title h2 { font-size: 18px; line-height: 1.3; }
+.checkout-shell .region-page-search { position: relative; }
+.checkout-shell .region-page-search > svg { position: absolute; top: 50%; left: 16px; transform: translateY(-50%); color: #737373; pointer-events: none; }
+.checkout-shell.storefront-root[data-theme-active="true"] .region-page-search input,
+.checkout-shell .region-page-search input { width: 100%; height: 52px; padding: 12px 14px 12px 46px; border: 1px solid #ddd; border-radius: 10px; font-size: 16px; background: #fff; }
+.checkout-shell .region-page-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 20px 24px max(24px, env(safe-area-inset-bottom)); }
+.checkout-shell .region-selection-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; font-size: 16px; }
+.checkout-shell.storefront-root[data-theme-active="true"] .region-page button.region-back,
+.checkout-shell.storefront-root[data-theme-active="true"] .region-selection-heading button,
+.checkout-shell .region-page button.region-back,
+.checkout-shell .region-selection-heading button { border: 0; border-radius: 0; box-shadow: none; background: transparent; padding: 0; color: #c71920; font-weight: 700; }
+.checkout-shell .region-page button.region-back { display: grid; place-items: center; min-width: 32px; min-height: 36px; }
+.checkout-shell .region-selection { display: grid; gap: 6px; }
+.checkout-shell.storefront-root[data-theme-active="true"] .region-selection button,
+.checkout-shell .region-selection button { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px; text-align: left; border: 1px solid #ddd; border-radius: 10px; background: transparent; box-shadow: none; font-weight: 600; }
+.checkout-shell.storefront-root[data-theme-active="true"] .region-selection button[aria-current],
+.checkout-shell .region-selection button[aria-current] { border-color: #c71920; }
+.checkout-shell.storefront-root[data-theme-active="true"] .region-selection-dot,
+.checkout-shell .region-selection-dot { width: 14px; height: 14px; flex-shrink: 0; border: 4px solid #c71920; border-radius: 50%; }
+.checkout-shell .region-list-title { font-size: 17px; font-weight: 700; margin-top: 22px; margin-bottom: 8px; }
+.checkout-shell .region-page .region-options { max-height: none; overflow: visible; border: 0; padding: 0; }
+.checkout-shell.storefront-root[data-theme-active="true"] .region-page .region-option,
+.checkout-shell .region-page .region-option { display: flex; justify-content: flex-start; gap: 16px; min-height: 52px; padding: 14px 0; border: 0; border-bottom: 1px solid #e6e6e6; border-radius: 0; font-size: 16px; color: #262626; }
+.checkout-shell .region-page .region-option > svg { color: #858585; flex-shrink: 0; }
+.checkout-shell .region-page .region-option > span { text-align: left; overflow-wrap: anywhere; }
+@media (min-width: 768px) {
+  .checkout-shell .region-page-header { padding-inline: max(24px, calc((100vw - 680px) / 2)); }
+  .checkout-shell .region-page-body { padding-inline: max(24px, calc((100vw - 680px) / 2)); }
+}

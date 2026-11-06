@@ -54,5 +54,5 @@ export async function validateJntLocation(input: unknown, version: string): Prom
     throw new HttpError("Wilayah pengiriman berubah. Pilih ulang dari daftar J&T.", 422);
   }
   return { ...parsed.data, province: row.province, city: row.city, district: row.district,
-    village: "", regionSource: "jnt-mapping", regionUpdatedAt: (row.approvedAt ?? new Date(0)).toISOString() };
+    village: parsed.data.village, regionSource: "jnt-mapping", regionUpdatedAt: (row.approvedAt ?? new Date(0)).toISOString() };
 }

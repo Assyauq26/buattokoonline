@@ -9,7 +9,7 @@ export const locationSchema = z.object({
   cityCode: z.string().regex(/^\d{2}\.\d{2}$/),
   districtCode: z.string().regex(/^\d{2}\.\d{2}\.\d{2}$/),
   villageCode: z.string().regex(/^\d{2}\.\d{2}\.\d{2}\.\d{4}$/),
-  postalCode: z.string().regex(/^\d{5}$/),
+  postalCode: z.union([z.literal(""), z.string().regex(/^\d{5}$/)]).default(""),
 });
 export const jntLocationSchema = z.object({
   provinceCode: z.string().min(1).max(130),
@@ -17,6 +17,7 @@ export const jntLocationSchema = z.object({
   districtCode: z.string().regex(jntDistrictCodePattern),
   villageCode: z.literal(""),
   postalCode: locationSchema.shape.postalCode,
+  village: z.string().trim().max(150).default(""),
 });
 export const checkoutLocationSchema = z.union([locationSchema, jntLocationSchema]);
 export type LocationCodes = z.infer<typeof checkoutLocationSchema>;
@@ -33,7 +34,7 @@ const contactSchema = z.object({
   // Names submitted by the client are ignored; canonical names come from the provider.
   city: z.string().max(150).optional(), province: z.string().max(150).optional(),
 });
-export const addressSchema = z.union([locationSchema.extend(contactSchema.shape), jntLocationSchema.extend(contactSchema.shape)]);
+export const addressSchema = z.union([locationSchema.extend(contactSchema.shape), jntLocationSchema.extend({ ...contactSchema.shape, village: z.string().trim().min(1).max(150) })]);
 export function assertRegionParent(level: RegionLevel, parent: string) {
   const patterns = { provinces: /^$/, regencies: /^\d{2}$/, districts: /^\d{2}\.\d{2}$/, villages: /^\d{2}\.\d{2}\.\d{2}$/ };
   if (!patterns[level].test(parent)) throw new Error("Kode induk wilayah tidak valid");

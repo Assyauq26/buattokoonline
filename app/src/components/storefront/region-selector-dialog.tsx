@@ -1,7 +1,7 @@
 "use client";
 import * as Dialog from "@radix-ui/react-dialog";
 import { useEffect, useRef, useState } from "react";
-import { Check, ChevronRight, MapPin, Search, X } from "lucide-react";
+import { ArrowLeft, Check, ChevronRight, MapPin, Search } from "lucide-react";
 import { Input, Label } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import type { RegionSearchResult } from "@/modules/regions/region-search";
@@ -19,6 +19,8 @@ export function RegionSelectorDialog({ value, onChange, jntCheckout = false }: {
   const [step, setStep] = useState(0);
   const [query, setQuery] = useState("");
   const [postal, setPostal] = useState("");
+  const [village, setVillage] = useState("");
+  const dialogRef = useRef<HTMLDivElement>(null);
   const [updatedAt, setUpdatedAt] = useState("");
   const [state, setState] = useState<{ key: string; list?: RegionList; error?: boolean }>({ key: "" });
   const [retry, setRetry] = useState(0);
@@ -47,9 +49,26 @@ export function RegionSelectorDialog({ value, onChange, jntCheckout = false }: {
   const confirmRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     if (!open) return;
-    const frame = requestAnimationFrame(() => (step < lastStep ? searchRef.current : confirmRef.current)?.focus());
+    const frame = requestAnimationFrame(() => { if (step === lastStep) confirmRef.current?.focus(); });
     return () => cancelAnimationFrame(frame);
   }, [open, step, lastStep]);
+  useEffect(() => {
+    if (!open) return;
+    const viewport = window.visualViewport;
+    const resize = () => {
+      dialogRef.current?.style.setProperty("--region-height", `${viewport?.height ?? window.innerHeight}px`);
+      dialogRef.current?.style.setProperty("--region-top", `${viewport?.offsetTop ?? 0}px`);
+    };
+    resize();
+    viewport?.addEventListener("resize", resize);
+    viewport?.addEventListener("scroll", resize);
+    window.addEventListener("resize", resize);
+    return () => {
+      viewport?.removeEventListener("resize", resize);
+      viewport?.removeEventListener("scroll", resize);
+      window.removeEventListener("resize", resize);
+    };
+  }, [open]);
   useEffect(() => setContainer(document.querySelector<HTMLElement>(".storefront-checkout-root, .storefront-root")), []);
   const parent = step ? draft[step - 1]?.code : "";
   const province = draft[0]?.code ?? "";
@@ -85,13 +104,14 @@ export function RegionSelectorDialog({ value, onChange, jntCheckout = false }: {
         ...(!jntCheckout ? [{ code: value.villageCode, name: value.village, postalCode: value.postalCode }] : []),
       ] : []);
       setPostal(value?.postalCode || ""); setUpdatedAt(value?.regionUpdatedAt || "");
+      setVillage(value?.village || "");
       setStep(value ? lastStep : 0); setQuery("");
     }
     setOpen(next);
   }
   const list = state.key === key ? state.list : undefined;
   const filtered = list?.data.filter(r => r.name.toLocaleLowerCase("id").includes(query.trim().toLocaleLowerCase("id")));
-  const codes = { provinceCode: draft[0]?.code, cityCode: draft[1]?.code, districtCode: draft[2]?.code, villageCode: jntCheckout ? "" : draft[3]?.code, postalCode: postal };
+  const codes = { provinceCode: draft[0]?.code, cityCode: draft[1]?.code, districtCode: draft[2]?.code, villageCode: jntCheckout ? "" : draft[3]?.code, postalCode: postal, village: jntCheckout ? village : draft[3]?.name };
   return <Dialog.Root open={open} onOpenChange={changeOpen}>
     <Dialog.Trigger asChild>
       <button type="button" className="region-trigger" data-testid="select-location">
@@ -104,47 +124,49 @@ export function RegionSelectorDialog({ value, onChange, jntCheckout = false }: {
     </Dialog.Trigger>
     <Dialog.Portal container={container}>
       <Dialog.Overlay className="region-overlay" />
-      <Dialog.Content className="region-dialog" data-testid="region-dialog">
-        <div className="flex items-center justify-between gap-3">
-          <Dialog.Title className="font-display text-xl font-bold">Pilih Lokasi Pengiriman</Dialog.Title>
-          <Dialog.Close asChild><button type="button" className="region-close" aria-label="Tutup pilihan lokasi"><X size={20} /></button></Dialog.Close>
+      <Dialog.Content ref={dialogRef} className="region-dialog region-page" data-testid="region-dialog" aria-describedby={undefined}>
+        <div className="region-page-header">
+          <div className="region-page-title">
+            <Dialog.Close asChild><button type="button" className="region-back" aria-label="Kembali ke checkout"><ArrowLeft size={24} /></button></Dialog.Close>
+            <Dialog.Title className="font-display text-xl font-bold">Provinsi, Kota, Kecamatan</Dialog.Title>
+          </div>
+          <Label htmlFor="region-search" className="sr-only">Cari provinsi, kota, kecamatan</Label>
+          <div className="region-page-search"><Search size={22} aria-hidden="true" /><Input ref={searchRef} id="region-search" value={query} onChange={e => setQuery(e.target.value)} maxLength={80} placeholder="Cari provinsi, kota, kecamatan" autoComplete="off" /></div>
         </div>
-        <Dialog.Description className="text-sm text-ink-soft">Cari langsung provinsi, kota, atau kecamatan. Anda juga bisa memilih melalui tab wilayah.</Dialog.Description>
-        <nav className="region-steps" aria-label="Tingkat wilayah">
-          {labels.map((label, i) => <button key={label} type="button" disabled={i > draft.length} aria-current={step === i ? "step" : undefined} onClick={() => { setStep(i); setQuery(""); }}>
-            <span className="block font-semibold">{label}</span><span className="block truncate">{draft[i]?.name || "Pilih wilayah"}</span>
-          </button>)}
-        </nav>
-        {step < lastStep ? <>
-          <Label htmlFor="region-search" className="sr-only">Cari provinsi, kota, atau kecamatan</Label>
-          <div className="relative"><Search className="pointer-events-none absolute left-3 top-3" size={18} aria-hidden="true" /><Input ref={searchRef} id="region-search" value={query} onChange={e => setQuery(e.target.value)} maxLength={80} placeholder="Cari provinsi, kota, kecamatan" className="pl-10" autoComplete="off" /></div>
+        <div className="region-page-body">
+          <div className="region-selection-heading"><strong>Lokasi Terpilih</strong><button type="button" onClick={() => { setDraft([]); setStep(0); setQuery(""); setPostal(""); setVillage(""); }}>Atur Ulang</button></div>
+          <nav className="region-selection" aria-label="Lokasi terpilih">
+            {labels.slice(0, Math.min(draft.length + 1, lastStep)).map((label, i) => <button key={label} type="button" aria-current={step === i ? "step" : undefined} onClick={() => { setStep(i); setQuery(""); }}><span className="region-selection-dot" /><span>{draft[i]?.name || `Pilih ${label}`}</span></button>)}
+          </nav>
+        {step < lastStep || searching ? <>
+          <h3 className="region-list-title">{searching ? "Hasil Pencarian" : `Pilih ${labels[step]}`}</h3>
           {searching ? <div className="region-options" aria-live="polite" aria-busy={search.term !== searchTerm || (!search.results && !search.error)}>
             {search.term !== searchTerm || (!search.results && !search.error) ? <p role="status">Mencari wilayah…</p> : search.error ? <div role="alert"><p>Pencarian gagal. Coba lagi.</p><Button type="button" variant="outline" onClick={() => setRetry(n => n + 1)}>Coba lagi</Button></div> : !search.results?.length ? <p>Tidak ada wilayah yang cocok. Coba nama lain.</p> : <ul>{search.results.map(result => <li key={JSON.stringify(result.path.map(region => region.code))}>
               <button type="button" className="region-option" onClick={() => {
-                setDraft(result.path); setPostal(""); setUpdatedAt(result.updatedAt);
+                setDraft(result.path); setPostal(""); setVillage(""); setUpdatedAt(result.updatedAt);
                 setStep(result.path.length); setQuery("");
-              }}><span><strong className="block">{result.path.at(-1)!.name}</strong><span className="block text-xs text-ink-soft">{result.path.slice(0, -1).map(region => region.name).join(" / ") || "Provinsi"}</span></span><ChevronRight size={16} aria-hidden="true" /></button>
+                searchRef.current?.blur();
+              }}><MapPin size={24} aria-hidden="true" /><span><strong className="block">{result.path.at(-1)!.name}</strong><span className="block text-xs text-ink-soft">{result.path.slice(0, -1).map(region => region.name).join(" / ") || "Provinsi"}</span></span></button>
             </li>)}</ul>}
           </div> :
           <div className="region-options" aria-label={labels[step]} aria-busy={!list && !state.error}>
             {state.key === key && state.error ? <div role="alert" className="space-y-3 p-3"><p>Gagal memuat wilayah. Coba lagi.</p><Button type="button" variant="outline" onClick={() => setRetry(n => n + 1)}>Coba lagi</Button></div> : !list ? <p role="status" className="p-3 text-sm">Memuat {labels[step].toLowerCase()}…</p> : !filtered?.length ? <p role="status" className="p-3 text-sm">Wilayah tidak ditemukan. Coba kata lain.</p> : <ul>{filtered.map(region => <li key={region.code}>
               <button type="button" className="region-option" aria-pressed={draft[step]?.code === region.code} onClick={() => {
-                setDraft([...draft.slice(0, step), region]); setPostal(step === 3 ? region.postalCode || "" : "");
+                setDraft([...draft.slice(0, step), region]); setPostal(step === 3 ? region.postalCode || "" : ""); setVillage("");
                 setUpdatedAt(list.updatedAt); setQuery(""); setStep(step + 1);
-              }}><span>{region.name}</span>{draft[step]?.code === region.code ? <Check size={18} aria-hidden="true" /> : <ChevronRight size={16} aria-hidden="true" />}</button>
+                searchRef.current?.blur();
+              }}><MapPin size={24} aria-hidden="true" /><span>{region.name}</span>{draft[step]?.code === region.code && <Check size={18} aria-hidden="true" />}</button>
             </li>)}</ul>}
           </div>}
-          <p className="region-guidance">{searching ? "Pilih hasil pencarian untuk melanjutkan." : `Pilih ${labels[step].toLowerCase()} atau ketik minimal 2 huruf.`}</p>
         </> : <div className="min-h-0 space-y-4 overflow-y-auto py-2">
-          <p className="text-sm" data-testid="region-confirm-summary">{draft.map(r => r.name).join(", ")}</p>
-          <div><Label htmlFor="region-postal">Kode pos</Label><Input id="region-postal" inputMode="numeric" maxLength={5} value={postal} readOnly={!!draft[3]?.postalCode} onChange={e => setPostal(e.target.value.replace(/\D/g, ""))} /></div>
-          {!draft[3]?.postalCode && <p className="text-xs text-ink-soft">Kode pos belum tersedia dari sumber wilayah. Isi kode pos alamat Anda.</p>}
-          <Button ref={confirmRef} type="button" className="w-full" disabled={!schema.safeParse(codes).success} onClick={() => {
+          <div><Label htmlFor="region-village">Desa/Kelurahan</Label><Input id="region-village" maxLength={150} value={jntCheckout ? village : draft[3]?.name ?? ""} readOnly={!jntCheckout} placeholder="Nama desa atau kelurahan" onChange={e => setVillage(e.target.value)} /></div>
+          <Button ref={confirmRef} type="button" className="w-full" disabled={!schema.safeParse(codes).success || (jntCheckout && !village.trim())} onClick={() => {
             const parsed = schema.parse(codes);
-            onChange({ ...parsed, province: draft[0].name, city: draft[1].name, district: draft[2].name, village: draft[3]?.name ?? "", regionSource: jntCheckout ? "jnt-mapping" : "emsifa-v2", regionUpdatedAt: updatedAt });
+            onChange({ ...parsed, province: draft[0].name, city: draft[1].name, district: draft[2].name, village: jntCheckout ? village.trim() : draft[3]?.name ?? "", regionSource: jntCheckout ? "jnt-mapping" : "emsifa-v2", regionUpdatedAt: updatedAt });
             setOpen(false);
           }}>Gunakan lokasi ini</Button>
         </div>}
+        </div>
       </Dialog.Content>
     </Dialog.Portal>
   </Dialog.Root>;
