@@ -1,3 +1,4 @@
+import { ADMIN_ROLES } from "@/lib/auth/permissions";
 import {
   enforceAuthRateLimit,
   enforceRegistrationPhoneLimit,
@@ -409,7 +410,7 @@ export async function verifyRegistrationOtp(
   }
 }
 
-async function recoveryUser(email: string | null, phone: string | null, rawPhone = "") {
+export async function recoveryUser(email: string | null, phone: string | null, rawPhone = "") {
   const rows = await prisma.$queryRaw<{ filtered: boolean; ids: string[] }[]>(
     recoveryIdentityQuery(email, phone, rawPhone),
   );
@@ -442,6 +443,12 @@ export async function authenticate(identifier: string, password: string) {
   return user;
 }
 
+export const sellerAccount = { isActive: true, roles: { some: { role: { name: { in: ADMIN_ROLES } } } } };
+
+export async function lockRecoveryUser(tx: Prisma.TransactionClient, id: string) {
+  await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${id} FOR UPDATE`;
+}
+
 const tokenDigest = (token: string) =>
   createHash("sha256").update(token).digest("hex");
 
@@ -453,6 +460,7 @@ export async function requestPasswordReset(email: string) {
   const config = resetMailConfig();
   const user = await recoveryUser(normalizedEmail, null);
   if (!user || !user.isActive) return; // keep the form response identical for unknown emails
+  if (await prisma.user.findFirst({ where: { id: user.id, ...sellerAccount } })) return;
   const token = randomBytes(32).toString("hex");
   const record = await prisma.passwordResetToken.create({
     data: {
@@ -484,6 +492,9 @@ export async function resetPassword(token: string, newPassword: string) {
     throw new HttpError("Token reset tidak valid atau kedaluwarsa", 400);
   const hash = await hashPassword(newPassword);
   await prisma.$transaction(async (tx) => {
+    await lockRecoveryUser(tx, record.userId);
+    if (await tx.user.findFirst({ where: { id: record.userId, ...sellerAccount } }))
+      throw new HttpError("Gunakan reset OTP untuk akun seller.", 400);
     // Atomic consume prevents two parallel submissions of the same reset link.
     const consumed = await tx.passwordResetToken.updateMany({
       where: { id: record.id, usedAt: null, expiresAt: { gt: new Date() } },

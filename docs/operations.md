@@ -97,3 +97,38 @@ manual atau menjalankan bootstrap lagi. Tidak ada auto-update atau sinkronisasi.
 Lihat [testing.md](testing.md) untuk profil runner biasa dan guest Ubuntu 2 GB,
 recovery wizard, backup/restore, dua versi disposable, rollback kode, serta batas
 pembuktian TLS lokal dan pengujian publik yang terotorisasi.
+
+## Pemulihan password dashboard seller
+
+Dari /admin, buka halaman masuk dan pilih **Lupa password?**. Form
+/seller-password-reset mengirim JSON same-origin ke
+POST /api/v1/auth/seller-password-reset dengan action request, verify, atau
+complete. Request mengembalikan pesan generik dan ID challenge acak.
+Verifikasi menukar OTP enam digit dengan token acak 256 bit yang disimpan
+sementara dalam memori form. Setelah konfirmasi password, seller kembali ke login.
+
+Gunakan RESEND_API_KEY dan PASSWORD_RESET_FROM (sender terverifikasi) pada
+runtime **aplikasi toko**, serta JWT_SECRET dan APP_ORIGIN yang sudah ada.
+Konfigurasi platform pusat terpisah. PASSWORD_RESET_BASE_URL hanya dipakai
+alur tautan pelanggan. Resend mengirim OTP dan pemberitahuan perubahan melalui
+HTML dan teks. Log diagnostik hanya berisi status, tanpa alamat atau kredensial.
+
+Challenge dan izin reset memakai PasswordResetToken yang sudah ada, dengan
+prefix purpose terpisah dan digest HMAC untuk OTP. Challenge aktif setelah
+provider menerima email. OTP dan token masing-masing berlaku lima menit,
+OTP maksimal lima percobaan. Cooldown 60 detik berlaku per akun. Kuota persisten
+membatasi permintaan per email, IP dan global, serta verifikasi per akun,
+challenge dan IP. Pastikan proxy Caddy adalah satu-satunya jalur masuk aplikasi
+dan menulis alamat klien tepercaya ke X-Forwarded-For.
+
+Role dashboard diperiksa saat pengiriman, verifikasi dan penyimpanan.
+Transaksi dengan lock baris User mengubah hash bcrypt, mengonsumsi seluruh izin
+reset dan menaikkan sessionVersion, sehingga token sesi lama ditolak.
+Akun dashboard memakai jalur OTP. Pelanggan tetap menggunakan tautan reset.
+
+Jalankan dari app: npm test, npm run typecheck, dan npm run build. Sebelum
+produksi, gunakan satu akun seller uji pada toko dengan Resend terkonfigurasi
+untuk memeriksa email masuk, resend, password lama/baru, pencabutan sesi di
+perangkat kedua, serta notifikasi. Uji juga pemakaian ulang dan dua pengiriman
+konfirmasi bersamaan. Rollback menggunakan image sebelumnya tanpa migrasi;
+perubahan password dan pencabutan sesi yang sudah terjadi tetap berlaku.
