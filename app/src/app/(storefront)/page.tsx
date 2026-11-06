@@ -109,7 +109,7 @@ export default async function HomePage() {
             <ProductCard
               key={p.id}
               homeLatest
-                product={toCardData(p)}
+              product={toCardData(p)}
               wishlisted={wl.has(p.id)}
             />
           ))}

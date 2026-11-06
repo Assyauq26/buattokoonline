@@ -139,7 +139,7 @@ export function ProductCard({
               </span>
             )}
           </PriceContainer>
-          {!featured && !homeLatest && !preview && (
+          {!featured && !homeFeatured && !preview && (
             <QuickAddButton
               slug={product.slug}
               testId={product.variantId ?? product.id}

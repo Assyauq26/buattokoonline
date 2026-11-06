@@ -90,7 +90,8 @@
   .flash-clock-unit small { font-size: 10px; text-transform: uppercase; }
   .home-flash-action { padding-left: 18px; border-left: 1px solid currentColor; }
   .home-flash-action a { padding-inline: 16px; }
-  .home-products { grid-template-columns: minmax(0, 7fr) minmax(0, 4fr); gap: 18px; }
+  .home-products { grid-template-columns: minmax(0, 4fr) minmax(0, 7fr); gap: 18px; }
+  .home-products > section:has(.home-latest) { order: -1; }
   .home-products > section:only-child { grid-column: 1 / -1; }
   .home-products h2 { font-size: clamp(20px, 1.8vw, 30px); }
   .home-featured { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 7px; overflow: visible; }
@@ -124,7 +125,7 @@
 
 /* Home cards preserve readable prices instead of scaling them to a single line. */
 .storefront-root .store-home .product-card-purchase { grid-template-columns: minmax(0, 1fr) auto; gap: 4px; }
-.storefront-root .store-home .home-latest .product-card-purchase { grid-template-columns: minmax(0, 1fr); }
+.storefront-root .store-home .home-featured .product-card-purchase { grid-template-columns: minmax(0, 1fr); }
 .storefront-root .store-home .product-card-prices { flex-wrap: wrap; column-gap: 4px; row-gap: 0; }
 .storefront-root .store-home .product-card-price { font-size: 1rem; min-height: 0; }
 .storefront-root .store-home .product-card-original { font-size: .75rem; }
