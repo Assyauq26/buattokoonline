@@ -224,6 +224,11 @@ export function LoginForm({ redirectTo, passwordReset }: { redirectTo?: string; 
       <p className="auth-switch">
         Belum punya akun? <Link href="/register">Daftar</Link>
       </p>
+      {!/^\/admin(?:[/?]|$)/.test(redirectTo ?? "") && (
+        <p className="auth-switch">
+          <Link href="/seller-password-reset">Lupa password akun seller?</Link>
+        </p>
+      )}
     </div>
   );
 }
