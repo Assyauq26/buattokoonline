@@ -8,6 +8,8 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { getCartView } from "@/modules/cart/cart.service";
 import { listActiveBankAccounts } from "@/modules/payments/payments.service";
 import { prisma } from "@/lib/prisma";
+import { ShoppingCart, Package } from "lucide-react";
+import { formatIDR } from "@/lib/money";
 import { CheckoutClient } from "@/components/storefront/checkout-client";
 
 export const dynamic = "force-dynamic";
@@ -46,12 +48,27 @@ export default async function CheckoutPage({ searchParams }: { searchParams: Pro
   const addr = customer?.addresses[0] ?? null;
 
   return (
-    <div className="space-y-6">
+    <div className="checkout-page space-y-6">
       <h1 className="font-display text-2xl font-black text-ink md:text-3xl">Checkout</h1>
-      {intent && <section aria-label="Pembelian langsung" data-testid="direct-checkout-summary">
-        <p>Hanya pilihan ini yang dibeli. Keranjang Anda tetap tersimpan.</p>
-        {cart.lines.map(line => <p key={line.variantId}>{line.product.name} — {line.variantLabel} × {line.quantity}</p>)}
-      </section>}
+      <section className="checkout-products" aria-labelledby="checkout-products-title" data-testid={intent ? "direct-checkout-summary" : "cart-checkout-summary"}>
+        <h2 id="checkout-products-title">Produk Dibeli</h2>
+        <ul>
+          {cart.lines.map(line => (
+            <li key={line.variantId} className="checkout-product">
+              {line.product.image ? (
+                <img src={line.product.image} alt={line.product.name} width={96} height={96} className="checkout-product-image" />
+              ) : <span className="checkout-product-image checkout-image-placeholder"><Package aria-label="Foto produk belum tersedia" /></span>}
+              <div>
+                <h3>{line.product.name}</h3>
+                <p>{line.variantLabel} × {line.quantity}</p>
+                <strong>{formatIDR(line.lineTotal)}</strong>
+                {!line.inStock && <p role="alert">Stok produk ini tidak mencukupi. Perbarui pilihan produk Anda.</p>}
+              </div>
+            </li>
+          ))}
+        </ul>
+        {intent && <p className="checkout-cart-note"><ShoppingCart size={19} aria-hidden="true" /> Keranjang lainnya tetap tersimpan.</p>}
+      </section>
       <CheckoutClient
         key={intent || "cart"}
         intentId={intent}

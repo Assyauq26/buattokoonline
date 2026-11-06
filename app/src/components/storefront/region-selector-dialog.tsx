@@ -6,7 +6,7 @@ import { Input, Label } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { jntLocationSchema, locationSchema, regionLevels, type Region, type RegionList, type SelectedLocation } from "@/modules/regions/region.validation";
 
-const regionLabels = ["Provinsi", "Kota/Kabupaten", "Kecamatan", "Desa/Kelurahan"];
+const regionLabels = ["Provinsi", "Kota/Kab.", "Kecamatan", "Desa"];
 const clientCache = new Map<string, { list: RegionList; expires: number }>();
 export function RegionSelectorDialog({ value, onChange, jntCheckout = false }: { value: SelectedLocation | null; onChange: (value: SelectedLocation) => void; jntCheckout?: boolean }) {
   const lastStep = jntCheckout ? 3 : 4;
@@ -84,10 +84,10 @@ export function RegionSelectorDialog({ value, onChange, jntCheckout = false }: {
       <Dialog.Overlay className="region-overlay" />
       <Dialog.Content className="region-dialog" data-testid="region-dialog">
         <div className="flex items-center justify-between gap-3">
-          <Dialog.Title className="font-display text-xl font-bold">Pilih Lokasi</Dialog.Title>
+          <Dialog.Title className="font-display text-xl font-bold">Pilih Lokasi Pengiriman</Dialog.Title>
           <Dialog.Close asChild><button type="button" className="region-close" aria-label="Tutup pilihan lokasi"><X size={20} /></button></Dialog.Close>
         </div>
-        <Dialog.Description className="text-sm text-ink-soft">Pilih wilayah secara berurutan, lalu konfirmasi lokasi pengiriman.</Dialog.Description>
+        <Dialog.Description className="text-sm text-ink-soft">Pilih wilayah secara berurutan.</Dialog.Description>
         <nav className="region-steps" aria-label="Tingkat wilayah">
           {labels.map((label, i) => <button key={label} type="button" disabled={i > draft.length} aria-current={step === i ? "step" : undefined} onClick={() => { setStep(i); setQuery(""); }}>
             <span className="block font-semibold">{label}</span><span className="block truncate">{draft[i]?.name || "Pilih wilayah"}</span>
@@ -95,7 +95,7 @@ export function RegionSelectorDialog({ value, onChange, jntCheckout = false }: {
         </nav>
         {step < lastStep ? <>
           <Label htmlFor="region-search" className="sr-only">Cari {labels[step]}</Label>
-          <div className="relative"><Search className="pointer-events-none absolute left-3 top-3" size={18} aria-hidden="true" /><Input ref={searchRef} id="region-search" value={query} onChange={e => setQuery(e.target.value)} placeholder="Cari provinsi / kota / kecamatan / desa..." className="pl-10" autoComplete="off" /></div>
+          <div className="relative"><Search className="pointer-events-none absolute left-3 top-3" size={18} aria-hidden="true" /><Input ref={searchRef} id="region-search" value={query} onChange={e => setQuery(e.target.value)} placeholder={`Cari ${labels[step].toLowerCase()}`} className="pl-10" autoComplete="off" /></div>
           <div className="region-options" aria-label={labels[step]} aria-busy={!list && !state.error}>
             {state.key === key && state.error ? <div role="alert" className="space-y-3 p-3"><p>Gagal memuat wilayah. Coba lagi.</p><Button type="button" variant="outline" onClick={() => setRetry(n => n + 1)}>Coba lagi</Button></div> : !list ? <p role="status" className="p-3 text-sm">Memuat {labels[step].toLowerCase()}…</p> : !filtered?.length ? <p role="status" className="p-3 text-sm">Wilayah tidak ditemukan. Coba kata lain.</p> : <ul>{filtered.map(region => <li key={region.code}>
               <button type="button" className="region-option" aria-pressed={draft[step]?.code === region.code} onClick={() => {
@@ -104,6 +104,7 @@ export function RegionSelectorDialog({ value, onChange, jntCheckout = false }: {
               }}><span>{region.name}</span>{draft[step]?.code === region.code ? <Check size={18} aria-hidden="true" /> : <ChevronRight size={16} aria-hidden="true" />}</button>
             </li>)}</ul>}
           </div>
+          <p className="region-guidance">Pilih {labels[step].toLowerCase()} untuk melanjutkan.</p>
         </> : <div className="min-h-0 space-y-4 overflow-y-auto py-2">
           <p className="text-sm" data-testid="region-confirm-summary">{draft.map(r => r.name).join(", ")}</p>
           <div><Label htmlFor="region-postal">Kode pos</Label><Input id="region-postal" inputMode="numeric" maxLength={5} value={postal} readOnly={!!draft[3]?.postalCode} onChange={e => setPostal(e.target.value.replace(/\D/g, ""))} /></div>
