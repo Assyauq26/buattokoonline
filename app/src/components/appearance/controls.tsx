@@ -257,6 +257,7 @@ export function Controls({
               ))}
             </span>
             <strong className="text-sm">{p.name}</strong>
+            {p.name === "Monochrome" && <span className="ml-2 rounded-md bg-zinc-100 px-2 py-1 text-xs text-zinc-700">Default</span>}
           </button>
         ))}
       </div>

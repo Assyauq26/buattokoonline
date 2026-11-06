@@ -16,8 +16,10 @@ import { themeStyle, isLegacy } from "@/modules/appearance/runtime";
 import { PERMISSIONS, ROLE_PERMISSIONS } from "@/lib/auth/permissions";
 import { resolveStorageObject } from "@/lib/storage-path";
 describe("store appearance contract", () => {
-  it("all ten complete presets pass AA", () => {
-    expect(PRESETS).toHaveLength(10);
+  it("all eleven complete presets pass AA", () => {
+    expect(PRESETS).toHaveLength(11);
+    expect(PRESETS[0].name).toBe("Monochrome");
+    expect(PRESETS[0].config).toEqual(makeDefault());
     for (const p of PRESETS) {
       expect(appearanceSchema.safeParse(p.config).success, p.name).toBe(true);
       expect(Object.keys(p.config.colors)).toHaveLength(TOKEN_KEYS.length);
@@ -38,8 +40,8 @@ describe("store appearance contract", () => {
     // Decorative outlines must not inherit that strong border as a solid line.
     expect(contrast(style["--store-decorative-border"], config.colors.card)).toBeLessThan(2);
     expect(contrast(style["--store-search-border"], config.colors.surface)).toBeLessThan(2);
-    expect(style["--store-radius"]).toBe("16px");
-    expect(style["--store-media-radius"]).toBe("12px");
+    expect(style["--store-radius"]).toBe("12px");
+    expect(style["--store-media-radius"]).toBe("10px");
     expect(style["--store-shadow"]).toContain("/ .05");
     expect(style["--store-shadow-hover"]).toContain("/ .08");
     const soft = structuredClone(config);

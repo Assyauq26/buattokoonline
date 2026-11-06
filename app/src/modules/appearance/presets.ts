@@ -1,6 +1,7 @@
-import { makeDefault, parseAppearance } from "./schema";
+import { makeDefault, makeMandiriPreset, parseAppearance } from "./schema";
 import { foreground, mix } from "./contrast";
 const seeds = [
+  ["Monochrome", "#111111", "#FFFFFF"],
   ["Toko Online Mandiri", "#111111", "#FFFFFF"],
   ["Midnight Ink", "#D6E4FF", "#101827"],
   ["Sage Studio", "#294D3A", "#F5F8F3"],
@@ -14,6 +15,7 @@ const seeds = [
 ];
 export const PRESETS = seeds.map(([name, primary, bg], index) => {
   if (index === 0) return { name, config: makeDefault() };
+  if (name === "Toko Online Mandiri") return { name, config: makeMandiriPreset() };
   const v = makeDefault(),
     dark = foreground(bg) === "#FFFFFF",
     text = dark ? "#FFFFFF" : "#111111";

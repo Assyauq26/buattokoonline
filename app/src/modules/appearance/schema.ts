@@ -367,7 +367,7 @@ export function legacyDefault(): StoreAppearanceV1 {
 }
 
 /** New/reset drafts only. Never rewrite an existing published config or legacy revision. */
-export function makeDefault(): StoreAppearanceV1 {
+export function makeMandiriPreset(): StoreAppearanceV1 {
   const v = monochromeDefault();
   v.identity = { ...v.identity, name: "Toko Anda", tagline: "", logoAssetId: null, mode: "text" };
   v.footer.tagline = "";
@@ -379,6 +379,20 @@ export function makeDefault(): StoreAppearanceV1 {
     navActive: "#E1251B", badge: "#E1251B", selected: "#E1251B",
     fieldText: "#111418", modalText: "#111418", outlineText: "#111418", price: "#111418",
     link: "#B3121A", linkHover: "#931017", linkPressed: "#931017", focus: "#B3121A"
+  });
+  return parseAppearance(v);
+}
+
+/** Neutral storefront defaults; existing published palettes remain explicit snapshots. */
+export function makeDefault(): StoreAppearanceV1 {
+  const v = monochromeDefault();
+  v.identity = { ...v.identity, name: "Toko Anda", tagline: "", logoAssetId: null, mode: "text" };
+  v.footer.tagline = "";
+  v.styling.radius = "soft";
+  Object.assign(v.colors, {
+    accent: "#111111", accentHover: "#242424", accentPressed: "#000000",
+    link: "#111111", linkHover: "#444444", linkPressed: "#000000",
+    focus: "#111111", info: "#444444", discount: "#111111",
   });
   return parseAppearance(v);
 }
