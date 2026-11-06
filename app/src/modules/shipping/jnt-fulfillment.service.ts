@@ -116,7 +116,7 @@ export async function createJntAwb(orderId: string, actorId: string) {
     return {existing:false as const,values,config};
   },{timeout:18000});
   if(prepared.existing)return {awb:prepared.awb,replayed:true};
-  let result:{awb:string;orderId:string};
+  let result:Awaited<ReturnType<typeof createJntOrder>>;
   try {result=await createJntOrder(prepared.values, prepared.config);}
   catch {
     await prisma.jntShipmentRequest.updateMany({
@@ -136,7 +136,7 @@ export async function createJntAwb(orderId: string, actorId: string) {
       }});
       await tx.jntShipmentRequest.update({where:{orderId},data:{state:"SUCCEEDED",awb:result.awb,errorCode:null}});
       await writeAudit({userId:actorId,action:"jnt.order.accepted",entity:"Order",entityId:orderId,
-        meta:{externalOrderId:result.orderId,awb:result.awb}},tx);
+        meta:{externalOrderId:result.orderId,awb:result.awb,routingCode:result.routingCode}},tx);
     },{timeout:18000});
   } catch {
     await prisma.jntShipmentRequest.updateMany({

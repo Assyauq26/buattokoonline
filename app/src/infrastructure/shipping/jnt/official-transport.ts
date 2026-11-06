@@ -158,7 +158,9 @@ export async function createJntOrder(value: z.input<typeof jntCreateOrderSchema>
   if (!result.success || result.data.detail[0].orderid !== input.orderid) {
     throw new HttpError("J&T tidak mengonfirmasi pembuatan resi; periksa status sebelum mencoba ulang", 502);
   }
-  return { orderId: input.orderid, awb: result.data.detail[0].awb_no };
+  const { awb_no, desCode } = result.data.detail[0];
+  const routingCode = typeof desCode === "string" && /^[A-Z0-9-]{1,64}$/i.test(desCode.trim()) ? desCode.trim() : null;
+  return { orderId: input.orderid, awb: awb_no, routingCode };
 }
 const cancelResult = z.object({
   success: z.literal(true),

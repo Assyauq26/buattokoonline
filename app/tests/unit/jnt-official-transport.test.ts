@@ -73,10 +73,10 @@ describe("official J&T API transport (network mocked)", () => {
   };
   it("parses successful AWB with exact matching orderid", async () => {
     const mock = vi.fn().mockResolvedValue(respond({
-      success: true, detail: [{ orderid: "GHV-TEST-001", status: "Sukses", awb_no: "JO9001348812" }],
+      success: true, detail: [{ orderid: "GHV-TEST-001", status: "Sukses", awb_no: "JO9001348812", desCode: "410-1BGG06-12B" }],
     }));
     vi.stubGlobal("fetch", mock);
-    expect(await createJntOrder(createPayload)).toEqual({ orderId: "GHV-TEST-001", awb: "JO9001348812" });
+    expect(await createJntOrder(createPayload)).toEqual({ orderId: "GHV-TEST-001", awb: "JO9001348812", routingCode: "410-1BGG06-12B" });
     const body = new URLSearchParams(mock.mock.calls[0][1].body);
     const signed = JSON.parse(body.get("data_param") || "{}");
     expect(signed.detail[0]).toMatchObject({ username: "SYNTHETIC-USERNAME", api_key: "SYNTHETIC-API-KEY", destination_code: "JKT", expresstype: "1" });
