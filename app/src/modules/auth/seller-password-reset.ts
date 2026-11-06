@@ -55,8 +55,26 @@ export async function deliverSellerReset(email: string, id: string) {
   const text = `Halo,\n\nKode reset password akun seller Buattokoonline Anda: ${code}\nBerlaku selama lima menit. Jika Anda tidak meminta reset, abaikan email ini.\n\nTim Buattokoonline`;
   await sendResendEmail(recipient, "Kode Verifikasi Reset Password â€” Buattokoonline", text,
     `<main style="max-width:420px;margin:auto;padding:24px;font:16px system-ui;color:#111;background:#fff"><h1>Buattokoonline</h1><p>Gunakan kode berikut untuk mengatur ulang password akun seller Anda.</p><p style="font-size:32px;font-weight:bold;letter-spacing:.2em">${code}</p><p>Kode berlaku selama lima menit. Abaikan email ini jika Anda tidak meminta reset.</p></main>`, config);
-  await prisma.passwordResetToken.updateMany({ where: { id, usedAt: null }, data: { expiresAt: new Date(Date.now() + ttl) } });
-  console.info("auth.seller_reset.otp_sent");
+  // An accepted email is not a usable OTP until activation is persisted.
+  // Retry a transient DB failure, while keeping the reserved code expired until success.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const activated = await prisma.passwordResetToken.updateMany({
+        where: { id, usedAt: null, token: sellerOtpDigest(id, code) },
+        data: { expiresAt: new Date(Date.now() + ttl) },
+      });
+      if (activated.count !== 1) {
+        throw new HttpError("Kode OTP tidak dapat diaktifkan. Coba kirim ulang nanti.", 503);
+      }
+      console.info("auth.seller_reset.otp_sent");
+      return;
+    } catch (error) {
+      if (attempt === 1 || error instanceof HttpError) {
+        console.warn("auth.seller_reset.otp_activation_failed");
+        throw error;
+      }
+    }
+  }
 }
 
 const invalid = () => new HttpError("Kode salah, belum terkirim, atau kedaluwarsa. Periksa email atau kirim ulang.", 400);
