@@ -21,17 +21,17 @@ export default async function AdminDashboard() {
   return <Suspense fallback={<OperationsSkeleton />}><DashboardContent user={user} /></Suspense>;
 }
 
-const panel = "rounded-2xl border border-zinc-200/80 bg-white shadow-[0_3px_24px_rgba(18,18,18,0.025)]";
+const panel = "rounded-xl border border-zinc-200/80 bg-white shadow-[0_3px_24px_rgba(18,18,18,0.025)]";
 const idNumber = (n: number) => new Intl.NumberFormat("id-ID").format(n);
 
-function Metric({ label, value, description, href, tone, icon, testId, compactValue = false }: {
+function Metric({ label, value, description, href, icon, testId, compactValue = false }: {
   label: string; value: string | number; description: ReactNode; href: string;
-  tone: string; icon: ReactNode; testId: string; compactValue?: boolean;
+  icon: ReactNode; testId: string; compactValue?: boolean;
 }) {
   return (
     <Link href={href} prefetch={false} className={`${panel} group relative block min-w-0 px-4 py-4 transition hover:-translate-y-0.5 hover:border-zinc-300 hover:shadow-md sm:px-5 sm:py-5`}>
       <div className="flex min-h-14 items-center gap-2 pr-6 sm:min-h-12">
-        <span className={`grid size-9 shrink-0 place-items-center rounded-xl ${tone}`}>{icon}</span>
+        <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-zinc-100 text-zinc-800">{icon}</span>
         <span className="min-w-0 flex-1 break-words text-[11px] font-medium leading-tight text-zinc-700 sm:text-sm">{label}</span>
       </div>
       <span className="absolute right-3 top-5 grid size-7 place-items-center rounded-full bg-zinc-50 text-zinc-500 transition group-hover:translate-x-0.5 group-hover:bg-zinc-100" aria-hidden="true"><ChevronRight size={15}/></span>
@@ -54,7 +54,7 @@ function SalesPanel({ amount, count }: { amount: number; count: number }) {
         <svg aria-hidden="true" className="absolute inset-0 h-full w-full" viewBox="0 0 750 190" preserveAspectRatio="none">
           {[23,64,105,146,187].map(y => <line key={y} x1="0" x2="750" y1={y} y2={y} stroke="#e8e8e8" strokeDasharray="4 5" strokeWidth="1"/>)}
           {[0,125,250,375,500,625,750].map(x => <line key={x} x1={x} x2={x} y1="0" y2="190" stroke="#f2f2f2" strokeDasharray="4 6" />)}
-          <path d="M0 186 L750 186" fill="none" stroke="#ed4a58" strokeWidth="2" strokeLinecap="round"/>
+          <path d="M0 186 L750 186" fill="none" stroke="#52525b" strokeWidth="2" strokeLinecap="round"/>
         </svg>
         <div className="relative z-10 max-w-xs rounded-xl bg-white/95 px-5 py-4 text-center shadow-sm backdrop-blur-sm">
           <BarChart3 className="mx-auto mb-2 text-zinc-400" size={23}/>
@@ -70,8 +70,8 @@ function OrderSummary({ pending, processing }: { pending: number; processing: nu
   return <section className={`${panel} p-5`}>
     <div className="mb-4 flex items-center justify-between"><h2 className="text-lg font-bold tracking-tight">Ringkasan pesanan</h2><Link href="/admin/orders" className="text-xs underline underline-offset-4">Lihat semua</Link></div>
     <ul className="space-y-1 text-[13px]">
-      <li className="flex items-center gap-3 rounded-xl bg-red-50/60 px-3 py-2.5 text-zinc-700"><Clock3 size={19} className="text-red-500"/><span className="flex-1">Menunggu pembayaran</span><strong className="font-semibold">{idNumber(pending)}</strong></li>
-      <li className="flex items-center gap-3 border-b border-zinc-100 px-3 py-2.5 text-zinc-700"><Package size={19} className="text-blue-600"/><span className="flex-1">Diproses</span><strong className="font-semibold">{idNumber(processing)}</strong></li>
+      <li className="flex items-center gap-3 rounded-xl bg-zinc-100 px-3 py-2.5 text-zinc-700"><Clock3 size={19} className="text-zinc-700"/><span className="flex-1">Menunggu pembayaran</span><strong className="font-semibold">{idNumber(pending)}</strong></li>
+      <li className="flex items-center gap-3 border-b border-zinc-100 px-3 py-2.5 text-zinc-700"><Package size={19} className="text-zinc-700"/><span className="flex-1">Diproses</span><strong className="font-semibold">{idNumber(processing)}</strong></li>
       <li className="flex items-center gap-3 px-3 py-2.5 text-zinc-500"><CircleHelp size={19}/><span className="flex-1">Status pesanan lainnya</span><Link href="/admin/orders" className="text-xs underline">Lihat</Link></li>
     </ul>
   </section>;
@@ -84,12 +84,12 @@ function StockOverview({ available, reserved, variants }: { available: number; r
   return <section className={`${panel} p-5`}>
     <div className="flex items-center justify-between gap-3"><h2 className="text-lg font-bold">Stok produk</h2><Link href="/admin/inventory" className="text-xs underline underline-offset-4">Lihat semua</Link></div>
     <div className="mt-4 flex items-center justify-between gap-5">
-      <div className="relative grid size-32 shrink-0 place-items-center rounded-full p-3" style={{ background: `conic-gradient(#22c55e 0% ${percent}%, #eab308 ${percent}% 100%)` }}>
+      <div className="relative grid size-32 shrink-0 place-items-center rounded-full p-3" style={{ background: `conic-gradient(#27272a 0% ${percent}%, #a1a1aa ${percent}% 100%)` }}>
         <div className="grid size-full place-content-center rounded-full bg-white text-center"><strong className="text-lg font-bold">{idNumber(available)}</strong><span className="text-[10px] text-zinc-500">Stok tersedia</span></div>
       </div>
       <dl className="min-w-0 flex-1 space-y-3 text-xs">
-        <div className="flex items-center gap-2"><span className="size-2.5 rounded-full bg-green-500"/><dt className="flex-1 text-zinc-600">Tersedia</dt><dd className="font-semibold">{idNumber(available)}</dd></div>
-        <div className="flex items-center gap-2"><span className="size-2.5 rounded-full bg-yellow-400"/><dt className="flex-1 text-zinc-600">Direservasi</dt><dd className="font-semibold">{idNumber(reserved)}</dd></div>
+        <div className="flex items-center gap-2"><span className="size-2.5 rounded-full bg-zinc-800"/><dt className="flex-1 text-zinc-600">Tersedia</dt><dd className="font-semibold">{idNumber(available)}</dd></div>
+        <div className="flex items-center gap-2"><span className="size-2.5 rounded-full bg-zinc-400"/><dt className="flex-1 text-zinc-600">Direservasi</dt><dd className="font-semibold">{idNumber(reserved)}</dd></div>
         <div className="flex items-center gap-2"><span className="size-2.5 rounded-full bg-zinc-300"/><dt className="flex-1 text-zinc-600">Varian</dt><dd className="font-semibold">{idNumber(variants)}</dd></div>
       </dl>
     </div>
@@ -128,10 +128,10 @@ async function DashboardContent({ user }: { user: AuthUser }) {
           <span className="ml-auto inline-flex min-h-10 items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 text-xs text-zinc-700"><CalendarDays size={16}/> Semua waktu</span>
         </div>
         <div className="grid grid-cols-2 gap-3 md:gap-4 xl:grid-cols-4">
-          {data.products && <Metric label="Produk" value={idNumber(data.products.total)} description={<>{data.products.published} terbit · {data.products.drafts} draft · {data.products.archived} arsip</>} href="/admin/products" tone="bg-blue-50 text-blue-600" icon={<Package size={22}/>} testId="dashboard-products"/>}
-          {data.inventory && <Metric label="Stok tersedia" value={idNumber(data.inventory.available)} description={<>{data.inventory.reserved} direservasi · {data.inventory.variants} varian</>} href="/admin/inventory" tone="bg-green-50 text-green-600" icon={<Boxes size={22}/>} testId="dashboard-stock"/>}
-          {data.orders && <Metric label="Pesanan" value={idNumber(data.orders.total)} description={<>{data.orders.pending} menunggu pembayaran<br/>{data.orders.processing} diproses</>} href="/admin/orders" tone="bg-red-50 text-red-600" icon={<ShoppingBag size={22}/>} testId="dashboard-orders"/>}
-          {data.sales && <Metric label="Penjualan dibayar" value={formatIDR(data.sales.amount)} description={<>{data.sales.count} pesanan dengan pembayaran PAID</>} href="/admin/payments" tone="bg-violet-50 text-violet-700" icon={<Wallet size={22}/>} testId="dashboard-sales" compactValue/>}
+          {data.products && <Metric label="Produk" value={idNumber(data.products.total)} description={<>{data.products.published} terbit · {data.products.drafts} draft · {data.products.archived} arsip</>} href="/admin/products" icon={<Package size={22}/>} testId="dashboard-products"/>}
+          {data.inventory && <Metric label="Stok tersedia" value={idNumber(data.inventory.available)} description={<>{data.inventory.reserved} direservasi · {data.inventory.variants} varian</>} href="/admin/inventory" icon={<Boxes size={22}/>} testId="dashboard-stock"/>}
+          {data.orders && <Metric label="Pesanan" value={idNumber(data.orders.total)} description={<>{data.orders.pending} menunggu pembayaran<br/>{data.orders.processing} diproses</>} href="/admin/orders" icon={<ShoppingBag size={22}/>} testId="dashboard-orders"/>}
+          {data.sales && <Metric label="Penjualan dibayar" value={formatIDR(data.sales.amount)} description={<>{data.sales.count} pesanan dengan pembayaran PAID</>} href="/admin/payments" icon={<Wallet size={22}/>} testId="dashboard-sales" compactValue/>}
         </div>
       </section>
 

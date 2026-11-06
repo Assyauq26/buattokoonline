@@ -22,7 +22,7 @@ const config: Config = {
         line: "#E5E5E5",
         background: "#FFFFFF",
         foreground: "#111418",
-        primary: { DEFAULT: "#E1251B", foreground: "#FFFFFF" },
+        primary: { DEFAULT: "rgb(var(--ui-primary-rgb, 225 37 27) / <alpha-value>)", foreground: "#FFFFFF" },
         secondary: { DEFAULT: "#F7F7F8", foreground: "#111418" },
         muted: { DEFAULT: "#F7F7F8", foreground: "#666666" },
         destructive: { DEFAULT: "#DC2626", foreground: "#FFFFFF" },
