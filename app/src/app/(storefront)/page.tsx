@@ -21,7 +21,7 @@ export default async function HomePage() {
     await Promise.all([
       listCategories(),
       listProducts({ featured: true, pageSize: 4, includeTotal: false }),
-      listProducts({ pageSize: 12, includeTotal: false }),
+      listProducts({ sort: "newest", pageSize: 8, includeTotal: false }),
       wishIdsPromise,
       listProducts({ flashSale: true, pageSize: 1, includeTotal: false }),
       getPublishedHero(),
@@ -34,10 +34,6 @@ export default async function HomePage() {
   // an empty section when the catalog itself is populated.
   const featuredItems =
     featured.items.length > 0 ? featured.items : latest.items.slice(0, 4);
-  const featuredIds = new Set(featuredItems.map((p) => p.id));
-  const recommendedItems = latest.items
-    .filter((p) => !featuredIds.has(p.id))
-    .slice(0, 8);
 
   // Zero published versions keep the existing banners until the first Publish.
   const slides =
@@ -104,10 +100,10 @@ export default async function HomePage() {
         </div>
       </section>
 
-      <section>
-        <SectionHeader title="Rekomendasi untukmu" href="/shop" />
+      {latest.items.length > 0 && <section>
+        <SectionHeader title="Produk Terbaru" href="/shop?sort=newest" />
         <div className="product-listing-grid grid grid-cols-2 gap-x-4 gap-y-6 md:grid-cols-4">
-          {recommendedItems.map((p) => (
+          {latest.items.map((p) => (
             <ProductCard
               key={p.id}
               product={toCardData(p)}
@@ -115,7 +111,7 @@ export default async function HomePage() {
             />
           ))}
         </div>
-      </section>
+      </section>}
     </div>
   );
 }
