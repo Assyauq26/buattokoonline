@@ -25,6 +25,7 @@ const links = [
   { href: "/admin/integrations/jnt", label: "Integrasi J&T Express", icon: PlugZap, permission: null },
   { href: "/admin/bank-accounts", label: "Rekening Bank", icon: Landmark, permission: PERMISSIONS.BANK_MANAGE },
   { href: "/admin/audit", label: "Audit Log", icon: ScrollText, permission: PERMISSIONS.AUDIT_READ },
+  { href: "/admin/updates", label: "Update Versi", icon: Package, permission: PERMISSIONS.AUDIT_READ },
 ] as const;
 
 function allowed(permissions: string[], item: (typeof links)[number], canManageJnt: boolean) {

@@ -311,6 +311,8 @@ def main():
     if JOURNAL.exists() and core.read_json(JOURNAL)['status'] in ['updating', 'failed']:
         raise core.StoreError('Update terputus. Jalankan --recover sebelum memeriksa versi baru.')
     installed = installed_version()
+    if installed.get('channel') == 'hubify-development':
+        raise core.StoreError('Hubify memakai jalur deployment operator, bukan updater rilis stabil.')
     print('Versi terpasang: ' + installed['version'])
     fixture = None
     if args.fixture:

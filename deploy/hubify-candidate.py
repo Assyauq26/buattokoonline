@@ -39,6 +39,8 @@ def main():
     new = copy.deepcopy(old)
     new["services"]["app"]["build"] = {"context": str(source / "app"), "target": "runtime"}
     new["services"]["app"]["image"] = "single-store-app:hubify-candidate-" + sha[:12]
+    new["services"]["app"].setdefault("environment", {}).update(
+        STORE_INSTALLED_VERSION=installed["version"], STORE_UPDATE_CHANNEL="hubify-development", STORE_BUILD_SHA=sha)
     candidate = source / "compose.candidate.json"
     core.atomic_json(candidate, new)
     print("Building exact candidate " + sha, flush=True)

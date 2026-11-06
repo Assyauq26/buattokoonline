@@ -1,8 +1,13 @@
 # Release dan update lokal
 
-Pemilik toko menjalankan `sudo bash update.sh --check`, lalu `--apply` dengan versi
-yang ditampilkan. Tidak ada cron pemeriksa versi, tombol update palsu, remote control,
-atau pengiriman kredensial toko. Semua request updater adalah metadata/asset publik
+Menu **Update Versi** di dashboard admin menampilkan versi dari konfigurasi container.
+Tombol **Periksa rilis** membaca metadata publik GitHub; kompatibilitas paket baru
+diverifikasi oleh updater VPS. Jika metadata versi belum tersedia (misalnya saat
+pertama diperbarui melalui updater lama), cek versi melalui SSH.
+Pemilik toko menjalankan `sudo bash /opt/single-store/manager/update.sh --check`,
+lalu `--apply --version X.Y.Z` dengan versi yang sudah diperiksa.
+Hubify menampilkan jalur pengembangan dan commit aktif; operator memakai deploy kandidat.
+Semua request updater adalah metadata/asset publik
 GitHub; tidak memerlukan akun platform atau token GitHub seller.
 
 Sumber resmi dipatok ke `Assyauq26/buattokoonline`, repository ID `1446326256`.

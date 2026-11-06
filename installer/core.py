@@ -74,6 +74,12 @@ def inventory(source):
 
 def compose_for(source, image='installed'):
     config = json.loads((ROOT / 'manager/compose-base.json').read_text())
+    version_file = Path(source) / 'VERSION'
+    if not version_file.is_file() and Path(source) == ROOT:
+        version_file = ROOT / 'manager/VERSION'
+    if version_file.is_file():
+        config['services']['app'].setdefault('environment', {}).update(
+            STORE_INSTALLED_VERSION=version_file.read_text().strip(), STORE_UPDATE_CHANNEL='stable')
     for name, target in [('app', 'runtime'), ('tools', 'tools')]:
         config['services'][name]['build'] = {'context': str(Path(source) / 'app'), 'target': target}
         config['services'][name]['image'] = 'single-store-' + name + ':' + image
