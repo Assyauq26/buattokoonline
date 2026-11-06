@@ -290,7 +290,7 @@
 
 @media (max-width: 767px) {
   .storefront-root .product-card-flash { margin-bottom: 0; }
-  .storefront-root .product-card-purchase { margin-top: 0; }
+  .storefront-root .product-card-purchase { margin-top: 2px; }
   .storefront-root .featured-card-track .product-card-purchase { padding-top: 2px; min-height: 0; }
   .storefront-root .product-card-price { min-height: 0; }
 }

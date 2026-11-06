@@ -133,6 +133,15 @@
 .storefront-root .store-home .featured-card-track .product-card-body { flex: 1; }
 .product-card-flash-label { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; color: var(--store-primary, #171717); }
 .product-card-flash-label svg { flex-shrink: 0; }
+@media (max-width: 767px) {
+  /* Keep the cart level with the selling price when the old price sits below it. */
+  .storefront-root .home-latest .product-card-purchase:has(.product-card-original) { align-items: start; }
+  .storefront-root .home-latest .product-card-prices:has(.product-card-original) {
+    flex-flow: column nowrap;
+    align-items: flex-start;
+  }
+  .home-latest .product-card-purchase:has(.product-card-original) > button { align-items: flex-start; }
+}
 @media (min-width: 1024px) {
   .store-home .home-latest .product-card-body { min-width: 0; }
   .store-home .home-latest .product-card-prices { flex-direction: column; align-items: flex-start; }
