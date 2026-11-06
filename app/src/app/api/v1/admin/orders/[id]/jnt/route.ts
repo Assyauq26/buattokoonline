@@ -11,8 +11,6 @@ export const dynamic = "force-dynamic";
 const input = z.discriminatedUnion("action", [
   z.object({
     action: z.literal("create"),
-    pickupStart: z.string().max(25),
-    pickupEnd: z.string().max(25),
   }).strict(),
   z.object({ action: z.literal("handover") }).strict(),
   z.object({ action: z.literal("cancel") }).strict(),
@@ -33,7 +31,7 @@ export async function POST(req: Request, context: {params: Promise<{id:string}>}
     const permission = body.action === "track" ? PERMISSIONS.SHIPPING_READ :
       body.action === "create" ? PERMISSIONS.SHIPPING_CREATE : PERMISSIONS.SHIPPING_UPDATE;
     const actor = await requirePermission(permission);
-    const data = body.action === "create" ? await createJntAwb(id,actor.id,body) :
+    const data = body.action === "create" ? await createJntAwb(id,actor.id) :
       body.action === "deliver" ? await confirmJntDelivery(id,actor.id,body) :
       body.action === "cancel" ? await cancelJntAwb(id,actor.id) :
       body.action === "handover" ? await handoverJntPackage(id,actor.id) :

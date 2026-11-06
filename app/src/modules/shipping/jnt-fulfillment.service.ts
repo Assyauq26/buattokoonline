@@ -35,18 +35,6 @@ function wib(value: Date) {
     hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23",
   }).format(value);
 }
-function pickupWindow(start: string, end: string) {
-  // OperationForm serializes datetime-local to an absolute ISO instant.
-  const regex = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/;
-  if (!regex.test(start) || !regex.test(end)) throw new HttpError("Jadwal pickup tidak valid", 422);
-  const a = new Date(start), b = new Date(end);
-  const now = Date.now();
-  if (!Number.isFinite(+a) || !Number.isFinite(+b) || +a < now + 60_000 ||
-      +a > now + 7 * 86400_000 || +b <= +a || +b - +a > 12 * 3600_000) {
-    throw new HttpError("Jadwal pickup harus di masa depan (maks. 7 hari, durasi 12 jam)", 422);
-  }
-  return { start: wib(a), end: wib(b) };
-}
 function warehouse(config: JntConfig) {
   const sender = config.seller!.warehouse;
   const name=sender.name, contact=sender.contact,
@@ -63,13 +51,12 @@ const payloadHash=(v:unknown)=>createHash("sha256").update(JSON.stringify(v)).di
 type Tx=Prisma.TransactionClient;
 
 /** Reserve intent transactionally BEFORE contacting J&T. Never automatically retry UNKNOWN. */
-export async function createJntAwb(orderId: string, actorId: string, input: {pickupStart:string;pickupEnd:string}) {
+export async function createJntAwb(orderId: string, actorId: string) {
   requireFlag("JNT_ENABLE_ORDER_CREATE");
   if(process.env.JNT_API_ENV==="production") {
     requireFlag("JNT_PRODUCTION_ORDER_APPROVED");
     requireFlag("JNT_PRODUCTION_API_APPROVED");
   }
-  const window=pickupWindow(input.pickupStart,input.pickupEnd);
   const prepared=await prisma.$transaction(async tx=>{
     await assertStaffPermission(tx,actorId,PERMISSIONS.SHIPPING_CREATE);
     await lockOrder(tx,orderId);
@@ -100,6 +87,10 @@ export async function createJntAwb(orderId: string, actorId: string, input: {pic
     if(order.address.postalCode && !/^\d{5}$/.test(order.address.postalCode))throw new HttpError("Kode pos tidak valid",422);
     const address=[order.address.line,order.address.village,order.address.district,order.address.city,order.address.province]
       .filter(Boolean).join(", ");
+    // Required J&T transport fields are generated in WIB, not entered by staff.
+    const requestTime=new Date();
+    const pickupStart=new Date(+requestTime+5*60_000);
+    const pickupEnd=new Date(+pickupStart+12*3600_000);
     const values={
       ...sender,orderid:externalId(orderId),
       receiver_name:order.address.recipientName,receiver_phone:phoneNumber(order.address.phone),
@@ -109,8 +100,8 @@ export async function createJntAwb(orderId: string, actorId: string, input: {pic
       destination_code:mapped.destinationCityCode,receiver_area:mapped.receiverArea,
       qty,weight:Math.ceil(order.shippingWeightGram/10)/100,
       goodsdesc:"BARANG",servicetype:1 as const,insurance:0,
-      orderdate:wib(new Date()),item_name:text(order.items[0].productName.slice(0,50),50),
-      cod:0,sendstarttime:window.start,sendendtime:window.end,
+      orderdate:wib(requestTime),item_name:text(order.items[0].productName.slice(0,50),50),
+      cod:0,sendstarttime:wib(pickupStart),sendendtime:wib(pickupEnd),
       expresstype:order.shippingService as "EZ" | "HBO" | "JND" | "JSD",goodsvalue:order.subtotal,
     };
     // Reject all deterministic request errors BEFORE reserving an external dispatch intent.

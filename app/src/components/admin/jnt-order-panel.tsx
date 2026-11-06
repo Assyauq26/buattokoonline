@@ -44,12 +44,10 @@ export function JntOrderPanel(props:{
     </div>
     {canIssue&&<OperationForm
       url={"/api/v1/admin/orders/"+props.orderId+"/jnt"}
-      label="Buat resi resmi J&T"
-      confirmation="Anda akan mengirim request pembuatan resi ke sistem resmi J&T. Pastikan pesanan lunas, paket siap, alamat gudang dan penerima benar, serta jadwal pickup telah disetujui. Jika respons tidak pasti, jangan mengulangi."
+      label="Buat Resi"
+      confirmation="Anda akan mengirim request pembuatan resi ke sistem resmi J&T. Pastikan pesanan lunas, paket siap, alamat gudang dan penerima benar, dan data paket sudah sesuai. Jika respons tidak pasti, jangan mengulangi."
       fields={[
         {name:"action",label:"Aksi",type:"hidden",value:"create"},
-        {name:"pickupStart",label:"Mulai pickup (waktu perangkat)",type:"datetime-local",required:true},
-        {name:"pickupEnd",label:"Selesai pickup (waktu perangkat)",type:"datetime-local",required:true},
       ]}
     />}
     {props.canRead&&props.awb&&props.requestState==="SUCCEEDED"&&
