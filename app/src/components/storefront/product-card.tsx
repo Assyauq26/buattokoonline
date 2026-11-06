@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+import { Tag } from "lucide-react";
 import { FlashSaleTimer } from "./flash-sale-timer";
 import type { CampaignClock } from "@/modules/promotions/campaign.validation";
 import Link from "@/components/ui/navigation";
@@ -24,12 +26,17 @@ export interface ProductCardData {
   flashCampaign?: CampaignClock | null;
 }
 
+function NaturalCardPrices({ children }: { children: ReactNode }) {
+  return <div className="product-card-prices min-w-0">{children}</div>;
+}
+
 export function ProductCard({
   product,
   wishlisted = false,
   compact = false,
   featured = false,
   homeFeatured = false,
+  homeLatest = false,
   preview = false,
 }: {
   product: ProductCardData;
@@ -38,8 +45,10 @@ export function ProductCard({
   /** Product Pilihan uses a simplified card with no wishlist/add-to-cart actions. */
   featured?: boolean;
   homeFeatured?: boolean;
+  homeLatest?: boolean;
   preview?: boolean;
 }) {
+  const PriceContainer = homeFeatured || homeLatest ? NaturalCardPrices : FittedCardPrices;
   const price = effectivePrice(product.basePrice, product.salePrice);
   const pct = discountPercent(product.basePrice, product.salePrice);
   const priceLayout = pct > 0 ? "inline" : "single";
@@ -47,7 +56,8 @@ export function ProductCard({
   return (
     <article
       data-theme-target="highlightCard"
-      data-featured={featured || homeFeatured || undefined}
+      data-featured={featured || undefined}
+      data-home-card={homeFeatured || homeLatest || undefined}
       data-price-layout={priceLayout}
       data-wide-price={
         (!featured &&
@@ -84,13 +94,7 @@ export function ProductCard({
           {pct > 0 && !compact && (
             <div className="absolute left-2 top-2 z-10">
               <Badge variant="sale">{pct}%</Badge>
-              {product.flashCampaign && (
-                <div className="mt-1">
-                  <Badge variant="muted" className="px-1.5 text-[10px]">
-                    Flash Sale
-                  </Badge>
-                </div>
-              )}
+
             </div>
           )}
         </div>
@@ -115,12 +119,13 @@ export function ProductCard({
         </Link>
 
         {product.flashCampaign && (
-          <div className="my-1">
+          <div className="product-card-flash my-1">
+            <span className="product-card-flash-label"><Tag size={13} aria-hidden="true" />Flash Sale</span>
             <FlashSaleTimer campaign={product.flashCampaign} inline />
           </div>
         )}
         <div className="product-card-purchase mt-2 min-w-0">
-          <FittedCardPrices>
+          <PriceContainer>
             <span
               data-theme-role="price"
               data-discount={pct > 0}
@@ -133,8 +138,8 @@ export function ProductCard({
                 {formatIDR(product.basePrice)}
               </span>
             )}
-          </FittedCardPrices>
-          {!featured && !preview && (
+          </PriceContainer>
+          {!featured && !homeLatest && !preview && (
             <QuickAddButton
               slug={product.slug}
               testId={product.variantId ?? product.id}
