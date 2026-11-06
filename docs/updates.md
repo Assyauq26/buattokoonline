@@ -20,10 +20,17 @@ digest bukan tanda tangan independen yang melindungi dari akun penerbit yang dib
 
 ## Menerbitkan versi
 
+**Upgrade v1.0.0 → v1.1.0:** updater otomatis menghentikan pemasangan jika
+migrasi `20261105100000_shipping_settings` belum tercatat. Migrasi ini menyiapkan
+tabel pengaturan J&T, foreign key, dan menyalin konfigurasi aktif. Operator perlu
+menyiapkan backup serta memeriksa migrasi dan hasil restore pada salinan toko
+sebelum menjadwalkan upgrade instalasi lama. Instalasi baru menggunakan migrasi
+normal saat setup. Jangan menjalankan bootstrap ulang untuk meng-upgrade toko.
+
 Adaptasi perubahan source utama secara selektif; jangan mengimpor database, seed,
 secret, foto, platform atau riwayat produksi. Naikkan `VERSION` menjadi semver stabil,
 review `release-policy.json`, jalankan CI lengkap, lalu buat tag yang cocok.
-Workflow `release.yml` membuat **draft** GitHub Release dari file tracked beserta
+Workflow `release.yml` dapat dijalankan manual pada tag yang cocok untuk membuat **draft** GitHub Release dari file tracked beserta
 manifest checksum/migrasi. Pemilik melakukan review terakhir sebelum menerbitkan
 release stabil. Draft/prerelease tidak diterima updater. Tidak ada release stabil
 yang diterbitkan otomatis oleh pekerjaan implementasi ini.
