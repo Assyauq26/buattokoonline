@@ -81,6 +81,31 @@ it("leaves an undelivered code expired and never mails an ineligible account", a
   expect(db.updateMany).toHaveBeenCalledTimes(1);
 });
 
+it("retries a transient DB activation failure after email acceptance", async () => {
+  db.recovery.mockResolvedValue(user);
+  db.findSeller.mockResolvedValue(user);
+  db.findFirst.mockResolvedValue(null);
+  // First update consumes old challenges; next two attempts activate the emailed code.
+  db.updateMany.mockResolvedValueOnce({ count: 0 })
+    .mockRejectedValueOnce(new Error("temporary DB failure"))
+    .mockResolvedValueOnce({ count: 1 });
+  await expect(deliverSellerReset(user.email, id)).resolves.toBeUndefined();
+  expect(db.mail).toHaveBeenCalledTimes(1);
+  expect(db.updateMany).toHaveBeenCalledTimes(3);
+  expect(db.create.mock.calls[0][0].data.expiresAt.getTime()).toBeLessThanOrEqual(Date.now());
+});
+
+it("reports an unactivated OTP instead of claiming successful delivery", async () => {
+  db.recovery.mockResolvedValue(user);
+  db.findSeller.mockResolvedValue(user);
+  db.findFirst.mockResolvedValue(null);
+  db.updateMany.mockResolvedValueOnce({ count: 0 }).mockResolvedValueOnce({ count: 0 });
+  await expect(deliverSellerReset(user.email, id)).rejects.toMatchObject({ status: 503 });
+  expect(db.mail).toHaveBeenCalledTimes(1);
+  expect(db.updateMany).toHaveBeenCalledTimes(2);
+  expect(db.create.mock.calls[0][0].data.expiresAt.getTime()).toBeLessThanOrEqual(Date.now());
+});
+
 it("hashes the new password and revokes sessions and outstanding grants in one transaction", async () => {
   db.updateUser.mockResolvedValue(user);
   await expect(completeSellerReset("a".repeat(64), "passphrase yang panjang")).resolves.toBe(user.email);
