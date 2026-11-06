@@ -288,6 +288,12 @@
 
 .storefront-root .product-card-prices:not(:has(.product-card-original)) {justify-content:flex-start;}
 
+.storefront-root .product-card-prices[data-stacked-prices] { flex-direction: column; align-items: flex-start; }
+.storefront-root .product-card-prices[data-stacked-prices] .product-card-original { order: -1; }
+.storefront-root .product-card-prices[data-stacked-prices] .product-card-price { min-height: 0; }
+.storefront-root .product-card-purchase:has(> [data-stacked-prices]) { align-items: end; }
+.storefront-root .product-card-purchase:has(> button) > [data-stacked-prices] .product-card-price { min-height: 2.75rem; }
+
 @media (max-width: 767px) {
   .storefront-root .product-card-flash { margin-bottom: 0; }
   .storefront-root .product-card-purchase { margin-top: 2px; }

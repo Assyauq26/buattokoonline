@@ -32,3 +32,14 @@ it('can grow again when space becomes available',()=>{
   vi.spyOn(row,'getBoundingClientRect').mockImplementation(()=>({width:200} as DOMRect));
   fitCardPrices(row);expect(row.style.getPropertyValue('--product-price-scale')).toBe('1');
 });
+it('stacks a long discount before type gets too small and returns to inline when it fits', () => {
+  const row = layout(100, [90, 60]);
+  fitCardPrices(row, true);
+  expect(row.hasAttribute('data-stacked-prices')).toBe(true);
+  expect(row.style.getPropertyValue('--product-price-scale')).toBe('1');
+
+  vi.spyOn(row, 'getBoundingClientRect').mockReturnValue({width: 140} as DOMRect);
+  fitCardPrices(row, true);
+  expect(row.hasAttribute('data-stacked-prices')).toBe(false);
+  expect(Number(row.style.getPropertyValue('--product-price-scale'))).toBeGreaterThan(.8);
+});

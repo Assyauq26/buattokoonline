@@ -2,13 +2,13 @@
 import { useLayoutEffect, useRef, type ReactNode } from "react";
 import { fitCardPrices } from "./fit-card-prices.mjs";
 
-export function FittedCardPrices({ children }: { children: ReactNode }) {
+export function FittedCardPrices({ children, longDiscount }: { children: ReactNode; longDiscount: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
     const row = ref.current;
     if (!row) return;
     let disposed = false, frame = 0, lastWidth = -1;
-    const fit = () => { if (!disposed) fitCardPrices(row); };
+    const fit = () => { if (!disposed) fitCardPrices(row, longDiscount); };
     const schedule = () => {
       if (disposed) return;
       cancelAnimationFrame(frame);
@@ -35,6 +35,6 @@ export function FittedCardPrices({ children }: { children: ReactNode }) {
       theme.disconnect();
       document.fonts?.removeEventListener("loadingdone", schedule);
     };
-  }, [children]);
+  }, [children, longDiscount]);
   return <div ref={ref} className="product-card-prices min-w-0">{children}</div>;
 }

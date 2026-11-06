@@ -1,4 +1,3 @@
-import type { ReactNode } from "react";
 import { Tag } from "lucide-react";
 import { FlashSaleTimer } from "./flash-sale-timer";
 import type { CampaignClock } from "@/modules/promotions/campaign.validation";
@@ -26,17 +25,12 @@ export interface ProductCardData {
   flashCampaign?: CampaignClock | null;
 }
 
-function NaturalCardPrices({ children }: { children: ReactNode }) {
-  return <div className="product-card-prices min-w-0">{children}</div>;
-}
-
 export function ProductCard({
   product,
   wishlisted = false,
   compact = false,
   featured = false,
   homeFeatured = false,
-  homeLatest = false,
   preview = false,
 }: {
   product: ProductCardData;
@@ -45,10 +39,8 @@ export function ProductCard({
   /** Product Pilihan uses a simplified card with no wishlist/add-to-cart actions. */
   featured?: boolean;
   homeFeatured?: boolean;
-  homeLatest?: boolean;
   preview?: boolean;
 }) {
-  const PriceContainer = homeFeatured || homeLatest ? NaturalCardPrices : FittedCardPrices;
   const price = effectivePrice(product.basePrice, product.salePrice);
   const pct = discountPercent(product.basePrice, product.salePrice);
   const priceLayout = pct > 0 ? "inline" : "single";
@@ -57,7 +49,6 @@ export function ProductCard({
     <article
       data-theme-target="highlightCard"
       data-featured={featured || undefined}
-      data-home-card={homeFeatured || homeLatest || undefined}
       data-price-layout={priceLayout}
       data-wide-price={
         (!featured &&
@@ -125,7 +116,7 @@ export function ProductCard({
           </div>
         )}
         <div className="product-card-purchase mt-2 min-w-0">
-          <PriceContainer>
+          <FittedCardPrices longDiscount={pct > 0 && product.basePrice >= 1_000_000}>
             <span
               data-theme-role="price"
               data-discount={pct > 0}
@@ -138,7 +129,7 @@ export function ProductCard({
                 {formatIDR(product.basePrice)}
               </span>
             )}
-          </PriceContainer>
+          </FittedCardPrices>
           {!featured && !homeFeatured && !preview && (
             <QuickAddButton
               slug={product.slug}

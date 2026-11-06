@@ -108,7 +108,6 @@ export default async function HomePage() {
           {latest.items.map((p) => (
             <ProductCard
               key={p.id}
-              homeLatest
               product={toCardData(p)}
               wishlisted={wl.has(p.id)}
             />
