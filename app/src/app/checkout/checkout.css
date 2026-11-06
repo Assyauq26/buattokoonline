@@ -108,15 +108,15 @@
 .checkout-shell.storefront-root[data-theme-active="true"] .region-page button.region-back,
 .checkout-shell.storefront-root[data-theme-active="true"] .region-selection-heading button,
 .checkout-shell .region-page button.region-back,
-.checkout-shell .region-selection-heading button { border: 0; border-radius: 0; box-shadow: none; background: transparent; padding: 0; color: #c71920; font-weight: 700; }
+.checkout-shell .region-selection-heading button { border: 0; border-radius: 0; box-shadow: none; background: transparent; padding: 0; color: var(--store-primary, #111111); font-weight: 700; }
 .checkout-shell .region-page button.region-back { display: grid; place-items: center; min-width: 32px; min-height: 36px; }
 .checkout-shell .region-selection { display: grid; gap: 6px; }
 .checkout-shell.storefront-root[data-theme-active="true"] .region-selection button,
 .checkout-shell .region-selection button { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px; text-align: left; border: 1px solid #ddd; border-radius: 10px; background: transparent; box-shadow: none; font-weight: 600; }
 .checkout-shell.storefront-root[data-theme-active="true"] .region-selection button[aria-current],
-.checkout-shell .region-selection button[aria-current] { border-color: #c71920; }
+.checkout-shell .region-selection button[aria-current] { border-color: var(--store-primary, #111111); }
 .checkout-shell.storefront-root[data-theme-active="true"] .region-selection-dot,
-.checkout-shell .region-selection-dot { width: 14px; height: 14px; flex-shrink: 0; border: 4px solid #c71920; border-radius: 50%; }
+.checkout-shell .region-selection-dot { width: 14px; height: 14px; flex-shrink: 0; border: 4px solid var(--store-primary, #111111); border-radius: 50%; }
 .checkout-shell .region-list-title { font-size: 17px; font-weight: 700; margin-top: 22px; margin-bottom: 8px; }
 .checkout-shell .region-page .region-options { max-height: none; overflow: visible; border: 0; padding: 0; }
 .checkout-shell.storefront-root[data-theme-active="true"] .region-page .region-option,
