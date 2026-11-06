@@ -1,4 +1,10 @@
+.store-home, .home-products { grid-template-columns: minmax(0, 1fr); }
 .home-products { display: grid; gap: 24px; }
+.home-latest { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px 16px; }
+.home-latest > .product-card { min-width: 0; }
+@media (min-width: 768px) and (max-width: 1023px) {
+  .home-latest { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
 .home-flash {
   --flash-primary: var(--store-primary, #161616);
   --flash-on-primary: var(--store-primaryText, #fff);
@@ -89,7 +95,7 @@
   .home-products h2 { font-size: clamp(20px, 1.8vw, 30px); }
   .home-featured { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 7px; overflow: visible; }
   .home-featured .featured-card-track { width: auto; min-width: 0; }
-  .home-featured .product-card > a:first-child > div { aspect-ratio: 6 / 5; max-height: 19vh; }
+  .home-featured .product-card > a:first-child > div { aspect-ratio: 6 / 5; max-height: 17vh; }
   .store-home .home-latest { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
   .home-latest > :nth-child(n+5) { display: none; }
   .home-latest .product-card { display: grid; grid-template-columns: minmax(0, 36%) minmax(0, 1fr); align-items: center; gap: 7px; }
@@ -97,6 +103,7 @@
   .home-latest .product-card > div.absolute { display: none; }
   .store-home .product-card-body { padding-block: 3px; }
   .store-home .product-card-body > :first-child { display: none; }
+  .store-home .product-card-body > div:has([data-testid="flash-timer"]) { display: none; }
   .store-home .product-card-body h3 { margin-top: 0; font-size: 13px; line-height: 1.15; }
   .storefront-root .store-home .product-card .product-card-purchase { grid-template-columns: minmax(0, 1fr) auto; margin-top: 2px; padding-top: 0; }
   .storefront-root .store-home .product-card-price { min-height: 0; }
@@ -106,4 +113,11 @@
   .storefront-root:has(.store-home) .store-trust > div + div { border-left: 1px solid var(--store-decorative-border, #e4e4e7); }
   .storefront-root:has(.store-home) .store-trust > div:nth-child(4) { display: none; }
   .storefront-root:has(.store-home) .store-trust:empty { display: none; }
+}
+
+@media (min-width: 1024px) and (max-height: 800px) {
+  .store-home { row-gap: 12px; }
+  .store-home .hero-media { min-height: clamp(150px, 23vh, 182px); }
+  .storefront-root:has(.store-home) > footer { margin-top: 10px; }
+  .storefront-root:has(.store-home) .store-trust { padding-block: 8px; }
 }

@@ -104,7 +104,7 @@ export default async function HomePage() {
 
       {latest.items.length > 0 && <section className="min-w-0">
         <SectionHeader title="Produk Terbaru" subtitle="Temukan koleksi terbaru dari toko kami." href="/shop?sort=newest" />
-        <div className="home-latest product-listing-grid grid grid-cols-2 gap-x-4 gap-y-6 md:grid-cols-4">
+        <div className="home-latest">
           {latest.items.map((p) => (
             <ProductCard
               key={p.id}
