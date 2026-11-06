@@ -29,6 +29,7 @@ export function ProductCard({
   wishlisted = false,
   compact = false,
   featured = false,
+  homeFeatured = false,
   preview = false,
 }: {
   product: ProductCardData;
@@ -36,6 +37,7 @@ export function ProductCard({
   compact?: boolean;
   /** Product Pilihan uses a simplified card with no wishlist/add-to-cart actions. */
   featured?: boolean;
+  homeFeatured?: boolean;
   preview?: boolean;
 }) {
   const price = effectivePrice(product.basePrice, product.salePrice);
@@ -45,7 +47,7 @@ export function ProductCard({
   return (
     <article
       data-theme-target="highlightCard"
-      data-featured={featured || undefined}
+      data-featured={featured || homeFeatured || undefined}
       data-price-layout={priceLayout}
       data-wide-price={
         (!featured &&

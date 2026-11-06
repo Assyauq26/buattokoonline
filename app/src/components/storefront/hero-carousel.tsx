@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "@/components/ui/navigation";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, ChevronLeft, ChevronRight } from "lucide-react";
 
 export interface HeroSlide {
   image: string;
@@ -50,7 +50,7 @@ export function HeroCarousel({ slides, autoplaySeconds = 6, preview = false }: {
   const darken = Math.min(60, Math.max(0, slide.overlay ?? 0))/100;
   return (
     <section className="relative overflow-hidden rounded-2xl bg-surface" data-testid="hero-carousel" data-theme-target="hero" aria-label="Banner promosi toko">
-      <div className={`relative aspect-[16/8] w-full md:aspect-[3/1] ${hasContent ? "md:min-h-[320px]" : ""}`}>
+      <div className={`hero-media relative aspect-[16/8] w-full md:aspect-[3/1] ${hasContent ? "md:min-h-[320px]" : ""}`}>
         <picture>
           {slide.mobileImage && <source media="(max-width: 767px)" srcSet={slide.mobileImage} />}
           <Image src={slide.image} alt={slide.alt ?? "Koleksi toko"} fill unoptimized priority
@@ -58,7 +58,7 @@ export function HeroCarousel({ slides, autoplaySeconds = 6, preview = false }: {
         </picture>
         {hasContent && (
           /* Normal-flow desktop content grows the hero instead of clipping long copy. */
-          <div className={`relative z-10 hidden min-h-[320px] flex-col justify-center gap-2 px-10 py-10 md:flex lg:px-16 ${justify} ${tone}`}
+          <div className={`hero-desktop-copy relative z-10 hidden min-h-[320px] flex-col justify-center gap-2 px-10 py-10 md:flex lg:px-16 ${justify} ${tone}`}
             style={{ background: `rgba(0,0,0,${darken})` }}>
             {slide.heading && <h2 className="max-w-[85%] break-words text-3xl font-extrabold leading-tight lg:text-5xl">{slide.heading}</h2>}
             {slide.description && <p className="max-w-[85%] break-words text-sm font-medium lg:text-lg">{slide.description}</p>}
@@ -73,6 +73,12 @@ export function HeroCarousel({ slides, autoplaySeconds = 6, preview = false }: {
                 onClick={() => setIndex(i)}
                 className={`h-2 rounded-full transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white ${i === index ? "w-6 bg-white" : "w-2 bg-white/60"}`}/>
             ))}
+          </div>
+        )}
+        {total > 1 && !preview && (
+          <div className="home-hero-arrows hidden">
+            <button type="button" aria-label="Banner sebelumnya" onClick={() => setIndex((i) => (i + total - 1) % total)}><ChevronLeft size={20} /></button>
+            <button type="button" aria-label="Banner berikutnya" onClick={() => setIndex((i) => (i + 1) % total)}><ChevronRight size={20} /></button>
           </div>
         )}
       </div>
