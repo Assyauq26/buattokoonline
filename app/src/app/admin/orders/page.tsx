@@ -1,3 +1,5 @@
+import "./orders.css";
+import { Package, UserRound, PackageCheck, SlidersHorizontal } from "lucide-react";
 import { FilterForm } from "@/components/ui/filter-form";
 import { Suspense } from "react";
 import { OperationsSkeleton } from "@/components/admin/operations-skeleton";
@@ -15,20 +17,32 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { PageLinks } from "@/components/admin/operations-layout";
 import { readPage } from "@/lib/pagination";
 export const dynamic = "force-dynamic";
-export default async function AdminOrdersPage(props: { searchParams: Promise<{ q?: string; status?: string; page?: string }> }) {
+export default async function AdminOrdersPage(props: { searchParams: Promise<{ q?: string; status?: string; tab?: string; page?: string }> }) {
   await requireBackofficeUser(PERMISSIONS.ORDER_READ);
   return <Suspense fallback={<OperationsSkeleton />}><AdminOrdersPageContent {...props} /></Suspense>;
 }
-async function AdminOrdersPageContent({ searchParams }: { searchParams: Promise<{ q?: string; status?: string; page?: string }> }) {
+async function AdminOrdersPageContent({ searchParams }: { searchParams: Promise<{ q?: string; status?: string; tab?: string; page?: string }> }) {
   const params = await searchParams;
   const q = (params.q || "").slice(0, 200); const status = Object.values(OrderStatus).includes(params.status as OrderStatus) ? params.status as OrderStatus : undefined;
-  const where: Prisma.OrderWhereInput = { ...(q ? { orderNumber: { contains: q, mode: "insensitive" } } : {}), ...(status ? { status } : {}) };
+  const tabs: {key:string;label:string;where:Prisma.OrderWhereInput}[] = [
+    {key:"all",label:"Semua",where:{}},
+    {key:"verify",label:"Verifikasi Pembayaran",where:{status:"PENDING_PAYMENT",paymentStatus:"WAITING_VERIFICATION"}},
+    {key:"process",label:"Perlu Diproses",where:{status:{in:["PAID","PROCESSING"]}}},
+    {key:"ready",label:"Siap Dikirim",where:{status:"PACKED"}},
+    {key:"shipped",label:"Dikirim",where:{status:"SHIPPED"}},
+    {key:"done",label:"Selesai",where:{status:{in:["DELIVERED","COMPLETED"]}}},
+  ];
+  const tab=tabs.find(t=>t.key===params.tab) ?? tabs[0];
+  const search:Prisma.OrderWhereInput=q?{OR:[{orderNumber:{contains:q,mode:"insensitive"}},{address:{recipientName:{contains:q,mode:"insensitive"}}}]}:{};
+  const where:Prisma.OrderWhereInput={AND:[tab.where,search,...(status?[{status}]:[])]};
+  const counts=await Promise.all(tabs.map(t=>prisma.order.count({where:{AND:[t.where,search]}})));
   const { rows, total, pages, page } = await readPage(pageNumber(params.page),
     () => prisma.order.count({ where }),
-    (skip, take) => prisma.order.findMany({ where, select: { id: true, orderNumber: true, createdAt: true, status: true, paymentStatus: true, total: true, user: { select: { name: true } }, _count: { select: { items: true } } }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take, skip }));
-  return <div className="space-y-6"><header><h1 className="text-2xl font-bold">Pesanan</h1><p className="mt-1 text-sm text-ink-soft">{total} pesanan · pantau pembayaran dan pemenuhan pesanan.</p></header>
-    <FilterForm action={"/admin/orders"} key={JSON.stringify(params)} role="search" className="flex flex-wrap gap-3"><label className="w-full min-w-0 sm:w-auto sm:flex-1"><span className="sr-only">Cari nomor pesanan</span><Input className="placeholder:text-ink-soft" name="q" defaultValue={q} placeholder="Cari nomor pesanan" maxLength={200} /></label><label><span className="sr-only">Status pesanan</span><select name="status" defaultValue={status || ""} className="h-11 rounded-xl border border-line bg-white px-3 text-sm"><option value="">Semua status</option>{Object.values(OrderStatus).map(s => <option key={s} value={s}>{ORDER_STATUS_LABEL[s]}</option>)}</select></label><Button variant="outline">Cari</Button><Link href="/admin/orders" className="self-center text-sm underline">Reset</Link></FilterForm>
-    {!rows.length ? <EmptyState title="Tidak ada pesanan yang sesuai" description="Ubah pencarian atau filter. Pesanan baru akan tampil di sini setelah checkout." /> : <table className="block w-full rounded-2xl border border-line bg-white text-sm xl:table"><caption className="sr-only">Daftar pesanan</caption><thead className="hidden text-left text-xs text-ink-soft xl:table-header-group"><tr>{["Pesanan / pelanggan", "Tanggal", "Status", "Pembayaran", "Total"].map(t => <th key={t} scope="col" className="p-4 font-medium">{t}</th>)}</tr></thead><tbody className="block divide-y divide-line xl:table-row-group">{rows.map(o => <tr key={o.id} data-testid={`admin-order-${o.orderNumber}`} className="grid min-w-0 grid-cols-2 gap-3 p-4 xl:table-row xl:p-0"><td className="col-span-2 min-w-0 xl:p-4"><Link className="break-all font-semibold underline underline-offset-4" href={`/admin/orders/${o.id}`}>{o.orderNumber}</Link><p className="mt-1 break-words text-xs text-ink-soft">{o.user.name} · {o._count.items} item</p></td><td className="text-xs text-ink-soft xl:p-4"><span className="mb-1 block xl:hidden">Tanggal</span>{o.createdAt.toLocaleDateString("id-ID", { timeZone: "Asia/Jakarta" })}</td><td className="xl:p-4"><span className="mb-1 block text-xs text-ink-soft xl:hidden">Status</span>{orderDisplayStatus(o.status, o.paymentStatus)}</td><td className="break-words text-xs xl:p-4"><span className="mb-1 block text-ink-soft xl:hidden">Pembayaran</span>{paymentDisplayStatus(o.paymentStatus)}</td><td className="font-semibold tabular-nums xl:p-4"><span className="mb-1 block text-xs font-normal text-ink-soft xl:hidden">Total</span>{formatIDR(o.total)}</td></tr>)}</tbody></table>}
-    <PageLinks path="/admin/orders" params={{ q, status }} page={page} pages={pages} />
+    (skip, take) => prisma.order.findMany({ where, select: { id: true, orderNumber: true, createdAt: true, status: true, paymentStatus: true, total: true, shippingCourier:true, shippingService:true, items:{take:1,orderBy:{id:"asc"},select:{productName:true,variantLabel:true,quantity:true,imageUrl:true}}, address:{select:{recipientName:true}}, user: { select: { name: true } }, _count: { select: { items: true } } }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take, skip }));
+  return <div className="orders-page"><header><h1>Pesanan</h1><p>Kelola pesanan toko Anda.</p></header>
+    <nav className="orders-tabs" aria-label="Status pesanan">{tabs.map((t,i)=><Link key={t.key} href={`/admin/orders?tab=${t.key}&q=${encodeURIComponent(q)}`} aria-current={tab.key===t.key?"page":undefined}>{t.label} ({counts[i]})</Link>)}</nav>
+    <FilterForm action="/admin/orders" key={JSON.stringify(params)} role="search" className="orders-search"><input type="hidden" name="tab" value={tab.key}/><label><span className="sr-only">Cari pesanan atau penerima</span><Input name="q" defaultValue={q} placeholder="Cari pesanan..." maxLength={200}/></label><details><summary aria-label="Filter pesanan"><SlidersHorizontal size={22}/></summary><div><select name="status" defaultValue={status||""} aria-label="Status pesanan"><option value="">Semua status</option>{Object.values(OrderStatus).map(s=><option key={s} value={s}>{ORDER_STATUS_LABEL[s]}</option>)}</select><Button>Terapkan</Button><Link href="/admin/orders">Reset</Link></div></details><button type="submit" className="sr-only">Cari</button></FilterForm>
+    {!rows.length?<EmptyState title="Tidak ada pesanan yang sesuai" description="Ubah pencarian atau filter pesanan."/>:<ul className="orders-cards">{rows.map(o=>{const item=o.items[0];return <li key={o.id} data-testid={`admin-order-${o.orderNumber}`}><Link href={`/admin/orders/${o.id}`} className="order-card"><div className="order-thumb">{item?.imageUrl?<img src={item.imageUrl} alt={item.productName}/>:<Package size={30}/>}</div><div className="order-card-info"><div className="order-card-meta"><strong>{o.orderNumber}</strong><span>{o.createdAt.toLocaleString("id-ID",{timeZone:"Asia/Jakarta",day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"})}</span></div><h2>{item?.productName||"Produk pesanan"}</h2><p>{item?.variantLabel} × {item?.quantity}{o._count.items>1?` · +${o._count.items-1} produk`:""}</p><p className="order-buyer"><UserRound size={16}/>{o.address?.recipientName||o.user.name}</p></div><strong className="order-card-total">{formatIDR(o.total)}</strong><div className="order-card-status"><span className="order-status-pill">{o.status==="PAID"?"Perlu diproses":orderDisplayStatus(o.status,o.paymentStatus)}</span><span>{o.paymentStatus==="PAID"?"✓ Dibayar":paymentDisplayStatus(o.paymentStatus)}</span><span>{o.shippingCourier} · {o.shippingService}</span></div><span className="order-card-action"><PackageCheck size={22}/>{o.paymentStatus==="WAITING_VERIFICATION"?"Verifikasi":["PAID","PROCESSING","PACKED"].includes(o.status)?"Proses":"Detail"}</span></Link></li>})}</ul>}
+    <p className="orders-count">{total} pesanan ditemukan</p><PageLinks path="/admin/orders" params={{q,status,tab:tab.key}} page={page} pages={pages}/>
   </div>;
 }

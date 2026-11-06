@@ -1,4 +1,5 @@
 "use client";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { OperationForm } from "@/components/admin/operation-form";
 type State=string|null;
@@ -9,6 +10,7 @@ export function JntOrderPanel(props:{
   status:string;hasPaid:boolean;canCreate:boolean;canUpdate:boolean;canRead:boolean;
   requestState:State;awb:string|null;shipmentStatus:string|null;
 }) {
+  const router=useRouter();
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState("");
   const [events,setEvents]=useState<Event[]|null>(null);
@@ -25,7 +27,8 @@ export function JntOrderPanel(props:{
       });
       const json=await response.json();
       if(!response.ok||!json.success)throw new Error(json.error?.message||"Tracking gagal");
-      setEvents(json.data.events||[]);
+      if(json.data.failed)throw new Error("Tracking J&T gagal. Status terakhir tetap tersimpan. Coba kembali nanti.");
+      setEvents(json.data.events||[]);router.refresh();
     }catch(e){setError(e instanceof Error?e.message:"Tracking gagal");}
     finally{setBusy(false);}
   }
@@ -51,8 +54,9 @@ export function JntOrderPanel(props:{
     />}
     {props.canRead&&props.awb&&props.requestState==="SUCCEEDED"&&
       <div className="space-y-2">
+        <a className="inline-flex rounded-xl border border-zinc-300 px-4 py-3 text-sm font-semibold" href={`/admin/orders/${props.orderId}/awb`} target="_blank" rel="noreferrer">Cetak AWB</a>
         <button type="button" onClick={track} disabled={busy} className="min-h-11 rounded-xl bg-black px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
-          {busy?"Memeriksa...":"Lacak resi J&T"}
+          {busy?"Memeriksa...":"Perbarui Tracking"}
         </button>
         {error&&<p role="alert" className="text-sm text-red-600">{error}</p>}
         {events&&<div role="status" className="text-sm">{events.length?events.map((event,i)=>

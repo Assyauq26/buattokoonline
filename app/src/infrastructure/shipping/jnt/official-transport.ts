@@ -184,7 +184,7 @@ export async function cancelJntOrder(orderId: string, remark: string, approvedCo
   }
   return { orderId, cancelled: true };
 }
-export type JntTrackingEvent = {status:string;time:string|null;note:string|null};
+export type JntTrackingEvent = {status:string;time:string|null;note:string|null;code?:string|null};
 export async function trackJntOrder(awb: string, expectedOrderId?: string, approvedConfig?: JntConfig): Promise<{ awb: string; events: JntTrackingEvent[] }> {
   if (!/^[A-Z0-9]{8,30}$/.test(awb)) throw new HttpError("Nomor resi tidak valid", 422);
   const cfg = approvedConfig ?? await activeJntConfig();
@@ -215,6 +215,7 @@ export async function trackJntOrder(awb: string, expectedOrderId?: string, appro
   }
   // Deliberately excludes personal names, phone numbers, addresses, drivers and raw notes.
   return {awb, events:(parsed.data.history||[]).map(row=>({
+    code:row.status_code == null ? null : String(row.status_code),
     status:row.status || (row.status_code != null ? String(row.status_code) : "Status tidak tersedia"),
     time:row.date_time || null,
     note:row.city_name || null,

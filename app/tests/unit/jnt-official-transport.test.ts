@@ -125,7 +125,7 @@ describe("official J&T API transport (network mocked)", () => {
       "Manifes", "Paket dalam perjalanan", "Paket disimpan di gudang",
       "Paket akan dikirim", "Paket telah diterima",
     ]);
-    expect(result.events.at(-1)).toEqual({
+    expect(result.events.at(-1)).toEqual({ code: "200",
       status: "Paket telah diterima", time: "2026-10-23 09:39:49", note: "CIBINONG",
     });
     for (const secret of ["PRIVATE-RECEIVER", "PRIVATE-DRIVER-PHONE", "PRIVATE-ADDRESS"]) {
