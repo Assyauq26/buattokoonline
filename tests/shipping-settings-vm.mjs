@@ -23,8 +23,8 @@ export async function verifyShippingSettings({ page, context, base, sql, dc, pro
   await page.screenshot({ path: "test-results/shipping-settings-mobile.png", fullPage: true });
   await page.setViewportSize({ width: 1360, height: 900 });
   await page.goto(base + "/admin/integrations/jnt");
-  await expect(page.getByRole("heading", { name: "J&T Express API", exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Simpan konfigurasi" })).toBeEnabled();
+  await expect(page.getByRole("heading", { name: "Integrasi J&T Express", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Simpan Konfigurasi", exact: true })).toBeEnabled();
   await page.screenshot({ path: "test-results/shipping-jnt-desktop.png", fullPage: true });
   pass("Shipping Manual rupiah validation, database persistence, activation gate and responsive admin UI");
 

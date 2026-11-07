@@ -17,12 +17,16 @@ const connection = new URL(process.env.MAIL_TEST_DATABASE_URL || '');
 if (connection.hostname !== '127.0.0.1' || connection.pathname !== '/postgres') throw Error('Use loopback disposable PostgreSQL /postgres');
 const admin = new PrismaClient({ datasources: { db: { url: connection.href } } });
 const children = [], created = [], databases = [], messages = [];
+const liveRecipient = process.env.MAIL_LIVE_RECIPIENT;
+const liveHost = process.env.MAIL_LIVE_SSH_HOST;
+if (Boolean(liveRecipient) !== Boolean(liveHost) || (liveHost && !/^[a-z][a-z0-9-]+$/.test(liveHost)))
+  throw Error('Explicit authorized recipient and SSH operator alias required together');
 const media = mkdtempSync(join(tmpdir(), 'btos-mail-media-'));
 const password = 'Test!' + randomBytes(18).toString('hex');
 const newPassword = process.env.MAIL_TEST_HOLD === '1' ? 'Local-browser-fixture-only-2026!' : 'Changed!' + randomBytes(18).toString('hex');
 const identities = ['Gheverhan', 'Toko Makmur', 'Fashion Store'].map((brand, i) => ({
   brand, origin: `https://localhost:${3411 + i}`, token: randomBytes(32).toString('hex'),
-  seller: `seller${i}@example.test`, customer: `customer${i}@example.test`,
+  seller: liveRecipient || `seller${i}@example.test`, customer: liveRecipient || `customer${i}@example.test`,
 }));
 const registry = parseRegistry(identities.map(t => ({ ...t, tokenHash: hashRelayValue(t.token), sellerEmails: [t.seller],
   customerEmails: [t.seller, t.customer] })), { requireCustomerAllowlist: true });
@@ -33,7 +37,22 @@ if (process.env.MAIL_TEST_HOLD === '1') for (const tenant of identities) {
   registry.get(hashRelayValue(tenant.token)).origin = tenant.origin;
 }
 const quota = openQuota(':memory:');
-const relay = createRelayServer({ registry: () => registry, reserve: quota.reserve, deliver: async message => messages.push(message) });
+const relay = createRelayServer({ registry: () => registry, reserve: quota.reserve, deliver: async message => {
+  if (liveHost) {
+    // Provider credential stays on the operator server. Only authorized messages
+    // cross authenticated SSH stdin; never argv, log, or a public test endpoint.
+    const child = spawn('ssh', ['-o', 'BatchMode=yes', liveHost, 'sudo', '-n', '/opt/btos-mail-candidate-test/send'],
+      { stdio: ['pipe', 'pipe', 'pipe'] });
+    let output = ''; child.stdout.on('data', b => output += b); child.stderr.resume();
+    child.stdin.end(JSON.stringify(message));
+    const [code] = await once(child, 'exit');
+    if (code) throw Error('Authorized live provider delivery failed');
+    const evidence = JSON.parse(output);
+    assert.match(evidence.id, /^[a-f0-9-]{36}$/);
+    console.log(JSON.stringify({ providerAccepted: true, id: evidence.id, from: message.from, subject: message.subject }));
+  }
+  messages.push(message);
+} });
 relay.listen(3419, '127.0.0.1'); await once(relay, 'listening');
 async function command(args, env, input) {
   const child = spawn(process.execPath, args, { cwd: app, env, stdio: ['pipe', 'pipe', 'pipe'] });
@@ -48,6 +67,7 @@ async function waitFor(check) {
 }
 try {
   for (const [i, tenant] of identities.entries()) {
+    messages.length = 0;
     const name = `btos_mail_${'abc'[i]}_test`;
     // Never reset an existing database. Each run owns only the databases it creates.
     await admin.$executeRawUnsafe(`CREATE DATABASE "${name}"`); created.push(name);
@@ -98,9 +118,14 @@ try {
       action: 'complete', token: verified.data.token, password: newPassword, confirmation: newPassword })));
     assert.deepEqual(completed.map(x => x.status).sort(), [200, 400]);
     assert.equal((await request('/api/v1/admin/email-otp/test', {}, login.cookie)).status, 401);
+    if (liveRecipient) {
+      // Reuse the sole authorized inbox in two roles without changing any real
+      // account. Retire only this disposable database's seeded admin address.
+      await db.user.update({ where: { email: tenant.seller }, data: { email: `retired${i}@example.test` } });
+    }
     const registered = await request('/api/v1/auth/register', { name: 'Test Customer', email: tenant.customer, phone: `08123456789${i}`,
       password, confirmPassword: password, terms: true }); assert.equal(registered.status, 202);
-    const registrationMail = await waitFor(() => messages.find(m => m.to[0] === tenant.customer));
+    const registrationMail = await waitFor(() => messages.find(m => m.to[0] === tenant.customer && m.subject.startsWith('Kode verifikasi email')));
     assert.equal(registrationMail.from, `${tenant.brand} <otp@buattokosendiri.web.id>`);
     const verify = { email: tenant.customer, challengeId: registered.data.data.challengeId, otp: registrationMail.text.match(/pendaftaran: (\d{6})/)[1] };
     assert.equal((await request('/api/v1/auth/register/verify', verify)).status, 201);
@@ -121,7 +146,7 @@ try {
     assert.equal((await db.user.findUnique({ where: { email: tenant.customer } })).sessionVersion, 1);
     assert.equal((await request('/api/v1/auth/me', null, customerLogin.cookie)).status, 401);
     assert.equal(await db.user.count(), 2);
-    assert.equal(await db.user.count({ where: { email: identities[(i + 1) % 3].seller } }), 0);
+    assert.equal(await db.user.count({ where: { email: liveRecipient ? `retired${(i + 1) % 3}@example.test` : identities[(i + 1) % 3].seller } }), 0);
     console.log(JSON.stringify({ store: tenant.brand, databaseIsolation: 'PASS', sellerResetRace: 'PASS', sessionRevocation: 'PASS', customerOtp: 'PASS', customerResetAndReplay: 'PASS', senderIdentity: 'PASS', testEmail: 'PASS' }));
   }
   if (process.env.MAIL_TEST_HOLD === '1') {
