@@ -16,7 +16,7 @@ vi.mock("@/modules/auth/auth.service", () => ({
 }));
 vi.mock("@/lib/auth/rate-limit", () => ({ authRateLimitRealm: () => "test", consumeAuthBucket: db.consume }));
 vi.mock("@/modules/auth/registration-otp-email", () => ({
-  registrationMailConfig: () => ({ key: "dummy", from: "sender@example.com" }), sendResendEmail: db.mail,
+  registrationMailConfig: () => ({ key: "dummy", from: "sender@example.com" }), sendStoreMail: db.mail,
 }));
 vi.mock("@/modules/audit/audit.service", () => ({ writeAudit: db.audit }));
 

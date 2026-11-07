@@ -14,6 +14,10 @@ import {
   sendRegistrationOtpEmail,
 } from "@/modules/auth/registration-otp-email";
 
+vi.mock("@/modules/appearance/service", () => ({
+  readPublishedUncached: async () => ({ config: { identity: { name: "Gheverhan" } } }),
+}));
+
 afterEach(() => {
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
@@ -88,34 +92,29 @@ it("rejects an email sink on hosted/remote databases before any network request"
   vi.stubEnv("REGISTRATION_OTP_TEST_SINK", "http://localhost:9876/emails");
   vi.stubEnv("VERCEL_ENV", "production");
   await expect(
-    sendRegistrationOtpEmail("dummy@example.test", "012345", {
-      key: "dummy",
-      from: "dummy@example.test",
-    }),
+    Promise.resolve().then(() => sendRegistrationOtpEmail("dummy@example.test", "012345")),
   ).rejects.toMatchObject({ status: 503 });
   vi.stubEnv("VERCEL_ENV", "");
   vi.stubEnv("DATABASE_URL", "postgresql://unused@remote.invalid/database");
   await expect(
-    sendRegistrationOtpEmail("dummy@example.test", "012345", {
-      key: "dummy",
-      from: "dummy@example.test",
-    }),
+    Promise.resolve().then(() => sendRegistrationOtpEmail("dummy@example.test", "012345")),
   ).rejects.toMatchObject({ status: 503 });
   expect(fetchMock).not.toHaveBeenCalled();
 });
 it("fails closed without email configuration and on rejected provider responses", async () => {
+  vi.stubEnv("STORE_MAIL_RELAY_TOKEN", "");
   vi.stubEnv("RESEND_API_KEY", "");
   expect(() => registrationMailConfig()).toThrow();
   vi.stubEnv("REGISTRATION_OTP_TEST_SINK", "");
+  vi.stubEnv("STORE_MAIL_MODE", "operator-direct");
+  vi.stubEnv("RESEND_API_KEY", "unit-only");
+  vi.stubEnv("APP_ORIGIN", "https://shop.example.test");
   const fetchMock = vi
     .fn()
     .mockResolvedValue(new Response("{}", { status: 503 }));
   vi.stubGlobal("fetch", fetchMock);
   await expect(
-    sendRegistrationOtpEmail("dummy@example.test", "012345", {
-      key: "dummy",
-      from: "dummy@example.test",
-    }),
+    Promise.resolve().then(() => sendRegistrationOtpEmail("dummy@example.test", "012345")),
   ).rejects.toMatchObject({ status: 503 });
   expect(fetchMock.mock.calls[0][0]).toBe("https://api.resend.com/emails");
   expect(fetchMock.mock.calls[0][1].redirect).toBe("error");
