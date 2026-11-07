@@ -45,9 +45,10 @@ export function renderOtpMail({ purpose, to, value = "" }, store) {
   return { from: mailSender(brand), to: [to], subject: `${title} — ${brand}`, text, html };
 }
 
-export async function deliverResend(endpoint, key, message) {
+export async function deliverResend(endpoint, key, message, idempotencyKey) {
   const response = await fetch(endpoint, {
-    method: "POST", headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json", "User-Agent": "buattokosendiri-mail/1.0" },
+    method: "POST", headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json", "User-Agent": "buattokosendiri-mail/1.0",
+      ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}) },
     body: JSON.stringify(message), cache: "no-store", redirect: "error",
     signal: AbortSignal.timeout(8000),
   });

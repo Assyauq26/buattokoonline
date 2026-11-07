@@ -20,6 +20,7 @@ import threading
 import time
 import urllib.error
 import urllib.request
+import unicodedata
 
 BASE = Path('/etc/btos-agent')
 WORK = Path('/opt/btos-agent')
@@ -61,6 +62,68 @@ def run(args, timeout=300):
     return result.stdout.decode().strip()
 
 
+def sync_mail(config, store, core):
+    """Only paired agent receives a tenant token; never browser or shell arguments."""
+    # A controller without provisioning enabled retains the legacy install flow.
+    # It must not claim OTP readiness; the new controller gates completion itself.
+    if store.get('mailRequired') is not True:
+        return
+    try:
+        provisioning = api(config, 'mail', {})
+    except urllib.error.HTTPError as error:
+        if error.code == 403:
+            raise RuntimeError('MAIL_DISABLED') from None
+        raise
+    token = provisioning.get('token', '')
+    generation = provisioning.get('generation')
+    if (not re.fullmatch('[a-f0-9]{64}', token) or not isinstance(generation, int)
+            or provisioning.get('origin') != 'https://' + store['domain']):
+        raise RuntimeError('MAIL_IDENTITY_MISMATCH')
+    runtime = Path('/etc/single-store/runtime.env')
+    content = runtime.read_text()
+    if 'APP_ORIGIN=' + provisioning['origin'] not in content.splitlines():
+        raise RuntimeError('MAIL_ORIGIN_MISMATCH')
+    # Obtain the published identity directly from the local store database, not
+    # from browser parameters. Relay compares it against the approved registry.
+    brand = core.sql('SELECT published->\'identity\'->>\'name\' FROM "StoreAppearance";')
+    brand = ''.join(c if unicodedata.category(c)[0] in 'LMN' or c in " .&'()-" else ' '
+                    for c in unicodedata.normalize('NFKC', brand))
+    brand = re.sub(r'\s+', ' ', brand).strip()[:80].strip() or 'Toko Online'
+    request = urllib.request.Request(ORIGIN + '/api/platform/store-mail/status',
+        data=json.dumps({'origin': provisioning['origin'], 'brand': brand}).encode(),
+        headers={'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token})
+    class NoRedirect(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, *_):
+            return None
+    try:
+        with urllib.request.build_opener(NoRedirect).open(request, timeout=15) as response:
+            if response.status != 200:
+                raise RuntimeError('MAIL_NOT_READY')
+            receipt = json.load(response)['receipt']
+    except urllib.error.HTTPError:
+        raise RuntimeError('MAIL_NOT_READY') from None
+    line = 'STORE_MAIL_RELAY_TOKEN=' + token
+    if line not in content.splitlines():
+        updated = re.sub(r'^STORE_MAIL_(?:RELAY_TOKEN|MODE)=.*\n?', '', content, flags=re.M)
+        updated = updated.rstrip() + '\n' + line + '\n'
+        temp = runtime.with_suffix('.mail.tmp')
+        fd = os.open(temp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600)
+        with os.fdopen(fd, 'w') as out:
+            out.write(updated)
+            out.flush()
+            os.fsync(out.fileno())
+        os.replace(temp, runtime)
+        directory = os.open(runtime.parent, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            os.fsync(directory)
+        finally:
+            os.close(directory)
+    # Recreate even after an interrupted prior env write; Compose reconciles config.
+    core.dc(['up', '-d', '--no-deps', '--wait', 'app'])
+    core.healthy(False)
+    api(config, 'mail-ack', {'generation': generation, 'receipt': receipt})
+
+
 def validate_release(release):
     if (release.get('repository') != REPOSITORY or release.get('approved') is not True
         or not re.fullmatch(r'v\d+\.\d+\.\d+', release.get('version', ''))
@@ -74,7 +137,9 @@ class Reporter:
         self.path = BASE / 'progress.json'
         self.state = read(self.path) if self.path.exists() else {'job': job['id'], 'sequence': job['sequence']}
         if self.state['job'] != job['id']:
-            raise RuntimeError('JOB_ID_CHANGED')
+            # Keep the previous outbox for diagnostics without replaying it into a new job.
+            self.path.rename(BASE / ('progress.previous-' + str(time.time_ns()) + '.json'))
+            self.state = {'job': job['id'], 'sequence': job['sequence']}
 
     def flush(self):
         if self.state.get('pending'):
@@ -91,7 +156,50 @@ class Reporter:
         self.flush()
 
 
+def installed_store():
+    config_dir = Path('/etc/single-store')
+    if not (config_dir / 'installed').is_file():
+        return None
+    state = read(config_dir / 'setup.json')
+    domain = state.get('domain', '')
+    if (not state.get('complete') or state.get('local_test') or not isinstance(domain, str)
+            or not re.fullmatch(r'[a-z0-9.-]{1,253}', domain)
+            or f'APP_ORIGIN=https://{domain}' not in (config_dir / 'runtime.env').read_text().splitlines()):
+        raise RuntimeError('EXISTING_STORE_REQUIRES_OPERATOR')
+    return state
+
+
+def reconnect_store(config, state, store, report):
+    if state['domain'] != store['domain']:
+        report.event('preflight', 'failed', {'error_code': 'EXISTING_STORE_DOMAIN_MISMATCH'})
+        return
+    report.event('preflight')
+    sys.path.insert(0, '/opt/single-store/manager')
+    core = importlib.import_module('core')
+    if store.get('vps_ipv4') and core.discover_ips()['ipv4'] != store['vps_ipv4']:
+        report.event('dns', 'failed', {'error_code': 'WRONG_VPS_IP'})
+        return
+    version = read(Path('/etc/single-store/version.json'))
+    if not re.fullmatch(r'[a-f0-9]{40}', version.get('source_sha', '')) or not re.fullmatch(r'\d+\.\d+\.\d+', version.get('version', '')):
+        raise RuntimeError('INSTALLATION_IDENTITY_MISMATCH')
+    report.event('health')
+    core.healthy(False)
+    core.public_health(state)
+    sync_mail(config, store, core)
+    report.event('complete', 'complete', {
+        'https': 'PUBLIC_CERTIFICATE_VALID', 'application': 'healthy',
+        'version': 'v' + version['version'], 'source_sha': version['source_sha'],
+        'installation': 'reattached',
+    })
+
+
 def install(config, job, store, report):
+    existing = installed_store()
+    if existing:
+        reconnect_store(config, existing, store, report)
+        return
+    if config.get('passwordFromWizard') and not store.get('vps_ipv4'):
+        raise RuntimeError('PLATFORM_WIZARD_PROTOCOL_UNAVAILABLE')
     release = job['release']
     validate_release(release)
     source = WORK / ('source-' + release['sha'])
@@ -126,6 +234,11 @@ def install(config, job, store, report):
         core.atomic_json(core.STATE, state)
         core.create_secrets(domain)
         report.event('dns')
+        if store.get('vps_ipv4'):
+            actual_ip = core.discover_ips()['ipv4']
+            if actual_ip != store['vps_ipv4']:
+                report.event('dns', 'failed', {'ipv4': actual_ip, 'error_code': 'WRONG_VPS_IP'})
+                return
         status, evidence = core.verify_domain(state)
         state.update(status=status, evidence=evidence)
         core.atomic_json(core.STATE, state)
@@ -134,14 +247,18 @@ def install(config, job, store, report):
                 {'ipv4': state.get('ips', {}).get('ipv4', ''), 'error_code': 'CHECK_DNS_AND_PORTS'})
             return
         report.event('https', evidence={'https': evidence['https'], 'ipv4': state['ips']['ipv4']})
-        password_path = BASE / 'admin-password'
-        if not password_path.exists():
-            fd = os.open(password_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-            with os.fdopen(fd, 'w') as out:
-                out.write('Bt!' + secrets.token_urlsafe(24))
-                out.flush()
-                os.fsync(out.fileno())
-        password = password_path.read_text()
+        if store.get('vps_ipv4'):
+            password = api(config, 'admin-password')['password']
+        else:
+            # Jobs paired before the Info Toko password flow keep their recovery path.
+            password_path = BASE / 'admin-password'
+            if not password_path.exists():
+                fd = os.open(password_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+                with os.fdopen(fd, 'w') as out:
+                    out.write('Bt!' + secrets.token_urlsafe(24))
+                    out.flush()
+                    os.fsync(out.fileno())
+            password = password_path.read_text()
         core.validate_admin(store['admin_email'], password, password)
         state.update(bootstrap_started=True, step=3, verified_at=int(time.time()))
         core.atomic_json(core.STATE, state)
@@ -164,13 +281,20 @@ def install(config, job, store, report):
             core.dc = original_dc
         del password
     run(['systemctl', 'disable', '--now', 'single-store-setup.service'])
+    sync_mail(config, store, core)
     report.event('complete', 'complete', {'https': 'PUBLIC_CERTIFICATE_VALID', 'application': 'healthy',
         'version': release['version'], 'source_sha': release['sha']})
 
 
 def setup():
-    if (Path('/etc/single-store').exists() or Path('/opt/single-store').exists()) and not (BASE / 'config.json').exists():
-        raise RuntimeError('EXISTING_STORE_REQUIRES_OPERATOR')
+    existing = installed_store()
+    if not existing and not (BASE / 'config.json').exists():
+        if any(path.exists() or path.is_symlink() for path in (
+                Path('/etc/single-store'), Path('/opt/single-store'), Path('/var/lib/single-store'))):
+            raise SystemExit('Data instalasi toko lama belum dikenali. Periksa pemulihan instalasi di VPS.')
+        for port in (80, 443, 3000, 8787):
+            if run(['ss', '-H', '-ltn', f'sport = :{port}']):
+                raise SystemExit(f'Port {port} sedang digunakan. Kosongkan port tersebut sebelum memasang toko.')
     for directory in [BASE, WORK]:
         if directory.is_symlink():
             raise RuntimeError('UNSAFE_DIRECTORY')
@@ -182,9 +306,23 @@ def setup():
     pairing = getpass.getpass('Token pairing dari wizard (input disembunyikan): ')
     if not re.fullmatch('[a-f0-9]{64}', pairing):
         raise RuntimeError('INVALID_PAIRING_TOKEN')
-    api(config, 'pair', {'token': pairing, 'credential': config['credential']})
-    print('Pairing berhasil. Pantau wizard. Password admin hanya tersimpan di VPS:')
-    print('sudo cat /etc/btos-agent/admin-password')
+    ipv4 = run(['curl', '-4', '--noproxy', '*', '--proto', '=https', '-fsS', '--max-time', '8',
+                'https://api.ipify.org'], timeout=10)
+    try:
+        request = {'token': pairing, 'credential': config['credential'], 'protocol': 2, 'ipv4': ipv4}
+        if existing:
+            request['existingDomain'] = existing['domain']
+        result = api(config, 'pair', request)
+    except urllib.error.HTTPError as error:
+        if error.code in (409, 410, 422):
+            detail = json.load(error).get('error')
+            raise SystemExit(detail if isinstance(detail, str) else 'Pairing ditolak oleh platform.')
+        raise
+    if not isinstance(result.get('passwordFromWizard'), bool):
+        raise SystemExit('Platform belum mendukung wizard terbaru. Coba lagi setelah platform siap.')
+    config['passwordFromWizard'] = result['passwordFromWizard']
+    save(config_path, config)
+    print('VPS terhubung. Kembali ke wizard untuk memantau instalasi.')
 
 
 def main():
@@ -198,12 +336,19 @@ def main():
         setup()
         return
     config = read(BASE / 'config.json')
+    next_mail_sync = 0
     with open('/run/btos-agent.lock', 'w') as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         while True:
             try:
                 payload = api(config, 'job')
                 job = payload.get('job')
+                if job and job['state'] == 'complete' and time.monotonic() >= next_mail_sync:
+                    next_mail_sync = time.monotonic() + 120
+                    sys.path.insert(0, '/opt/single-store/manager')
+                    with open('/run/single-store-operation.lock', 'w') as operation:
+                        fcntl.flock(operation, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                        sync_mail(config, payload['store'], importlib.import_module('core'))
                 if job and job['state'] in ['queued', 'running']:
                     report = Reporter(config, job)
                     stop = threading.Event()
