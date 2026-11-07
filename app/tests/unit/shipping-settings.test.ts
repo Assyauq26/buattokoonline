@@ -50,20 +50,16 @@ describe("single-store shipping settings", () => {
     await expect(parseMappingFile("fake.csv", Buffer.alloc(2 * 1024 * 1024 + 1))).rejects.toThrow(/2 MiB/);
   });
 
-  it("preserves five separate codes, detects duplicates and rejects missing or unmatched data", async () => {
+  it("uses the J&T source alone, preserving five codes and rejecting duplicates or missing data", async () => {
     const columns = { district: 0, province: 1, city: 2, districtCode: 3, originCityCode: 4, sendSiteCode: 5, destAreaCode: 6, receiverArea: 7, destinationCityCode: 8 };
     const header = "Distrik;Propinsi;Kab;Internal;OrderAsal;Asal;Tujuan;AreaOrder;KotaOrder\n";
-    const row = "TEBET;DKI JAKARTA;KOTA ADM. JAKARTA SELATAN;31.74.01;AAA;SYNTHETIC ORIGIN;SYNTHETIC DEST;ZX0001;BBB";
-    const actual = JSON.parse((await import("node:zlib")).gunzipSync(readFileSync("src/modules/regions/data/snapshot.json.gz")).toString());
-    const p = actual.provinces.data[0], c = actual["regencies/" + p.code].data[0], d = actual["districts/" + c.code].data[0];
-    const codes = row.split(";").slice(4);
-    const valid = [d.name, p.name, c.name, d.code, ...codes].join(";");
+    const valid = "DISTRIK UJI;PROVINSI UJI;KOTA UJI;99.99.99;AAA;SYNTHETIC ORIGIN;SYNTHETIC DEST;ZX0001;BBB";
     const inspect = (rows: string[]) => inspectMapping("fixture.csv", Buffer.from(header + rows.join("\n")), { headerRow: 1, columns, delimiter: ";" });
     const one = await inspect([valid]);
     expect(one.report.valid).toBe(1);
-    expect(one.rows[0]).toMatchObject({ sendSiteCode: "SYNTHETIC ORIGIN", originCityCode: "AAA", destAreaCode: "SYNTHETIC DEST", jntCityCode: "BBB", jntAreaCode: "ZX0001" });
+    expect(one.rows[0]).toMatchObject({ district: "DISTRIK UJI", emsifaDistrictCode: null, sendSiteCode: "SYNTHETIC ORIGIN", originCityCode: "AAA", destAreaCode: "SYNTHETIC DEST", jntCityCode: "BBB", jntAreaCode: "ZX0001" });
     expect((await inspect([valid, valid])).report).toMatchObject({ valid: 0, duplicate: 2 });
     expect((await inspect([valid.replace("SYNTHETIC DEST", "")])).report.invalid).toBe(1);
-    expect((await inspect([valid.replace(d.code, "99.99.99")])).report.unmatched).toBe(1);
+    expect((await inspect([valid.replace("ZX0001", "!invalid")])).report.invalid).toBe(1);
   });
 });
