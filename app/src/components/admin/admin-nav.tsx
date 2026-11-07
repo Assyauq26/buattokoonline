@@ -5,7 +5,7 @@ import Link from "@/components/ui/navigation";
 import {
   Boxes, ChevronRight, CreditCard,
   Landmark, LayoutGrid, Megaphone, Menu, Package, ScrollText,
-  ShoppingBag, Store, Truck, Users, PlugZap,
+  ShoppingBag, Store, Truck, Users, PlugZap, Settings,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PERMISSIONS } from "@/lib/auth/permissions";
@@ -25,6 +25,7 @@ const links = [
   { href: "/admin/integrations/jnt", label: "Integrasi J&T Express", icon: PlugZap, permission: null },
   { href: "/admin/bank-accounts", label: "Rekening Bank", icon: Landmark, permission: PERMISSIONS.BANK_MANAGE },
   { href: "/admin/audit", label: "Audit Log", icon: ScrollText, permission: PERMISSIONS.AUDIT_READ },
+  { href: "/admin/settings/email-otp", label: "Email & OTP", icon: Settings, permission: PERMISSIONS.STORE_CUSTOMIZE_PUBLISH },
   { href: "/admin/updates", label: "Update Versi", icon: Package, permission: PERMISSIONS.AUDIT_READ },
 ] as const;
 
@@ -55,6 +56,15 @@ export function AdminNav({ permissions, canManageJnt = false }: { permissions: s
               className={cn("my-1 flex min-h-10 items-center gap-3 rounded-lg px-5 text-sm", pathname === child.href ? "bg-primary font-semibold text-white" : "text-zinc-700 hover:bg-zinc-100")}>
               <span aria-hidden="true">•</span>{child.label}
             </Link>)}
+        </details>;
+        if (item.href === "/admin/settings/email-otp") return <details key={item.href} open={pathname === item.href} className="group">
+          <summary className="flex min-h-11 cursor-pointer list-none items-center gap-3 px-4 py-3 text-sm font-semibold">
+            <Settings size={19} aria-hidden="true" />Pengaturan<ChevronRight size={15} aria-hidden="true" className="ml-auto group-open:rotate-90" />
+          </summary>
+          <Link href={item.href} aria-current={pathname === item.href ? "page" : undefined}
+            className={cn("my-1 flex min-h-10 items-center rounded-lg px-5 text-sm", pathname === item.href ? "bg-primary font-semibold text-white" : "text-zinc-700 hover:bg-zinc-100")}>
+            {item.label}
+          </Link>
         </details>;
         const active = activeLink(pathname, item.href, "exact" in item ? item.exact : false);
         const Icon = item.icon;
@@ -111,7 +121,7 @@ export function AdminMobileBottomNav({ permissions, canManageJnt = false }: { pe
             {extra.map(item => {
               const Icon = item.icon;
               return <Link key={item.href} href={item.href} prefetch={false} className="flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm text-zinc-700 hover:bg-zinc-100">
-                <Icon size={18} aria-hidden="true" />{("display" in item && item.display) || item.label}
+                <Icon size={18} aria-hidden="true" />{item.href === "/admin/settings/email-otp" ? "Pengaturan · Email & OTP" : ("display" in item && item.display) || item.label}
               </Link>;
             })}
             <Link href="/" className="mt-1 flex min-h-11 items-center gap-3 border-t border-line px-3 text-sm"><Store size={18}/> Buka toko</Link>

@@ -10,6 +10,7 @@ type AuthOperation =
   | "registerStatus"
   | "reset"
   | "sellerResetRequest"
+  | "mailTest"
   | "resetConfirm";
 const policies = {
   login: { perIdentity: 10, windowMs: 15 * 60_000, global: 300 },
@@ -18,6 +19,7 @@ const policies = {
   registerStatus: { perIdentity: 60, windowMs: 60 * 60_000, global: 240 },
   resetConfirm: { perIdentity: 3, windowMs: 60 * 60_000, global: 60 },
   reset: { perIdentity: 3, windowMs: 60 * 60_000, global: 30 },
+  mailTest: { perIdentity: 3, windowMs: 60 * 60_000, global: 10 },
   sellerResetRequest: { perIdentity: 3, windowMs: 60 * 60_000, global: 30 },
 } as const;
 

@@ -62,8 +62,9 @@ Ini menguji TLS tanpa domain publik dan **bukan** bukti penerbitan sertifikat AC
 
 Login `/admin`, tambahkan produk/foto/berat/stok, rekening bank, lalu atur pengiriman.
 Pendaftaran pelanggan dan reset password memakai email OTP/tautan melalui Resend.
-Konfigurasikan `RESEND_API_KEY` dan `PASSWORD_RESET_FROM` (sender terverifikasi milik
-toko) di `/etc/single-store/runtime.env`, lalu buat ulang service app:
+Untuk Email & OTP, konfigurasikan token khusus toko `STORE_MAIL_RELAY_TOKEN`
+di `/etc/single-store/runtime.env`, lalu buat ulang service app. Operator
+pusat menyiapkan [relay email](../services/mail-relay/README.md).
 
 ```bash
 sudo docker compose -f /opt/single-store/deploy/compose.yaml up -d --force-recreate app
@@ -107,10 +108,11 @@ complete. Request mengembalikan pesan generik dan ID challenge acak.
 Verifikasi menukar OTP enam digit dengan token acak 256 bit yang disimpan
 sementara dalam memori form. Setelah konfirmasi password, seller kembali ke login.
 
-Gunakan RESEND_API_KEY dan PASSWORD_RESET_FROM (sender terverifikasi) pada
-runtime **aplikasi toko**, serta JWT_SECRET dan APP_ORIGIN yang sudah ada.
-Konfigurasi platform pusat terpisah. PASSWORD_RESET_BASE_URL hanya dipakai
-alur tautan pelanggan. Resend mengirim OTP dan pemberitahuan perubahan melalui
+Gunakan STORE_MAIL_RELAY_TOKEN pada runtime **aplikasi toko** serta JWT_SECRET
+dan APP_ORIGIN yang sudah ada. API key Resend tetap pada infrastruktur tepercaya.
+Pengirim seller adalah Buattokosendiri dan pengirim customer mengikuti branding
+yang dipublikasikan, keduanya memakai otp@buattokosendiri.web.id.
+Resend mengirim OTP dan pemberitahuan perubahan melalui
 HTML dan teks. Log diagnostik hanya berisi status, tanpa alamat atau kredensial.
 
 Challenge dan izin reset memakai PasswordResetToken yang sudah ada, dengan
