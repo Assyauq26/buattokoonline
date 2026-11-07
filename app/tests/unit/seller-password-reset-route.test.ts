@@ -48,6 +48,11 @@ it("rejects cross-origin requests and invalid verification codes before service 
   expect(mocks.verify).not.toHaveBeenCalled();
 });
 
+it("rejects oversized request bodies before rate-limit or authentication work", async () => {
+  expect((await submit({ action: "request", email: "a".repeat(4096) + "@example.com" })).status).toBe(413);
+  expect(mocks.limit).not.toHaveBeenCalled();
+});
+
 it("rejects invalid grants and mismatched confirmation and schedules notification only on success", async () => {
   const data = { action: "complete", token: "a".repeat(64), password: "satu frasa rahasia", confirmation: "frasa berbeda" };
   expect((await submit(data)).status).toBe(400);
