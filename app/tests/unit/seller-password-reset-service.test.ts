@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { completeSellerReset, deliverSellerReset, sellerOtpDigest, verifySellerReset } from "@/modules/auth/seller-password-reset";
+import { HttpError } from "@/lib/response";
 
 const db = vi.hoisted(() => ({
   transaction: vi.fn(), findUnique: vi.fn(), findFirst: vi.fn(), create: vi.fn(), update: vi.fn(),
@@ -55,8 +56,11 @@ it("rejects expired, used, and non-seller OTP records", async () => {
 it("charges wrong codes to the same challenge and rejects a blocked attempt", async () => {
   await expect(verifySellerReset(id, "654321")).rejects.toMatchObject({ status: 400 });
   expect(db.consume).toHaveBeenCalledWith(expect.stringContaining(":attempt:" + id), 5, record.expiresAt);
-  db.consume.mockRejectedValueOnce(new Error("quota"));
-  await expect(verifySellerReset(id, code)).rejects.toThrow("quota");
+  db.findUnique.mockResolvedValueOnce(null);
+  const missing = await verifySellerReset(id, code).catch(error => error);
+  db.consume.mockResolvedValueOnce(1).mockRejectedValueOnce(new HttpError("Quota", 429));
+  await expect(verifySellerReset(id, code)).rejects.toMatchObject({ status: missing.status, message: missing.message });
+  expect(db.consume).toHaveBeenLastCalledWith(expect.stringContaining(":attempt:" + id), 5, record.expiresAt);
   expect(db.create).not.toHaveBeenCalled();
 });
 

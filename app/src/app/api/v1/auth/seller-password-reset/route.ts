@@ -20,12 +20,40 @@ const reply = (body: object, status = 200) => NextResponse.json(body, {
   status, headers: { "Cache-Control": "no-store" },
 });
 
+async function readPayload(req: Request): Promise<unknown> {
+  const maxBytes = 4096;
+  if (Number(req.headers.get("content-length")) > maxBytes)
+    throw new HttpError("Ukuran permintaan terlalu besar.", 413);
+  const reader = req.body?.getReader();
+  if (!reader) return null;
+  const chunks: Uint8Array[] = [];
+  let bytes = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      bytes += value.length;
+      if (bytes > maxBytes) {
+        await reader.cancel();
+        throw new HttpError("Ukuran permintaan terlalu besar.", 413);
+      }
+      chunks.push(value);
+    }
+    return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+  } catch (error) {
+    if (error instanceof HttpError) throw error;
+    return null;
+  } finally {
+    reader.releaseLock();
+  }
+}
+
 export async function POST(req: Request) {
   try {
     if (req.headers.get("origin") !== storeOrigin() ||
         req.headers.get("content-type")?.split(";")[0] !== "application/json")
       return reply({ error: "Permintaan tidak diizinkan." }, 403);
-    const parsed = input.safeParse(await req.json().catch(() => null));
+    const parsed = input.safeParse(await readPayload(req));
     if (!parsed.success) return reply({ error: "Periksa kembali data yang Anda masukkan." }, 400);
     const data = parsed.data;
     // The store is bound behind Caddy. Use the final proxy-supplied address.

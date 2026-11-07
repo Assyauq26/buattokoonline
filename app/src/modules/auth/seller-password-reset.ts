@@ -80,8 +80,14 @@ const invalid = () => new HttpError("Kode salah, belum terkirim, atau kedaluwars
 export async function verifySellerReset(id: string, code: string) {
   const challenge = await prisma.passwordResetToken.findUnique({ where: { id } });
   if (!challenge || !challenge.token.startsWith(prefix) || challenge.usedAt || challenge.expiresAt <= new Date()) throw invalid();
-  await sellerResetLimit("verify", "account", challenge.userId, 20);
-  await consumeAuthBucket(`${namespace()}:attempt:${id}`, 5, challenge.expiresAt);
+  try {
+    await sellerResetLimit("verify", "account", challenge.userId, 20);
+    await consumeAuthBucket(`${namespace()}:attempt:${id}`, 5, challenge.expiresAt);
+  } catch (error) {
+    // A challenge-specific 429 would reveal whether the submitted ID exists.
+    if (error instanceof HttpError && error.status === 429) throw invalid();
+    throw error;
+  }
   return prisma.$transaction(async tx => {
     await lockRecoveryUser(tx, challenge.userId);
     const now = new Date();
