@@ -28,6 +28,10 @@ customer memakai nama branding toko yang dipublikasikan.
   tidak mengisi key Resend atau token. Rotasi token per toko tanpa rotasi
   key platform. Registry dibaca pada tiap permintaan dan dapat diperbarui
   secara atomik. Hapus entri untuk mencabut akses.
+- Untuk uji terbatas, set `MAIL_RELAY_REQUIRE_CUSTOMER_ALLOWLIST=1` dan
+  isi `customerEmails` dengan daftar penerima yang diotorisasi. Konfigurasi
+  tanpa daftar customer ditolak dalam mode ini. Email uji dashboard harus
+  memenuhi daftar seller dan customer.
 - Jika branding publik berubah, sinkronkan brand di registry. Daftar
   sellerEmails harus berisi akun dashboard yang diizinkan menerima OTP
   seller, notifikasi dan email uji. Pengiriman ditolak bila identitas

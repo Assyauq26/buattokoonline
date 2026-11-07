@@ -9,7 +9,10 @@ test("HTTP relay enforces recipient scope and SQLite quotas with a fake provider
   const origin = "https://shop.example.test";
   const token = "a".repeat(64);
   const to = "seller@example.test";
-  const stores = parseRegistry([{ origin, brand: "Gheverhan", tokenHash: hashRelayValue(token), sellerEmails: [to] }]);
+  const registry = { origin, brand: "Gheverhan", tokenHash: hashRelayValue(token), sellerEmails: [to] };
+  const strict = { requireCustomerAllowlist: true };
+  assert.throws(() => parseRegistry([registry], strict), /invalid_registry/);
+  const stores = parseRegistry([{ ...registry, customerEmails: [to] }], strict);
   const quota = openQuota(":memory:");
   const messages = [];
   const server = createRelayServer({ registry: () => stores, reserve: quota.reserve, deliver: async mail => { messages.push(mail); } });
@@ -24,6 +27,8 @@ test("HTTP relay enforces recipient scope and SQLite quotas with a fake provider
     const data = { purpose: "customer-test", brand: "Gheverhan", origin, to, value: "" };
     assert.equal(await submit(data, "Bearer invalid"), 401);
     assert.equal(await submit({ ...data, to: "other@example.test" }), 403);
+    assert.equal(await submit({ ...data, purpose: "customer-registration", to: "other@example.test", value: "012345" }), 403);
+    assert.equal(await submit({ ...data, purpose: "customer-reset", to: "other@example.test", value: "a".repeat(64) }), 403);
     assert.equal(await submit({ ...data, value: "a".repeat(4096) }), 413);
     const concurrent = await Promise.all(Array.from({ length: 5 }, () => submit(data)));
     assert.deepEqual(concurrent.sort(), [202, 202, 202, 429, 429]);

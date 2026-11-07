@@ -3,7 +3,12 @@ import { renderOtpMail, sanitizeMailBrand } from "../../app/src/modules/auth/mai
 
 export const hashRelayValue = value => createHash("sha256").update(value).digest("hex");
 
-export function parseRegistry(entries) {
+const validEmails = entries => Array.isArray(entries) && entries.every(
+  email => typeof email === "string" && /^[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+$/.test(email.trim()),
+);
+const normalizedEmails = entries => new Set(entries.map(email => email.trim().toLowerCase()));
+
+export function parseRegistry(entries, { requireCustomerAllowlist = false } = {}) {
   if (!Array.isArray(entries)) throw new Error("invalid_registry");
   const stores = new Map();
   const origins = new Set();
@@ -12,11 +17,13 @@ export function parseRegistry(entries) {
     if (origin.protocol !== "https:" || origin.origin !== row.origin ||
         typeof row.brand !== "string" || !row.brand.trim() ||
         !/^[a-f0-9]{64}$/.test(row.tokenHash) || stores.has(row.tokenHash) || origins.has(row.origin) ||
-        !Array.isArray(row.sellerEmails) || row.sellerEmails.some(email => typeof email !== "string" || !email.includes("@")))
+        !validEmails(row.sellerEmails) ||
+        ((requireCustomerAllowlist || row.customerEmails !== undefined) && !validEmails(row.customerEmails)))
       throw new Error("invalid_registry");
     origins.add(row.origin);
     stores.set(row.tokenHash, { origin: row.origin, brand: sanitizeMailBrand(row.brand),
-      sellerEmails: new Set(row.sellerEmails.map(email => email.trim().toLowerCase())) });
+      sellerEmails: normalizedEmails(row.sellerEmails),
+      customerEmails: row.customerEmails === undefined ? null : normalizedEmails(row.customerEmails) });
   }
   return stores;
 }
@@ -33,6 +40,8 @@ export async function relayMail({ authorization, payload }, { stores, reserve, d
   if (typeof payload.purpose !== "string" || typeof payload.to !== "string") return 400;
   const to = payload.to.trim().toLowerCase();
   if ((payload.purpose.startsWith("seller-") || payload.purpose === "customer-test") && !store.sellerEmails.has(to))
+    return 403;
+  if (payload.purpose.startsWith("customer-") && store.customerEmails && !store.customerEmails.has(to))
     return 403;
   if (payload.purpose.startsWith("customer-") && payload.brand !== store.brand) return 409;
   let message;

@@ -8,7 +8,9 @@ const { RESEND_API_KEY, MAIL_RELAY_REGISTRY, MAIL_RELAY_DB } = process.env;
 if (!RESEND_API_KEY?.trim() || !MAIL_RELAY_REGISTRY || !MAIL_RELAY_DB)
   throw new Error("mail_relay_configuration_missing");
 process.umask(0o077);
-const registry = () => parseRegistry(JSON.parse(readFileSync(MAIL_RELAY_REGISTRY, "utf8")));
+const registry = () => parseRegistry(JSON.parse(readFileSync(MAIL_RELAY_REGISTRY, "utf8")), {
+  requireCustomerAllowlist: process.env.MAIL_RELAY_REQUIRE_CUSTOMER_ALLOWLIST === "1",
+});
 registry();
 const quota = openQuota(MAIL_RELAY_DB);
 const server = createRelayServer({
