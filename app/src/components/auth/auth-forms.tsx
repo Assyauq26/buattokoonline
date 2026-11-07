@@ -178,7 +178,7 @@ function Heading({
     </div>
   );
 }
-export function LoginForm({ redirectTo }: { redirectTo?: string }) {
+export function LoginForm({ redirectTo, passwordReset }: { redirectTo?: string; passwordReset?: boolean }) {
   const [state, action] = useFormState<FormState, FormData>(
     loginAction,
     initialState,
@@ -192,6 +192,7 @@ export function LoginForm({ redirectTo }: { redirectTo?: string }) {
         data-testid="login-form"
         aria-describedby="login-error"
       >
+        {passwordReset && <p role="status" className="auth-success">Password berhasil diperbarui. Silakan masuk menggunakan password baru Anda.</p>}
         <input type="hidden" name="redirectTo" value={redirectTo ?? ""} />
         <Field
           id="login-identifier"
@@ -213,7 +214,7 @@ export function LoginForm({ redirectTo }: { redirectTo?: string }) {
           autoComplete="current-password"
           data-testid="login-password"
         />
-        <Link href="/forgot-password" className="auth-forgot">
+        <Link href={/^\/admin(?:[/?]|$)/.test(redirectTo ?? "") ? "/seller-password-reset" : "/forgot-password"} className="auth-forgot">
           Lupa password?
         </Link>
         <Feedback error={state?.error} id="login-error" />
@@ -223,6 +224,11 @@ export function LoginForm({ redirectTo }: { redirectTo?: string }) {
       <p className="auth-switch">
         Belum punya akun? <Link href="/register">Daftar</Link>
       </p>
+      {!/^\/admin(?:[/?]|$)/.test(redirectTo ?? "") && (
+        <p className="auth-switch">
+          <Link href="/seller-password-reset">Lupa password akun seller?</Link>
+        </p>
+      )}
     </div>
   );
 }
@@ -522,6 +528,7 @@ export function ForgotForm() {
         <Submit label="Kirim Tautan Reset" />
       </form>
       <p className="auth-switch">
+        <Link href="/seller-password-reset">Lupa password dashboard seller?</Link><br />
         <Link href="/login">Kembali ke Masuk</Link>
       </p>
     </div>
@@ -553,6 +560,110 @@ export function ResetForm({ token }: { token: string }) {
         <Feedback id="reset-error" error={state?.error} />
         <Submit label="Simpan Password" />
       </form>
+    </div>
+  );
+}
+export function SellerPasswordResetForm() {
+  const [step, setStep] = useState<"email" | "otp" | "password">("email");
+  const [email, setEmail] = useState("");
+  const [id, setId] = useState("");
+  const [token, setToken] = useState("");
+  const [sentAt, setSentAt] = useState(0);
+  const [now, setNow] = useState(0);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const heading = useRef<HTMLDivElement>(null);
+  useEffect(() => { if (step !== "email") heading.current?.focus(); }, [step]);
+  useEffect(() => {
+    if (step !== "otp") return;
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [step]);
+  const remaining = Math.max(0, Math.ceil((sentAt + 300_000 - now) / 1000));
+  const cooldown = Math.max(0, remaining - 240);
+  const login = "/login?redirectTo=/admin";
+
+  async function send(payload: Record<string, string>) {
+    if (busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      const response = await fetch("/api/v1/auth/seller-password-reset", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        setError(typeof result.error === "string" ? result.error : "Terjadi gangguan. Coba lagi nanti.");
+        return;
+      }
+      if (payload.action === "request") {
+        const time = Date.now();
+        setId(result.id);
+        setSentAt(time);
+        setNow(time);
+        setStep("otp");
+      } else if (payload.action === "verify") {
+        setToken(result.token);
+        setStep("password");
+      } else {
+        setToken("");
+        window.location.assign(login + "&passwordReset=success");
+      }
+    } catch {
+      setError("Koneksi bermasalah. Coba lagi.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const [local, domain] = email.split("@");
+  return (
+    <div className="auth-content" style={{ maxWidth: 440 }}>
+      <div ref={heading} tabIndex={-1}>
+        <Heading title={{ email: "Lupa Password?", otp: "Verifikasi Email", password: "Buat Password Baru" }[step]}>
+          {step === "email" && "Masukkan email akun dashboard seller Anda."}
+          {step === "otp" && `Jika email terdaftar, kode dikirim ke ${local?.slice(0, 1)}***@${domain}.`}
+          {step === "password" && "Gunakan minimal 12 karakter. Anda bisa memakai frasa sandi."}
+        </Heading>
+      </div>
+        <form key={step} className="auth-form" onSubmit={event => {
+          event.preventDefault();
+          const values = new FormData(event.currentTarget);
+          if (step === "email") void send({ action: "request", email });
+          if (step === "otp" && remaining > 0) void send({ action: "verify", id, code: String(values.get("code")) });
+          if (step === "password") {
+            const password = String(values.get("password"));
+            const confirmation = String(values.get("confirmation"));
+            if (password !== confirmation || new TextEncoder().encode(password).length > 72) {
+              setError(password !== confirmation ? "Konfirmasi password tidak cocok." : "Password maksimal 72 byte.");
+              return;
+            }
+            void send({ action: "complete", token, password, confirmation });
+          }
+        }}>
+          {step === "email" && <Field id="seller-reset-email" label="Email" type="email" icon="mail" required autoComplete="email" maxLength={254} defaultValue={email} onChange={event => setEmail(event.target.value)} />}
+          {step === "otp" && <>
+            <Field key={id} id="seller-reset-code" label="Kode OTP enam digit" name="code" icon="lock-keyhole" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} required />
+            <p>{remaining ? `Kode berlaku ${Math.floor(remaining / 60)}:${String(remaining % 60).padStart(2, "0")}` : "Kode kedaluwarsa. Kirim ulang untuk memperoleh kode baru."}</p>
+          </>}
+          {step === "password" && <>
+            <Field id="seller-new-password" label="Password Baru" name="password" icon="lock-keyhole" password required minLength={12} maxLength={72} autoComplete="new-password" />
+            <Field id="seller-confirm-password" label="Konfirmasi Password" name="confirmation" icon="lock-keyhole" password required minLength={12} maxLength={72} autoComplete="new-password" />
+          </>}
+          <Feedback id="seller-reset-error" error={error} />
+          <Button type="submit" className="auth-submit" disabled={busy || (step === "otp" && remaining === 0)} loading={busy}>
+            {busy ? "Memproses..." : step === "email" ? "Kirim Kode OTP" : step === "otp" ? "Verifikasi" : "Simpan Password"}
+          </Button>
+          {step === "otp" && <Button type="button" variant="ghost" disabled={busy || cooldown > 0} onClick={() => void send({ action: "request", email })}>
+            {cooldown > 0 ? `Kirim ulang dalam ${cooldown} detik` : "Kirim Ulang Kode"}
+          </Button>}
+          {step !== "email" && <Button type="button" variant="ghost" disabled={busy} onClick={() => { setToken(""); setError(""); setStep("email"); }}>
+            Kembali ke email
+          </Button>}
+        </form>
+      <p className="auth-switch"><Link href={login}>Kembali ke Masuk</Link></p>
     </div>
   );
 }

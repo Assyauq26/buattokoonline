@@ -9,6 +9,7 @@ type AuthOperation =
   | "registerConfirm"
   | "registerStatus"
   | "reset"
+  | "sellerResetRequest"
   | "resetConfirm";
 const policies = {
   login: { perIdentity: 10, windowMs: 15 * 60_000, global: 300 },
@@ -17,6 +18,7 @@ const policies = {
   registerStatus: { perIdentity: 60, windowMs: 60 * 60_000, global: 240 },
   resetConfirm: { perIdentity: 3, windowMs: 60 * 60_000, global: 60 },
   reset: { perIdentity: 3, windowMs: 60 * 60_000, global: 30 },
+  sellerResetRequest: { perIdentity: 3, windowMs: 60 * 60_000, global: 30 },
 } as const;
 
 /** Server deployment metadata only; never derive a quota realm from a request. */

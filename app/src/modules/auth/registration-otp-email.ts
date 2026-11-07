@@ -38,6 +38,21 @@ export async function sendRegistrationOtpEmail(
   code: string,
   config: ReturnType<typeof registrationMailConfig>,
 ): Promise<void> {
+  await sendResendEmail(
+    email, "Kode verifikasi email toko",
+    "Kode OTP pendaftaran toko: " + code +
+      "\nBerlaku selama 10 menit, maksimal 5 percobaan. Jangan berikan kode ini kepada siapa pun. Jika Anda tidak mendaftar, abaikan email ini.",
+    undefined, config,
+  );
+}
+
+export async function sendResendEmail(
+  email: string,
+  subject: string,
+  text: string,
+  html: string | undefined,
+  config: ReturnType<typeof registrationMailConfig>,
+): Promise<void> {
   const response = await fetch(deliveryEndpoint(), {
     method: "POST",
     headers: {
@@ -48,11 +63,7 @@ export async function sendRegistrationOtpEmail(
     body: JSON.stringify({
       from: config.from,
       to: [email],
-      subject: "Kode verifikasi email toko",
-      text:
-        "Kode OTP pendaftaran toko: " +
-        code +
-        "\nBerlaku selama 10 menit, maksimal 5 percobaan. Jangan berikan kode ini kepada siapa pun. Jika Anda tidak mendaftar, abaikan email ini.",
+      subject, text, html,
     }),
     cache: "no-store",
     redirect: "error",
