@@ -12,6 +12,7 @@ import {
 } from "@/modules/catalog/catalog.service";
 import { getStorefrontUserContext } from "@/lib/auth/session";
 import { wishlistProductIds } from "@/modules/wishlist/wishlist.service";
+import "./home.css";
 
 export default async function HomePage() {
   const wishIdsPromise = getStorefrontUserContext().then((user) =>
@@ -21,7 +22,7 @@ export default async function HomePage() {
     await Promise.all([
       listCategories(),
       listProducts({ featured: true, pageSize: 4, includeTotal: false }),
-      listProducts({ pageSize: 12, includeTotal: false }),
+      listProducts({ sort: "newest", pageSize: 8, includeTotal: false }),
       wishIdsPromise,
       listProducts({ flashSale: true, pageSize: 1, includeTotal: false }),
       getPublishedHero(),
@@ -34,10 +35,6 @@ export default async function HomePage() {
   // an empty section when the catalog itself is populated.
   const featuredItems =
     featured.items.length > 0 ? featured.items : latest.items.slice(0, 4);
-  const featuredIds = new Set(featuredItems.map((p) => p.id));
-  const recommendedItems = latest.items
-    .filter((p) => !featuredIds.has(p.id))
-    .slice(0, 8);
 
   // Zero published versions keep the existing banners until the first Publish.
   const slides =
@@ -59,13 +56,13 @@ export default async function HomePage() {
         : [];
 
   return (
-    <div className="space-y-6">
+    <div className="store-home grid gap-6 lg:gap-4">
       <HeroCarousel
         slides={slides}
         autoplaySeconds={hero.config.autoplaySeconds}
       />
 
-      <section>
+      <section className="home-categories">
         {latest.items.length === 0 && <p className="mb-6 rounded-xl border border-zinc-200 p-8 text-center text-zinc-600">Belum ada produk. Silakan kunjungi kembali.</p>}
         <SectionHeader title="Kategori" href="/shop" />
         <CategoryNav categories={categories} />
@@ -76,14 +73,15 @@ export default async function HomePage() {
           (campaignState(campaign, campaign.serverNow) === "ACTIVE" &&
             flash.items.length > 0)) && <FlashSaleBanner campaign={campaign} />}
 
-      <section>
+      <div className="home-products">
+      <section className="min-w-0">
         <SectionHeader
           title="Produk Pilihan"
           subtitle="Pilihan produk dari toko kami"
           href="/shop"
         />
         <div
-          className="stagger flex snap-x snap-mandatory gap-2.5 overflow-x-auto overscroll-x-contain pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          className="home-featured stagger flex snap-x snap-mandatory gap-2.5 overflow-x-auto overscroll-x-contain pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
           aria-label="Produk pilihan"
         >
           {featuredItems.map((p) => {
@@ -96,7 +94,7 @@ export default async function HomePage() {
                 <ProductCard
                   product={card}
                   wishlisted={wl.has(p.id)}
-                  featured
+                  homeFeatured
                 />
               </div>
             );
@@ -104,10 +102,10 @@ export default async function HomePage() {
         </div>
       </section>
 
-      <section>
-        <SectionHeader title="Rekomendasi untukmu" href="/shop" />
-        <div className="product-listing-grid grid grid-cols-2 gap-x-4 gap-y-6 md:grid-cols-4">
-          {recommendedItems.map((p) => (
+      {latest.items.length > 0 && <section className="min-w-0">
+        <SectionHeader title="Produk Terbaru" subtitle="Temukan koleksi terbaru dari toko kami." href="/shop?sort=newest" />
+        <div className="home-latest">
+          {latest.items.map((p) => (
             <ProductCard
               key={p.id}
               product={toCardData(p)}
@@ -115,7 +113,8 @@ export default async function HomePage() {
             />
           ))}
         </div>
-      </section>
+      </section>}
+      </div>
     </div>
   );
 }

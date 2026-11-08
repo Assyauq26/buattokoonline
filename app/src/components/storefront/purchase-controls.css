@@ -288,6 +288,19 @@
 
 .storefront-root .product-card-prices:not(:has(.product-card-original)) {justify-content:flex-start;}
 
+.storefront-root .product-card-prices[data-stacked-prices] { flex-direction: column; align-items: flex-start; }
+.storefront-root .product-card-prices[data-stacked-prices] .product-card-original { order: -1; }
+.storefront-root .product-card-prices[data-stacked-prices] .product-card-price { min-height: 0; }
+.storefront-root .product-card-purchase:has(> [data-stacked-prices]) { align-items: end; }
+.storefront-root .product-card-purchase:has(> button) > [data-stacked-prices] .product-card-price { min-height: 2.75rem; }
+
+@media (max-width: 767px) {
+  .storefront-root .product-card-flash { margin-bottom: 0; }
+  .storefront-root .product-card-purchase { margin-top: 2px; }
+  .storefront-root .featured-card-track .product-card-purchase { padding-top: 2px; min-height: 0; }
+  .storefront-root .product-card-price { min-height: 0; }
+}
+
 /* Region dialog remains inside the themed storefront root, including checkout. */
 :is(.storefront-root,.storefront-checkout-root) .region-trigger {display:flex;align-items:center;gap:12px;width:100%;min-height:76px;padding:16px;border:1px solid var(--store-decorative-border,#e5e5e5);border-radius:var(--store-radius,12px);background:var(--store-field,#fff);color:var(--store-fieldText,#171717);}
 :is(.storefront-root,.storefront-checkout-root) .region-overlay {position:fixed;inset:0;z-index:110;background:rgb(0 0 0 / .4);}

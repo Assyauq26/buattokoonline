@@ -1,3 +1,4 @@
+import { Tag } from "lucide-react";
 import { FlashSaleTimer } from "./flash-sale-timer";
 import type { CampaignClock } from "@/modules/promotions/campaign.validation";
 import Link from "@/components/ui/navigation";
@@ -29,6 +30,7 @@ export function ProductCard({
   wishlisted = false,
   compact = false,
   featured = false,
+  homeFeatured = false,
   preview = false,
 }: {
   product: ProductCardData;
@@ -36,6 +38,7 @@ export function ProductCard({
   compact?: boolean;
   /** Product Pilihan uses a simplified card with no wishlist/add-to-cart actions. */
   featured?: boolean;
+  homeFeatured?: boolean;
   preview?: boolean;
 }) {
   const price = effectivePrice(product.basePrice, product.salePrice);
@@ -82,13 +85,7 @@ export function ProductCard({
           {pct > 0 && !compact && (
             <div className="absolute left-2 top-2 z-10">
               <Badge variant="sale">{pct}%</Badge>
-              {product.flashCampaign && (
-                <div className="mt-1">
-                  <Badge variant="muted" className="px-1.5 text-[10px]">
-                    Flash Sale
-                  </Badge>
-                </div>
-              )}
+
             </div>
           )}
         </div>
@@ -113,12 +110,13 @@ export function ProductCard({
         </Link>
 
         {product.flashCampaign && (
-          <div className="my-1">
+          <div className="product-card-flash my-1">
+            <span className="product-card-flash-label"><Tag size={13} aria-hidden="true" />Flash Sale</span>
             <FlashSaleTimer campaign={product.flashCampaign} inline />
           </div>
         )}
         <div className="product-card-purchase mt-2 min-w-0">
-          <FittedCardPrices>
+          <FittedCardPrices longDiscount={pct > 0 && product.basePrice >= 1_000_000}>
             <span
               data-theme-role="price"
               data-discount={pct > 0}
@@ -132,7 +130,7 @@ export function ProductCard({
               </span>
             )}
           </FittedCardPrices>
-          {!featured && !preview && (
+          {!featured && !homeFeatured && !preview && (
             <QuickAddButton
               slug={product.slug}
               testId={product.variantId ?? product.id}
