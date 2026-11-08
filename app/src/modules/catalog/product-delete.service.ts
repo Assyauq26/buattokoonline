@@ -34,7 +34,21 @@ export async function deleteManagedProduct(actorId: string, id: string, revision
         await tx.product.delete({ where: { id } });
         for (const image of product.images) {
           if (await tx.productImage.count({ where: { url: image.url } }) || await tx.orderItem.count({ where: { imageUrl: image.url } })) continue;
-          await tx.stagedProductMedia.updateMany({ where: { id: image.id, productId: id }, data: { productId: null, cancelledAt: new Date(), expiresAt: new Date() } });
+          const queued = await tx.stagedProductMedia.updateMany({ where: { id: image.id, productId: id }, data: { productId: null, cancelledAt: new Date(), expiresAt: new Date() } });
+          if (!queued.count) {
+            // Queue legacy files only when both URL and owned object path match this image exactly.
+            // External or shared media must never be removed by product deletion.
+            const url = new URL(image.url, "http://localhost");
+            const objectPath = url.searchParams.get("object") || "";
+            const owned = [ `store/product-images/${id}/${image.id}`, `store/product-images/staged-${image.id}/${image.id}` ];
+            if (url.origin === "http://localhost" && url.pathname === `/api/v1/product-images/${image.id}` &&
+                owned.some(prefix => ["webp", "png", "jpg", "jpeg"].some(ext => objectPath === `${prefix}.${ext}`))) {
+              await tx.stagedProductMedia.upsert({ where: { id: image.id }, update: {}, create: {
+                id: image.id, actorId, sessionHash: "deleted-product", contentHash: "legacy-owned-media", objectPath,
+                mime: "application/octet-stream", purpose: "product-delete", ready: true, productId: null, cancelledAt: new Date(), expiresAt: new Date()
+              } });
+            }
+          }
         }
         await writeAudit({ userId: actorId, action: "product.delete", entity: "Product", entityId: id }, tx);
         // Object storage is cleaned by the staged-media collector, never before commit.

@@ -73,3 +73,15 @@ it("bank status changes wait for an in-flight checkout lock", async () => {
   unlock(); await checkout; await deletion;
   expect(await prisma.bankAccount.findFirst({ where: { id: bank.id, isActive: true, deletedAt: null } })).toBeNull();
 });
+
+it("queues owned legacy media after deletion without deleting external images", async () => {
+  const p = await product(), imageId = randomUUID(), externalId = randomUUID();
+  const objectPath = `store/product-images/${p.id}/${imageId}.webp`;
+  await prisma.productImage.createMany({ data: [
+    { id: imageId, productId: p.id, url: `/api/v1/product-images/${imageId}?object=${encodeURIComponent(objectPath)}`, sortOrder: 0 },
+    { id: externalId, productId: p.id, url: "https://example.test/shared.jpg", sortOrder: 1 }
+  ] });
+  await deleteManagedProduct(staff, p.id, p.updatedAt.toISOString());
+  expect((await prisma.stagedProductMedia.findUniqueOrThrow({ where: { id: imageId } })).objectPath).toBe(objectPath);
+  expect(await prisma.stagedProductMedia.findUnique({ where: { id: externalId } })).toBeNull();
+});
