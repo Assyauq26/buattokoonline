@@ -182,7 +182,7 @@ export async function createOrder(
   if (checkoutSignature(confirmation.data) !== checkoutSignature(cartView.lines)) throw new HttpError("Harga atau isi keranjang berubah. Muat ulang checkout dan konfirmasi ulang sebelum membuat pesanan.", 409);
 
   const bank = await prisma.bankAccount.findFirst({
-    where: { id: input.bankAccountId, isActive: true },
+    where: { id: input.bankAccountId, isActive: true, deletedAt: null },
   });
   if (!bank) throw new HttpError("Rekening bank tidak valid", 400);
 
@@ -243,7 +243,8 @@ export async function createOrder(
     if (shippingSettings.activeJnt) requireEz(approvedRevision(shippingSettings.activeJnt).config);
     const lockedInquiry = shippingSettings.activeJnt ? await shippingInquiry(current, location, tx) : { destination: location, weightGram: 0, packages: [] };
     verifyShippingQuote(input.shipping.quoteToken, shippingFingerprint(userId, lockedInquiry, checkoutSignature(current.lines), shippingSettings.revision), selectedRate);
-    const lockedBank = await tx.bankAccount.findFirst({ where: { id: bank.id, isActive: true } });
+    await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "BankAccount" WHERE "id" = ${bank.id} FOR SHARE`);
+    const lockedBank = await tx.bankAccount.findFirst({ where: { id: bank.id, isActive: true, deletedAt: null } });
     if (!lockedBank) throw new HttpError("Rekening bank tidak valid", 409);
     // Serializes redemptions for capped coupons across concurrent checkout transactions.
     if (input.couponCode) await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "Coupon" WHERE "code" = ${input.couponCode.toUpperCase()} FOR UPDATE`);

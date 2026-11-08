@@ -15,6 +15,16 @@ import {
   saveCategory,
 } from "./product-management.service";
 import type { ProductStatus } from "@prisma/client";
+import { deleteManagedProduct } from "./product-delete.service";
+
+export async function deleteProductAction(id: string, revision: string) {
+  return runAction(async () => {
+    const actor = await requirePermission(PERMISSIONS.PRODUCT_DELETE);
+    const result = await deleteManagedProduct(actor.id, id, revision);
+    refreshCatalog();
+    return result;
+  });
+}
 
 function refreshCatalog() {
   revalidateTag(CATALOG_CACHE_TAG);

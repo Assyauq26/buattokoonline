@@ -1,4 +1,5 @@
 "use client";
+import { DeleteProductButton } from "./delete-product-button";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "@/components/ui/navigation";
@@ -1557,6 +1558,7 @@ export function ProductEditor({
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
+            {canArchive && <DeleteProductButton id={productId} name={values.name} revision={version} disabled={!!pending || queueBusy || dirty} />}
             {canEdit && status === "ARCHIVED" && (
               <Button type="button" disabled={!!pending || queueBusy || dirty || !readiness.ready} onClick={() => void changeStatus("PUBLISHED")} data-testid="publish-product">Terbitkan produk</Button>
             )}

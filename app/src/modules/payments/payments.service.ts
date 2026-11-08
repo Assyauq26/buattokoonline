@@ -7,7 +7,7 @@ import { assertStaffPermission, lockOrder, lockPaymentOrder } from "@/modules/or
 import { writeAudit } from "@/modules/audit/audit.service";
 
 export function listActiveBankAccounts() {
-  return prisma.bankAccount.findMany({ where: { isActive: true }, orderBy: { createdAt: "asc" } });
+  return prisma.bankAccount.findMany({ where: { isActive: true, deletedAt: null }, orderBy: { createdAt: "asc" } });
 }
 
 /** Customer submits transfer proof -> WAITING_VERIFICATION. */

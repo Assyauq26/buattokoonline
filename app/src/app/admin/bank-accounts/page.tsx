@@ -7,12 +7,12 @@ export const dynamic = "force-dynamic";
 
 export default async function AdminBankAccountsPage() {
   await requireBackofficeUser(PERMISSIONS.BANK_MANAGE);
-  const accounts = await prisma.bankAccount.findMany({ orderBy: { createdAt: "asc" } });
+  const accounts = await prisma.bankAccount.findMany({ where: { deletedAt: null }, orderBy: { createdAt: "asc" } });
 
   return (
     <div className="space-y-6">
       <h1 className="font-display text-2xl font-black text-ink">Rekening Bank</h1>
-      <BankAccountManager accounts={accounts} />
+      <BankAccountManager accounts={accounts.map(a => ({ ...a, updatedAt: a.updatedAt.toISOString() }))} />
     </div>
   );
 }
