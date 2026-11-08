@@ -1,4 +1,5 @@
 import { HttpError } from "@/lib/response";
+import { randomUUID } from "node:crypto";
 import { storeOrigin } from "@/lib/store-config";
 import { deliverResend, mailSender, renderOtpMail, sanitizeMailBrand } from "./mail-contract.mjs";
 
@@ -51,7 +52,7 @@ export async function sendStoreMail(
     }
     const response = await fetch(config.endpoint, {
       method: "POST", headers: { Authorization: `Bearer ${config.key}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ purpose, to, value, ...store }),
+      body: JSON.stringify({ purpose, to, value, requestId: randomUUID(), ...store }),
       redirect: "error", cache: "no-store", signal: AbortSignal.timeout(10_000),
     });
     await response.body?.cancel();
@@ -67,8 +68,24 @@ export function sendRegistrationOtpEmail(email: string, code: string, config = r
 
 export async function storeMailStatus() {
   let configured = false;
-  try { registrationMailConfig(); storeOrigin(); configured = true; }
-  catch { /* Expose configuration status, never credentials. */ }
   const brand = await mailBrand();
-  return { configured, brand, sender: mailSender(brand) };
+  let state: "active" | "preparing" | "action" | "unavailable" = "preparing";
+  try {
+    const config = registrationMailConfig();
+    const origin = storeOrigin();
+    if (config.mode === "relay") {
+      const response = await fetch(config.endpoint + "/status", {
+        method: "POST", headers: { Authorization: `Bearer ${config.key}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ origin, brand }), redirect: "error", cache: "no-store", signal: AbortSignal.timeout(4000),
+      });
+      await response.body?.cancel();
+      configured = response.ok;
+      state = response.ok ? "active" : [401, 403, 409].includes(response.status) ? "action" : "unavailable";
+    } else {
+      // Direct operator mode cannot claim live provider health without a send.
+      configured = true;
+      state = "preparing";
+    }
+  } catch { state = process.env.STORE_MAIL_RELAY_TOKEN ? "unavailable" : "preparing"; }
+  return { configured, state, brand, sender: mailSender(brand) };
 }

@@ -27,8 +27,8 @@ it("uses persisted branding for customer mail and only sends the store token to 
   expect(url).toBe("https://buattokosendiri.web.id/api/platform/store-mail");
   expect(request.headers.Authorization).toBe("Bearer " + token);
   expect(request.redirect).toBe("error");
-  expect(JSON.parse(request.body)).toEqual(payload);
-  expect(await storeMailStatus()).toEqual({ configured: true, brand: "Gheverhan", sender: `Gheverhan <${OTP_ADDRESS}>` });
+  expect(JSON.parse(request.body)).toEqual({ ...payload, requestId: expect.stringMatching(/^[a-f0-9-]{36}$/) });
+  expect(await storeMailStatus()).toEqual({ configured: true, state: "active", brand: "Gheverhan", sender: `Gheverhan <${OTP_ADDRESS}>` });
 });
 
 it("rejects an ambient Resend key unless the operator opts into trusted direct mode", () => {

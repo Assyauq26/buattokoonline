@@ -8,6 +8,57 @@ concurrency:
   group: store-verify-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 jobs:
+  candidate:
+    needs: [mail, install]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Package exact candidate without publishing a tag
+        run: |
+          mkdir candidate
+          python3 installer/release.py "candidate/store-v$(cat VERSION)-candidate-${GITHUB_SHA}.tar.gz"
+          sha256sum candidate/*.tar.gz > candidate/SHA256SUMS
+          python3 - <<'PY'
+          import json, os, pathlib
+          sha=os.environ['GITHUB_SHA']
+          version=pathlib.Path('VERSION').read_text().strip()
+          pathlib.Path('candidate/platform-manifest-candidate.json').write_text(json.dumps({
+            'repository':'Assyauq26/buattokoonline','version':'v'+version,'sha':sha,
+            'approved':False,'reason':'Candidate only; stable tag and final approval pending'
+          },indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mail-release-candidate-${{ github.sha }}
+          path: candidate/
+          if-no-files-found: error
+  mail:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16-bookworm
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: disposable-ci-mail-only
+        ports: ['5432:5432']
+        options: --health-cmd "pg_isready -U postgres" --health-interval 5s --health-retries 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - name: Build isolated store
+        working-directory: app
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          node node_modules/@prisma/engines/scripts/postinstall.js
+          npm run build
+      - name: Relay reliability and three independent store databases
+        env:
+          MAIL_TEST_DATABASE_URL: postgresql://postgres:disposable-ci-mail-only@127.0.0.1:5432/postgres
+        run: |
+          node --test services/mail-relay/*.test.mjs
+          node tests/mail-multistore.mjs
   install:
     strategy:
       fail-fast: false

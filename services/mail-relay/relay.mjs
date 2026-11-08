@@ -21,7 +21,7 @@ export function parseRegistry(entries, { requireCustomerAllowlist = false } = {}
         ((requireCustomerAllowlist || row.customerEmails !== undefined) && !validEmails(row.customerEmails)))
       throw new Error("invalid_registry");
     origins.add(row.origin);
-    stores.set(row.tokenHash, { origin: row.origin, brand: sanitizeMailBrand(row.brand),
+    stores.set(row.tokenHash, { tenantId: row.tenantId || row.origin, generation: row.generation, origin: row.origin, brand: sanitizeMailBrand(row.brand),
       sellerEmails: normalizedEmails(row.sellerEmails),
       customerEmails: row.customerEmails === undefined ? null : normalizedEmails(row.customerEmails) });
   }
@@ -29,14 +29,15 @@ export function parseRegistry(entries, { requireCustomerAllowlist = false } = {}
 }
 
 /** Authorize by a store-scoped token and registry identity before touching quotas or mail. */
-export async function relayMail({ authorization, payload }, { stores, reserve, deliver }) {
+export async function relayMail({ authorization, payload }, { stores, reserve, deliver, dispatch = undefined }) {
   const match = /^Bearer ([a-f0-9]{64})$/.exec(authorization || "");
   const store = match && stores.get(hashRelayValue(match[1]));
   if (!store) return 401;
   if (!payload || typeof payload !== "object" || Array.isArray(payload) ||
-      Object.keys(payload).some(key => !["purpose", "to", "value", "origin", "brand"].includes(key)))
+      Object.keys(payload).some(key => !["purpose", "to", "value", "origin", "brand", "requestId"].includes(key)))
     return 400;
   if (payload.origin !== store.origin) return 403;
+  if (payload.requestId !== undefined && !/^[a-f0-9-]{36}$/.test(payload.requestId)) return 400;
   if (typeof payload.purpose !== "string" || typeof payload.to !== "string") return 400;
   const to = payload.to.trim().toLowerCase();
   if ((payload.purpose.startsWith("seller-") || payload.purpose === "customer-test") && !store.sellerEmails.has(to))
@@ -47,7 +48,8 @@ export async function relayMail({ authorization, payload }, { stores, reserve, d
   let message;
   try { message = renderOtpMail({ ...payload, to }, store); }
   catch { return 400; }
-  if (!reserve(store.origin, to, payload.purpose)) return 429;
+  if (dispatch) return dispatch(message, store, payload);
+  if (!reserve(store.tenantId, to, payload.purpose)) return 429;
   try { await deliver(message); }
   catch { return 503; }
   return 202;

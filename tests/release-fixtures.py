@@ -12,13 +12,15 @@ import core
 
 fixture = Path('/tmp/store-release-fixture')
 subprocess.run(['git', 'clone', '--no-local', str(source), str(fixture)], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-for version, name in [('1.0.1', '20261106000001_store_update_probe'), ('1.0.2', '20261106000002_store_failure_probe')]:
+major, minor, patch = map(int, (source / 'VERSION').read_text().strip().split('.'))
+for offset, name in [(1, '20261106000001_store_update_probe'), (2, '20261106000002_store_failure_probe')]:
+    version = f'{major}.{minor}.{patch + offset}'
     (fixture / 'VERSION').write_text(version + '\n')
     migration = fixture / 'app/prisma/migrations' / name
     migration.mkdir()
-    table = 'StoreUpdateProbe' if version == '1.0.1' else 'StoreFailureProbe'
+    table = 'StoreUpdateProbe' if offset == 1 else 'StoreFailureProbe'
     (migration / 'migration.sql').write_text('CREATE TABLE "' + table + '" ("id" TEXT NOT NULL PRIMARY KEY, "note" TEXT);\n')
-    if version == '1.0.2':
+    if offset == 2:
         dockerfile = fixture / 'app/Dockerfile'
         dockerfile.write_text(dockerfile.read_text() + '\nCMD ["node", "-e", "process.exit(1)"]\n')
     package = Path('/tmp/store-v' + version + '.tar.gz')
