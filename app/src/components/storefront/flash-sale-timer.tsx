@@ -41,10 +41,12 @@ export function FlashSaleTimer({
   campaign,
   compact = false,
   inline = false,
+  segmented = false,
 }: {
   campaign: CampaignClock;
   compact?: boolean;
   inline?: boolean;
+  segmented?: boolean;
 }) {
   const elapsed = useSyncExternalStore(
     subscribe,
@@ -76,8 +78,7 @@ export function FlashSaleTimer({
     Math.floor((remaining % 3600) / 60),
     remaining % 60,
   ]
-    .map((v) => String(v).padStart(2, "0"))
-    .join(":");
+    .map((v) => String(v).padStart(2, "0"));
   const label =
     phase === "UPCOMING"
       ? "Flash Sale Dimulai Dalam"
@@ -87,7 +88,7 @@ export function FlashSaleTimer({
   return (
     <div
       className={
-        inline
+        segmented ? "flash-clock" : inline
           ? "flex flex-wrap items-center gap-x-1 text-[10px] leading-relaxed"
           : compact
             ? "text-xs"
@@ -97,12 +98,17 @@ export function FlashSaleTimer({
       data-campaign-id={campaign.id}
       data-deadline={phase === "UPCOMING" ? campaign.startsAt : campaign.endsAt}
     >
-      <span>{label}</span>
+      <span className={segmented ? "sr-only" : undefined}>{label}</span>
       <time
         dateTime={`PT${remaining}S`}
-        className={`font-semibold tabular-nums ${inline ? "" : "mt-1 block tracking-wide " + (compact ? "text-xl" : "text-2xl")}`}
+        className={segmented ? "flash-clock-time tabular-nums" : `font-semibold tabular-nums ${inline ? "" : "mt-1 block tracking-wide " + (compact ? "text-xl" : "text-2xl")}`}
       >
-        {time}
+        {segmented ? time.map((value, index) => (
+          <span className="flash-clock-segment" key={index}>
+            {index > 0 && <span className="flash-clock-colon">:</span>}
+            <span className="flash-clock-unit"><strong>{value}</strong><small>{["Jam", "Menit", "Detik"][index]}</small></span>
+          </span>
+        )) : time.join(":")}
       </time>
     </div>
   );

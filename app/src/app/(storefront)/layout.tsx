@@ -38,7 +38,7 @@ export default async function StorefrontLayout({
       <main className="container py-2 md:py-6">{children}</main>
 
       <footer className="mt-10 bg-white">
-        <div className="container grid grid-cols-2 gap-6 py-8 md:grid-cols-4">
+        <div className="store-trust container grid grid-cols-2 gap-6 py-8 md:grid-cols-4">
           {(theme.footer.trustFeatures ? [
             { icon: Truck, t: "Pengiriman Cepat", s: "ke seluruh Indonesia" },
             { icon: ShieldCheck, t: "Belanja Aman", s: "Informasi pesanan jelas" },
