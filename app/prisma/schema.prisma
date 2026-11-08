@@ -439,6 +439,7 @@ model Order {
   payment  Payment?
   shipment Shipment?
   jntShipmentRequest JntShipmentRequest?
+  jntShipmentAttempts JntShipmentAttempt[]
 
   @@index([userId])
   @@index([status])
@@ -621,8 +622,23 @@ model JntShipmentRequest {
   order Order @relation(fields: [orderId], references: [id], onDelete: Restrict)
 }
 
+// Immutable evidence of a confirmed-cancelled attempt before issuing a new AWB.
+model JntShipmentAttempt {
+  id String @id @default(uuid())
+  orderId String
+  externalOrderId String @unique @db.VarChar(20)
+  awb String? @db.VarChar(30)
+  requestSnapshot Json
+  shipmentSnapshot Json
+  archivedAt DateTime @default(now())
+  archivedBy String
+  order Order @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  @@index([orderId, archivedAt])
+}
+
 // ---------- Shipping ----------
 model Shipment {
+  cancelledAt DateTime?
   id                String         @id @default(cuid())
   orderId           String         @unique
   provider          String         @default("manual")
