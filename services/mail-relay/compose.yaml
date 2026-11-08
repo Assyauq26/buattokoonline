@@ -9,7 +9,7 @@ services:
       MAIL_RELAY_DB: /data/mail.sqlite
     volumes:
       - /var/lib/btos-mail-relay:/data
-    networks: [operator]
+    networks: [operator, platform]
     read_only: true
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
@@ -26,6 +26,9 @@ services:
       driver: json-file
       options: {max-size: 5m, max-file: '2'}
 networks:
+  platform:
+    external: true
+    name: btos-platform_web
   operator:
     external: true
     name: btos-mail-operator
