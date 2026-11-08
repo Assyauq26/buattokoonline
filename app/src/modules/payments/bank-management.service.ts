@@ -15,6 +15,7 @@ export const bankInputSchema = z.object({
 type Command = { kind: "create"; value: unknown } | { kind: "edit"; id: string; revision: string; value: unknown } | { kind: "status"; id: string; revision: string; active: boolean } | { kind: "delete"; id: string; revision: string };
 
 export async function manageBankAccount(actorId: string, command: Command) {
+  if (command.kind === "status" && typeof command.active !== "boolean") throw new HttpError("Status rekening tidak valid", 422);
   const parsed = command.kind === "create" || command.kind === "edit" ? bankInputSchema.safeParse(command.value) : null;
   if (parsed && !parsed.success) throw new HttpError("Isi nama bank, pemilik, nama tampilan, dan nomor rekening 3–34 digit.", 422);
   return prisma.$transaction(async tx => {
