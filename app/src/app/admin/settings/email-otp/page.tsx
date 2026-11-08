@@ -10,8 +10,9 @@ export default async function EmailOtpPage() {
     <section className="mx-auto w-full max-w-2xl space-y-5 pb-20">
       <header>
         <p className="text-sm font-medium text-zinc-600">Pengaturan</p>
-        <h1 className="mt-1 text-2xl font-bold tracking-tight text-zinc-950">Email &amp; OTP</h1>
+        <h1 className="mt-1 text-2xl font-bold tracking-tight text-zinc-950">Email &amp; OTP <span className="rounded-full bg-zinc-100 px-2 py-1 align-middle text-xs font-medium">Beta</span></h1>
         <p className="mt-2 text-sm text-zinc-600">Pengiriman email autentikasi dikelola Buattokosendiri.</p>
+        <p className="mt-2 text-sm text-zinc-600">Kapasitas bersama maksimal 100 email per hari pada paket Free, dengan batas per toko. Jika batas tercapai, email tidak dikirim atau diantre. Login dan pemulihan akun diprioritaskan.</p>
       </header>
       <dl className="divide-y divide-zinc-200 rounded-2xl border border-zinc-200 bg-white px-4 sm:px-6">
         {[

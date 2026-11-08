@@ -19,6 +19,7 @@ const admin = new PrismaClient({ datasources: { db: { url: connection.href } } }
 const children = [], created = [], databases = [], messages = [];
 const liveRecipient = process.env.MAIL_LIVE_RECIPIENT;
 const liveHost = process.env.MAIL_LIVE_SSH_HOST;
+const permanentRelay = process.env.MAIL_LIVE_PERMANENT_RELAY === '1';
 if (Boolean(liveRecipient) !== Boolean(liveHost) || (liveHost && !/^[a-z][a-z0-9-]+$/.test(liveHost)))
   throw Error('Explicit authorized recipient and SSH operator alias required together');
 const media = mkdtempSync(join(tmpdir(), 'btos-mail-media-'));
@@ -28,6 +29,19 @@ const identities = ['Gheverhan', 'Toko Makmur', 'Fashion Store'].map((brand, i) 
   brand, origin: `https://localhost:${3411 + i}`, token: randomBytes(32).toString('hex'),
   seller: liveRecipient || `seller${i}@example.test`, customer: liveRecipient || `customer${i}@example.test`,
 }));
+if (permanentRelay) {
+  if (!liveHost || !liveRecipient) throw Error('Permanent relay test requires explicit authorization');
+  const child = spawn('ssh', ['-o', 'BatchMode=yes', liveHost, 'sudo', '-n', 'cat', '/etc/btos-mail-relay/canary-stores.json'], { stdio: ['ignore', 'pipe', 'pipe'] });
+  let output = ''; child.stdout.on('data', b => output += b); child.stderr.resume();
+  if ((await once(child, 'exit'))[0] !== 0) throw Error('Canary credentials unavailable');
+  const records = JSON.parse(output);
+  for (const [i, tenant] of identities.entries()) {
+    assert.equal(records[i].brand, tenant.brand);
+    assert.equal(records[i].origin, tenant.origin);
+    assert.match(records[i].token, /^[a-f0-9]{64}$/);
+    tenant.token = records[i].token;
+  }
+}
 const registry = parseRegistry(identities.map(t => ({ ...t, tokenHash: hashRelayValue(t.token), sellerEmails: [t.seller],
   customerEmails: [t.seller, t.customer] })), { requireCustomerAllowlist: true });
 // Browser fixtures use the application's supported loopback HTTP origin. Only
@@ -37,7 +51,19 @@ if (process.env.MAIL_TEST_HOLD === '1') for (const tenant of identities) {
   registry.get(hashRelayValue(tenant.token)).origin = tenant.origin;
 }
 const quota = openQuota(':memory:');
-const relay = createRelayServer({ registry: () => registry, reserve: quota.reserve, deliver: async message => {
+const relay = createRelayServer({ registry: () => registry, reserve: quota.reserve,
+  ...(permanentRelay ? { dispatch: async (message, store, payload) => {
+    const identity = identities.find(t => t.origin === store.origin);
+    assert.ok(identity);
+    assert.equal(payload.to, liveRecipient);
+    const response = await fetch('https://buattokosendiri.web.id/api/platform/store-mail', {
+      method: 'POST', redirect: 'error', signal: AbortSignal.timeout(10000),
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${identity.token}` }, body: JSON.stringify(payload),
+    });
+    await response.body?.cancel();
+    if (response.status === 202) { messages.push(message); console.log(JSON.stringify({ permanentRelayAccepted: true, from: message.from, subject: message.subject })); }
+    return response.status;
+  } } : {}), deliver: async message => {
   if (liveHost) {
     // Provider credential stays on the operator server. Only authorized messages
     // cross authenticated SSH stdin; never argv, log, or a public test endpoint.

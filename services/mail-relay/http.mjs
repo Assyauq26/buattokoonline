@@ -44,6 +44,7 @@ export function createRelayServer({ registry, reserve, deliver, dispatch, ready 
       status = 503;
     }
     if (status === 503) console.warn("store_mail_relay.unavailable");
+    if (status === 429) console.warn("store_mail_relay.quota_exhausted");
     res.writeHead(status, { "Cache-Control": "no-store", ...([429, 503].includes(status) ? { 'Retry-After': '30' } : {}) }).end();
   });
 }

@@ -52,6 +52,10 @@ export async function deliverResend(endpoint, key, message, idempotencyKey) {
     body: JSON.stringify(message), cache: "no-store", redirect: "error",
     signal: AbortSignal.timeout(8000),
   });
-  await response.body?.cancel();
-  if (!response.ok) throw new Error("provider_rejected");
+  if (!response.ok) {
+    await response.body?.cancel();
+    throw new Error("provider_rejected");
+  }
+  const result = await response.json().catch(() => ({}));
+  return typeof result.id === 'string' ? result.id : undefined;
 }

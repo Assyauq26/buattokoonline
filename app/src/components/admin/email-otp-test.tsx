@@ -24,7 +24,7 @@ export function EmailOtpTest({ enabled }: { enabled: boolean }) {
       <p role="status" className="mt-3 text-sm text-zinc-700">
         {state === "accepted" && "Layanan menerima email uji. Periksa kotak masuk atau folder spam."}
         {state === "error" && "Email uji gagal dikirim. Coba lagi nanti atau hubungi Buattokosendiri."}
-        {state === "limited" && "Batas uji pengiriman tercapai. Coba lagi nanti."}
+        {state === "limited" && "Batas pengiriman Email & OTP Beta tercapai. Email belum dikirim. Coba lagi setelah batas pulih."}
       </p>
     </>
   );

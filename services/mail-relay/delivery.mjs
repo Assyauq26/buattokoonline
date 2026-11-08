@@ -3,7 +3,7 @@ import { DatabaseSync } from 'node:sqlite';
 
 // Persistent, secret-free delivery journal. Neither recipient nor OTP is stored.
 // Provider retries retain the same Resend idempotency key, including after restart.
-export function openDelivery(file, secret, { reserve, deliver, now = Date.now } = {}) {
+export function openDelivery(file, secret, { reserve, deliver, now = Date.now, minInterval = 0 } = {}) {
   if (!secret || secret.length < 32) throw Error('missing_delivery_secret');
   const db = new DatabaseSync(file);
   db.exec(`PRAGMA busy_timeout=2000;
@@ -11,6 +11,7 @@ export function openDelivery(file, secret, { reserve, deliver, now = Date.now } 
       fingerprint TEXT PRIMARY KEY, provider_key TEXT NOT NULL, state TEXT NOT NULL,
       lease INTEGER NOT NULL, expires INTEGER NOT NULL, quota_reserved INTEGER NOT NULL DEFAULT 0
     )`);
+  db.exec('CREATE TABLE IF NOT EXISTS provider_pacing (id INTEGER PRIMARY KEY, next_at INTEGER NOT NULL)');
   async function dispatch(message, store, payload) {
     const fingerprint = createHmac('sha256', secret).update(JSON.stringify([
       store.tenantId, payload.purpose, payload.to.trim().toLowerCase(), payload.value,
@@ -39,6 +40,13 @@ export function openDelivery(file, secret, { reserve, deliver, now = Date.now } 
       }
       db.prepare('UPDATE delivery SET quota_reserved=1 WHERE fingerprint=?').run(fingerprint);
     }
+    if (minInterval > 0) {
+      const slot = db.prepare('INSERT INTO provider_pacing VALUES (1, ?) ON CONFLICT(id) DO UPDATE SET next_at=excluded.next_at WHERE provider_pacing.next_at<=? RETURNING id').get(now() + minInterval, now());
+      if (!slot) {
+        db.prepare('UPDATE delivery SET lease=0 WHERE fingerprint=?').run(fingerprint);
+        return 429;
+      }
+    }
     try {
       await deliver(message, record.provider_key);
       db.prepare("UPDATE delivery SET state='sent',lease=0 WHERE fingerprint=?").run(fingerprint);
@@ -50,5 +58,6 @@ export function openDelivery(file, secret, { reserve, deliver, now = Date.now } 
       return 503;
     }
   }
-  return { dispatch, close: () => db.close(), healthy: () => Boolean(db.prepare('SELECT 1 AS ok').get().ok) };
+  return { dispatch, close: () => db.close(), healthy: () => Boolean(db.prepare('SELECT 1 AS ok').get().ok),
+    pending: () => Number(db.prepare("SELECT count(*) AS count FROM delivery WHERE state!='sent' AND expires>?").get(now()).count) };
 }
