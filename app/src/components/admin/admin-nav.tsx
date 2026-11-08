@@ -7,13 +7,13 @@ import {
   Landmark, LayoutGrid, Megaphone, Menu, Package, ScrollText,
   ShoppingBag, Store, Truck, Users, PlugZap, Settings,
 } from "lucide-react";
+import { ActionPopover } from "@/components/ui/action-popover";
 import { cn } from "@/lib/utils";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 
 const links = [
   { href: "/admin", label: "Dashboard", icon: LayoutGrid, exact: true, permission: null },
   { href: "/admin/customize", label: "Customize / Dekorasi Toko", display: "Dekorasi Toko", icon: Store, permission: PERMISSIONS.STORE_CUSTOMIZE_READ },
-  { href: "/admin/customize/hero", label: "Banner Hero", icon: Megaphone, permission: PERMISSIONS.STORE_CUSTOMIZE_READ },
   { href: "/admin/products", label: "Produk", icon: Package, permission: PERMISSIONS.PRODUCT_READ },
   { href: "/admin/orders", label: "Pesanan", icon: ShoppingBag, permission: PERMISSIONS.ORDER_READ },
   { href: "/admin/customers", label: "Pelanggan", icon: Users, permission: PERMISSIONS.CUSTOMER_READ },
@@ -37,7 +37,7 @@ function allowed(permissions: string[], item: (typeof links)[number], canManageJ
 }
 
 function activeLink(pathname: string, href: string, exact?: boolean) {
-  return exact || href === "/admin/customize"
+  return exact
     ? pathname === href
     : pathname === href || pathname.startsWith(href + "/");
 }
@@ -111,12 +111,10 @@ export function AdminMobileBottomNav({ permissions, canManageJnt = false }: { pe
             <span>{item.label}</span>
           </Link>;
         })}
-        <details className="group relative min-w-0 flex-1">
-          <summary className="flex min-h-[58px] cursor-pointer list-none flex-col items-center justify-center gap-1 rounded-2xl text-[11px] font-medium text-zinc-500 transition-colors duration-300 hover:bg-zinc-100 motion-reduce:transition-none [&::-webkit-details-marker]:hidden">
+        <ActionPopover label="Lainnya" className="min-w-0 flex-1" panelClassName="bottom-[calc(100%+18px)] max-h-[65dvh]" trigger={<span className="flex min-h-[58px] flex-col items-center justify-center gap-1 text-[11px] font-medium text-zinc-500">
             <Menu size={23} strokeWidth={1.9} aria-hidden="true" />
             <span>Lainnya</span>
-          </summary>
-          <div className="absolute bottom-[calc(100%+18px)] right-0 w-60 max-h-[65vh] overflow-y-auto rounded-2xl border border-line bg-white p-2 shadow-2xl">
+          </span>}>
             <div className="flex items-center justify-between px-3 py-2 text-sm font-semibold">Menu lainnya <Menu size={16} /></div>
             {extra.map(item => {
               const Icon = item.icon;
@@ -125,8 +123,7 @@ export function AdminMobileBottomNav({ permissions, canManageJnt = false }: { pe
               </Link>;
             })}
             <Link href="/" className="mt-1 flex min-h-11 items-center gap-3 border-t border-line px-3 text-sm"><Store size={18}/> Buka toko</Link>
-          </div>
-        </details>
+        </ActionPopover>
       </div>
     </nav>
   );
