@@ -17,6 +17,8 @@ export const PERMISSIONS = {
   SHIPPING_CREATE: "shipping.create",
   SHIPPING_UPDATE: "shipping.update",
   CUSTOMER_READ: "customer.read",
+  CUSTOMER_UPDATE: "customer.update",
+  CUSTOMER_DELETE: "customer.delete",
   PROMOTION_CREATE: "promotion.create",
   PROMOTION_UPDATE: "promotion.update",
   BANK_MANAGE: "bank.manage",

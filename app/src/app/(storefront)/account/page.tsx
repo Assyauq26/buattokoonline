@@ -4,6 +4,8 @@ import { Package, Heart, MapPin, ShieldCheck, ChevronRight } from "lucide-react"
 import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { LogoutButton } from "@/components/storefront/logout-button";
+import { AccountSettings } from "@/components/storefront/account-settings";
+import { readShippingSettings } from "@/modules/shipping/shipping-settings.service";
 import { Badge } from "@/components/ui/badge";
 
 export const dynamic = "force-dynamic";
@@ -17,6 +19,8 @@ export default async function AccountPage() {
     include: { addresses: true },
   });
 
+  const profile = await prisma.user.findUniqueOrThrow({ where: { id: user.id }, select: { id: true, name: true, email: true, phone: true, isActive: true, updatedAt: true } });
+  const shipping = await readShippingSettings();
   const links = [
     { href: "/orders", icon: Package, label: "Pesanan Saya" },
     { href: "/wishlist", icon: Heart, label: "Wishlist" },
@@ -55,19 +59,7 @@ export default async function AccountPage() {
         ))}
       </div>
 
-      <section className="rounded-2xl border border-line p-4">
-        <h2 className="mb-2 flex items-center gap-2 font-display font-bold text-ink"><MapPin size={18} /> Alamat Tersimpan</h2>
-        {customer?.addresses.length ? (
-          customer.addresses.map((a) => (
-            <div key={a.id} className="mt-2 rounded-xl bg-surface p-3 text-sm">
-              <p className="font-semibold text-ink">{a.recipientName} {a.isDefault && <Badge variant="default" className="ml-1">Utama</Badge>}</p>
-              <p className="text-ink-soft">{a.line}, {a.city}, {a.province} {a.postalCode}</p>
-            </div>
-          ))
-        ) : (
-          <p className="text-sm text-ink-muted">Belum ada alamat tersimpan.</p>
-        )}
-      </section>
+      {!user.isAdmin && <AccountSettings profile={{ ...profile, updatedAt: profile.updatedAt.toISOString() }} addresses={customer?.addresses || []} jnt={!!shipping.activeJnt} />}
 
       <LogoutButton />
     </div>

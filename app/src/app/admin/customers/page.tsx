@@ -1,13 +1,15 @@
 import { requireBackofficeUser } from "@/modules/admin/backoffice-access";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/prisma";
-import { Badge } from "@/components/ui/badge";
+import Link from "next/link";
+import { customerOnly } from "@/modules/customers/account.service";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminCustomersPage() {
   await requireBackofficeUser(PERMISSIONS.CUSTOMER_READ);
   const users = await prisma.user.findMany({
+    where: { ...customerOnly, deletedAt: null },
     include: { roles: { include: { role: true } }, _count: { select: { orders: true } } },
     orderBy: { createdAt: "desc" },
     take: 100,
@@ -16,22 +18,12 @@ export default async function AdminCustomersPage() {
   return (
     <div className="space-y-6">
       <h1 className="font-display text-2xl font-black text-ink">Pelanggan</h1>
-      <div className="overflow-hidden rounded-2xl border border-line bg-white">
-        <table className="w-full text-sm">
-          <thead className="border-b border-line bg-surface text-left text-xs uppercase text-ink-muted">
-            <tr><th className="p-3">Nama</th><th className="p-3">Email</th><th className="p-3">Role</th><th className="p-3">Pesanan</th></tr>
-          </thead>
-          <tbody className="divide-y divide-line">
-            {users.map((u) => (
-              <tr key={u.id} data-testid={`admin-customer-${u.id}`}>
-                <td className="p-3 font-semibold text-ink">{u.name}</td>
-                <td className="p-3 text-ink-soft">{u.email}</td>
-                <td className="p-3">{u.roles.map((r) => <Badge key={r.roleId} variant="muted" className="mr-1">{r.role.name}</Badge>)}</td>
-                <td className="p-3">{u._count.orders}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div className="space-y-3">
+        {!users.length && <p className="rounded-xl border p-5 text-sm">Belum ada pelanggan.</p>}
+        {users.map(u => <Link key={u.id} href={`/admin/customers/${u.id}`} className="flex min-w-0 items-center justify-between gap-3 rounded-xl border bg-white p-4" data-testid={`admin-customer-${u.id}`}>
+          <div className="min-w-0"><p className="truncate font-semibold">{u.name}</p><p className="truncate text-sm text-zinc-500">{u.email}</p></div>
+          <div className="shrink-0 text-right text-xs"><p>{u.isActive ? "Aktif" : "Nonaktif"}</p><p>{u._count.orders} pesanan</p></div>
+        </Link>)}
       </div>
     </div>
   );
