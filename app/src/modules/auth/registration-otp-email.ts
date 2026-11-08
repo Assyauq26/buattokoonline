@@ -56,8 +56,10 @@ export async function sendStoreMail(
       redirect: "error", cache: "no-store", signal: AbortSignal.timeout(10_000),
     });
     await response.body?.cancel();
+    if (response.status === 429) throw new HttpError("Batas pengiriman Email & OTP Beta tercapai. Email belum dikirim. Coba lagi setelah batas pengiriman pulih atau hubungi pengelola toko.", 429);
     if (!response.ok) throw unavailable();
-  } catch {
+  } catch (error) {
+    if (error instanceof HttpError) throw error;
     throw unavailable();
   }
 }

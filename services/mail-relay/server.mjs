@@ -1,5 +1,5 @@
 import { createRelayServer } from "./http.mjs";
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync, renameSync } from "node:fs";
 import { openQuota } from "./quota.mjs";
 import { deliverResend } from "../../app/src/modules/auth/mail-contract.mjs";
 import { parseRegistry } from "./relay.mjs";
@@ -22,8 +22,12 @@ const registry = process.env.MAIL_REGISTRY_URL ? remoteRegistry(process.env.MAIL
 if (!process.env.MAIL_REGISTRY_URL) registry();
 const quota = openQuota(MAIL_RELAY_DB);
 const delivery = openDelivery(MAIL_RELAY_DB, process.env.MAIL_CONTROL_SECRET || process.env.MAIL_IDEMPOTENCY_SECRET, {
+  minInterval: 250,
   reserve: quota.reserve,
-  deliver: (message, key) => deliverResend('https://api.resend.com/emails', RESEND_API_KEY, message, key),
+  deliver: async (message, key) => {
+    const id = await deliverResend('https://api.resend.com/emails', RESEND_API_KEY, message, key);
+    console.info(JSON.stringify({ event: 'mail_relay.accepted', providerId: id }));
+  },
 });
 const server = createRelayServer({
   registry, reserve: quota.reserve, dispatch: delivery.dispatch, ready: async () => {
@@ -45,8 +49,14 @@ server.listen(Number(process.env.MAIL_RELAY_PORT ?? 8092), bind);
 const monitor = setInterval(() => {
   try {
     const usage = quota.usage();
+    const nearLimit = usage.day >= usage.dayLimit * .8 || usage.month >= usage.monthLimit * .8;
+    const status = { checkedAt: new Date().toISOString(), ...usage, nearLimit,
+      pending: delivery.pending(), beta: true };
+    writeFileSync(MAIL_RELAY_DB + '.status.new', JSON.stringify(status), { mode: 0o600 });
+    renameSync(MAIL_RELAY_DB + '.status.new', MAIL_RELAY_DB + '.status.json');
+    if (nearLimit || status.pending > 0) console.warn(JSON.stringify({ event: 'mail_relay.operator_attention', ...status }));
     console.info(JSON.stringify({ event: 'mail_relay.usage', ...usage,
-      nearLimit: usage.day >= usage.dayLimit * .8 || usage.month >= usage.monthLimit * .8 }));
+      nearLimit }));
   } catch { console.error('mail_relay.monitor_unavailable'); }
 }, 60000);
 monitor.unref();

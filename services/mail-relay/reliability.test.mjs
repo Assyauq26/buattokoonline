@@ -6,6 +6,25 @@ import { join } from 'node:path';
 import { openDelivery } from './delivery.mjs';
 import { openQuota } from './quota.mjs';
 
+test('provider pacing persists across restart and does not queue expired OTPs', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'btos-pacing-'));
+  const file = join(dir, 'mail.sqlite');
+  let clock = 1000, sent = 0;
+  const options = { now: () => clock, minInterval: 250, reserve: () => true, deliver: async () => { sent++; } };
+  let ledger = openDelivery(file, 'test-secret-'.repeat(4), options);
+  const store = { tenantId: 'a', origin: 'https://a.example.test', brand: 'A' };
+  const payload = { purpose: 'seller-reset', to: 'a@example.test', value: '123456' };
+  try {
+    assert.equal(await ledger.dispatch({}, store, payload), 202);
+    ledger.close(); ledger = openDelivery(file, 'test-secret-'.repeat(4), options);
+    assert.equal(await ledger.dispatch({}, store, { ...payload, value: '654321' }), 429);
+    assert.equal(sent, 1);
+    clock += 250;
+    assert.equal(await ledger.dispatch({}, store, { ...payload, value: '654321' }), 202);
+    assert.equal(sent, 2);
+  } finally { ledger.close(); rmSync(dir, { recursive: true, force: true }); }
+});
+
 test('persistent delivery: concurrency, restart, timeout, retry idempotency', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'btos-mail-test-'));
   let clock = Date.now(), sends = 0, reservations = 0, failed = true;

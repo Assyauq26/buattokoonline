@@ -16,6 +16,14 @@ const stores = parseRegistry([
 ]);
 const payload = { origin, brand: "Gheverhan", purpose: "customer-registration", value: "012345", to: buyer };
 
+it("reports exhausted Beta capacity without claiming delivery", async () => {
+  vi.stubEnv("STORE_MAIL_RELAY_TOKEN", token);
+  vi.stubEnv("APP_ORIGIN", origin);
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null, { status: 429 })));
+  await expect(sendStoreMail("customer-registration", buyer, "012345")).rejects.toMatchObject({ status: 429 });
+  await expect(sendStoreMail("customer-registration", buyer, "012345")).rejects.toThrow("Email belum dikirim");
+});
+
 it("uses persisted branding for customer mail and only sends the store token to the fixed relay", async () => {
   vi.stubEnv("STORE_MAIL_RELAY_TOKEN", token);
   vi.stubEnv("RESEND_API_KEY", "platform-key-must-not-be-sent");
