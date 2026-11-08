@@ -43,9 +43,10 @@ export async function deleteManagedProduct(actorId: string, id: string, revision
             const owned = [ `store/product-images/${id}/${image.id}`, `store/product-images/staged-${image.id}/${image.id}` ];
             if (url.origin === "http://localhost" && url.pathname === `/api/v1/product-images/${image.id}` &&
                 owned.some(prefix => ["webp", "png", "jpg", "jpeg"].some(ext => objectPath === `${prefix}.${ext}`))) {
+              // Cancelled tombstones are cleanup-only, never valid upload sessions or ready media.
               await tx.stagedProductMedia.upsert({ where: { id: image.id }, update: {}, create: {
-                id: image.id, actorId, sessionHash: "deleted-product", contentHash: "legacy-owned-media", objectPath,
-                mime: "application/octet-stream", purpose: "product-delete", ready: true, productId: null, cancelledAt: new Date(), expiresAt: new Date()
+                id: image.id, actorId, sessionHash: "0".repeat(64), contentHash: "0".repeat(64), objectPath,
+                mime: "application/octet-stream", purpose: "gallery", ready: false, productId: null, cancelledAt: new Date(), expiresAt: new Date()
               } });
             }
           }
