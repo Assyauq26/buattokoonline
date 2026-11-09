@@ -153,10 +153,10 @@
   width: 100%;
   min-height: 44px;
   box-shadow: none;
-  border: 1px solid #E1251B;
+  border: 1px solid var(--auth-primary, #111);
   border-radius: 20px;
   padding: 10px 20px;
-  background: #E1251B;
+  background: var(--auth-primary, #111);
   color: hsl(var(--on-brand));
   font:
     500 14px/1.5 Arial,
@@ -180,7 +180,9 @@
   opacity: 0.7;
 }
 .auth-ui .auth-submit:hover:not(:disabled) {
-  background: hsl(var(--ink-soft));
+  background: var(--auth-hover, #242424);
+  border-color: var(--auth-hover, #242424);
+  color: var(--auth-foreground, #fff);
 }
 .auth-ui .auth-feedback:empty {
   display: none;
@@ -605,3 +607,9 @@
 .auth-ui .auth-submit:focus-visible{outline:2px solid var(--auth-primary,#111);outline-offset:4px}
 .auth-ui .auth-submit:disabled{opacity:.5;transform:none}
 @media(prefers-reduced-motion:reduce){.auth-ui .auth-submit{transition:none;transform:none}}
+
+.auth-ui .auth-submit.ui-button--loading > .ui-button__content { opacity: 1; padding-right: 24px; }
+.auth-ui .auth-submit.ui-button--loading > .ui-spinner { position: absolute; inset: auto 16px auto auto; width: 18px; height: 18px; color: inherit; }
+.auth-ui .auth-submit:is(:disabled, [aria-busy="true"]) { background: var(--auth-primary, #111); border-color: var(--auth-primary, #111); color: var(--auth-foreground, #fff); }
+
+.auth-ui .auth-submit[aria-busy="true"] {opacity:1}

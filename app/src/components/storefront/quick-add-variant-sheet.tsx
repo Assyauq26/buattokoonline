@@ -1,5 +1,6 @@
 "use client";
 import Image from "next/image";
+import { useRef, useState, useId } from "react";
 import { useAppearance } from "@/components/appearance/context";
 import { Button } from "@/components/ui/button";
 import { formatIDR, discountPercent } from "@/lib/money";
@@ -27,6 +28,9 @@ export function QuickAddVariantSheet({
   onCart: () => void;
 }) {
   const { config } = useAppearance();
+  const root = useRef<HTMLDivElement>(null),
+    [validation, setValidation] = useState("");
+  const feedbackId = useId();
   const selection = useProductOptions(product, initialOptions, initialQuantity),
     { selected, image, quantity } = selection;
   const prices = product.variants.map((v) => v.price),
@@ -35,8 +39,20 @@ export function QuickAddVariantSheet({
   const percent = selected
     ? discountPercent(selected.originalPrice, selected.price)
     : 0;
+  const allSoldOut = product.variants.every((v) => v.available <= 0);
+  const missing = product.groups.filter((g) => !selection.options[g.id]);
+  const hint = allSoldOut
+    ? "Stok habis"
+    : missing.length
+      ? `Pilih ${missing.map((g) => g.name.toLocaleLowerCase("id-ID")).join(" dan ")} terlebih dahulu.`
+      : !selected
+        ? "Kombinasi variasi tidak tersedia."
+        : selected.available < quantity
+          ? "Stok habis"
+          : "";
   return (
     <div
+      ref={root}
       data-testid="quick-add-variant-sheet"
       className="flex min-h-0 flex-col"
     >
@@ -63,7 +79,12 @@ export function QuickAddVariantSheet({
             <h3 className="line-clamp-2 break-words text-base font-semibold">
               {product.name}
             </h3>
-            <p className="mt-2 font-display text-lg font-bold" data-testid="quick-add-price" data-theme-role="price" data-discount={percent > 0}>
+            <p
+              className="mt-2 font-display text-lg font-bold"
+              data-testid="quick-add-price"
+              data-theme-role="price"
+              data-discount={percent > 0}
+            >
               {selected
                 ? formatIDR(selected.price)
                 : prices.length
@@ -72,8 +93,13 @@ export function QuickAddVariantSheet({
             </p>
             {percent > 0 && (
               <div className="mt-1 flex flex-wrap items-center gap-2">
-                <s className="text-xs text-ink-muted">{formatIDR(selected!.originalPrice)}</s>
-                <span data-badge-variant="sale" className="rounded-full bg-ink px-2 py-0.5 text-[11px] font-semibold text-white">
+                <s className="text-xs text-ink-muted">
+                  {formatIDR(selected!.originalPrice)}
+                </s>
+                <span
+                  data-badge-variant="sale"
+                  className="rounded-full bg-ink px-2 py-0.5 text-[11px] font-semibold text-white"
+                >
                   {percent}% OFF
                 </span>
               </div>
@@ -83,7 +109,10 @@ export function QuickAddVariantSheet({
         <ProductOptionSelector
           product={product}
           options={selection.options}
-          onChange={selection.setOptions}
+          onChange={(v) => {
+            selection.setOptions(v);
+            setValidation("");
+          }}
           busy={busy}
         />
         <div className="flex flex-wrap items-center gap-3">
@@ -116,20 +145,47 @@ export function QuickAddVariantSheet({
         )}
       </div>
       <div className="purchase-sheet-footer">
+        <p
+          id={feedbackId}
+          role="status"
+          aria-live="polite"
+          className="mb-3 text-sm"
+        >
+          {validation || hint}
+        </p>
         <Button
           className="purchase-submit w-full"
-          disabled={
-            busy || (!uncertain && (!selected || selected.available < quantity))
-          }
-          onClick={() =>
-            uncertain ? onCart() : selected && onSubmit(selected.id, quantity)
-          }
+          disabled={busy}
+          aria-disabled={busy || (!uncertain && !!hint)}
+          aria-describedby={feedbackId}
+          data-incomplete={!uncertain && !!hint}
+          onClick={() => {
+            if (busy) return;
+            if (uncertain) {
+              onCart();
+              return;
+            }
+            if (hint) {
+              setValidation(hint);
+              const group = root.current?.querySelector<HTMLElement>(
+                `[data-option-group="${missing[0]?.id}"]`,
+              );
+              group?.scrollIntoView({ block: "nearest", behavior: "instant" });
+              group
+                ?.querySelector<HTMLButtonElement>("button:not(:disabled)")
+                ?.focus();
+              return;
+            }
+            if (selected) onSubmit(selected.id, quantity);
+          }}
         >
           {busy
             ? "Menambahkan…"
             : uncertain
               ? "Periksa Keranjang"
-              : "Masukkan ke Keranjang"}
+              : allSoldOut || selected?.available === 0
+                ? "Stok habis"
+                : "Masukkan ke Keranjang"}
         </Button>
       </div>
     </div>

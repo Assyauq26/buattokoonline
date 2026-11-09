@@ -60,6 +60,7 @@ import {
   submitConfirmation,
 } from "@/modules/payments/payments.service";
 import {
+  listCustomerOrderPage,
   transitionOrder,
   completeOrderForBuyer,
 } from "@/modules/orders/orders.service";
@@ -796,4 +797,12 @@ it("generic status endpoints cannot bypass cancellation reason and financial rev
       })
     ).reserved,
   ).toBe(2);
+});
+
+it("customer cancellation filtering, counts and pagination run across the entire owner-scoped dataset", async()=>{
+ const prefix="PAG-"+randomUUID();
+ await prisma.order.createMany({data:Array.from({length:26},(_,i)=>({orderNumber:prefix+"-"+i,userId:i===25?other.id:buyer.id,status:i<12?"CANCELLED":"PAID",paymentStatus:i<12?"EXPIRED":"PAID",subtotal:100,discount:0,shippingCost:0,total:100,createdAt:new Date(Date.now()+i*1000)}))});
+ const result=await listCustomerOrderPage(buyer.id,{tab:"cancelled",q:prefix.toLowerCase(),page:2,pageSize:5});
+ expect(result.total).toBe(12);expect(result.counts.all).toBe(25);expect(result.counts.cancelled).toBe(12);expect(result.orders).toHaveLength(5);expect(result.page).toBe(2);expect(result.pages).toBe(3);expect(result.orders.every(o=>o.userId===buyer.id&&o.status==="CANCELLED")).toBe(true);
+ const last=await listCustomerOrderPage(buyer.id,{tab:"cancelled",q:prefix,page:999,pageSize:5});expect(last.page).toBe(3);expect(last.orders).toHaveLength(2);
 });

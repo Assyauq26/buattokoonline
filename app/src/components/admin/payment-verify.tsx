@@ -1,5 +1,12 @@
+import { formatIDR } from "@/lib/money";
 import { OperationForm } from "./operation-form";
-export function PaymentVerify({ paymentId }: { paymentId: string }) {
+export function PaymentVerify({
+  paymentId,
+  amount,
+}: {
+  paymentId: string;
+  amount?: number;
+}) {
   return (
     <div
       data-testid={`payment-verify-${paymentId}`}
@@ -8,7 +15,7 @@ export function PaymentVerify({ paymentId }: { paymentId: string }) {
       <OperationForm
         url={`/api/v1/admin/payments/${paymentId}/approve`}
         label="Terima pembayaran"
-        confirmation="Saya telah memeriksa mutasi dan dana benar-benar diterima. Reservasi stok akan dicatat sebagai penjualan."
+        confirmation={`Pastikan dana ${amount === undefined ? "pembeli" : formatIDR(amount)} sudah masuk ke rekening Anda. Bukti unggah pembeli bukan konfirmasi dari bank. Reservasi stok akan dicatat sebagai penjualan.`}
         fields={[]}
       />
       <details>

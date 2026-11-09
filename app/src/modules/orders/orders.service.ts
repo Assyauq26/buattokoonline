@@ -13,7 +13,14 @@ import { canExpireOrder } from "./expiry-policy";
 const orderInclude = {
   resolutions: {
     orderBy: { createdAt: "desc" },
-    select: { id: true, kind: true, state: true, refundAmount: true },
+    select: {
+      id: true,
+      kind: true,
+      state: true,
+      refundAmount: true,
+      reason: true,
+      createdAt: true,
+    },
   },
   items: true,
   address: true,
@@ -39,6 +46,84 @@ export function listOrdersForUser(userId: string) {
     include: { items: true, payment: true, shipment: true },
     orderBy: { createdAt: "desc" },
   });
+}
+
+export async function listCustomerOrderPage(
+  userId: string,
+  input: { tab: string; q: string; page: number; pageSize?: number },
+) {
+  const pageSize = Number.isSafeInteger(input.pageSize)
+      ? Math.min(30, Math.max(1, input.pageSize!))
+      : 10,
+    page = Number.isSafeInteger(input.page) ? Math.max(1, input.page) : 1;
+  const search: Prisma.OrderWhereInput = {
+    userId,
+    ...(input.q
+      ? {
+          OR: [
+            { orderNumber: { contains: input.q, mode: "insensitive" } },
+            {
+              items: {
+                some: {
+                  productName: { contains: input.q, mode: "insensitive" },
+                },
+              },
+            },
+          ],
+        }
+      : {}),
+  };
+  const groups: Record<string, Prisma.OrderWhereInput> = {
+    all: {},
+    unpaid: {
+      status: "PENDING_PAYMENT",
+      paymentStatus: { not: "WAITING_VERIFICATION" },
+    },
+    process: {
+      OR: [
+        { status: "PENDING_PAYMENT", paymentStatus: "WAITING_VERIFICATION" },
+        { status: { in: ["PAID", "PROCESSING", "PACKED"] } },
+      ],
+    },
+    shipped: { status: "SHIPPED" },
+    done: { status: { in: ["DELIVERED", "COMPLETED"] } },
+    cancelled: { status: { in: ["CANCELLED", "REFUNDED"] } },
+  };
+  return prisma.$transaction(
+    async (tx) => {
+      const counts: Record<string, number> = {};
+      for (const [tab, filter] of Object.entries(groups))
+        counts[tab] = await tx.order.count({
+          where: { AND: [search, filter] },
+        });
+      const total = counts[input.tab] ?? counts.all,
+        actualPage = Math.min(page, Math.max(1, Math.ceil(total / pageSize)));
+      const orders = await tx.order.findMany({
+        where: { AND: [search, groups[input.tab] || {}] },
+        include: {
+          items: true,
+          payment: true,
+          shipment: true,
+          resolutions: {
+            select: { state: true, refundAmount: true },
+            orderBy: { createdAt: "desc" },
+            take: 1,
+          },
+        },
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        skip: (actualPage - 1) * pageSize,
+        take: pageSize,
+      });
+      return {
+        orders,
+        counts,
+        total,
+        page: actualPage,
+        pages: Math.ceil(total / pageSize),
+      };
+    },
+    { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
+  );
 }
 
 export async function getOrderForUser(userId: string, id: string) {

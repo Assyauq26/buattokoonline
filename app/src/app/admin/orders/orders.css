@@ -1039,9 +1039,9 @@
   color: var(--store-textMuted, #62626a);
 }
 .order-workflow .order-filter-sheet footer button.flow-danger {
-  background: #bf1827;
-  color: #fff;
-  border-color: #bf1827;
+  background: var(--store-primary,#111);
+  color: var(--store-primaryText,#fff);
+  border-color: var(--store-primary,#111);
 }
 .order-workflow .order-filter-sheet footer button:not(.flow-danger) {
   background: var(--store-card, #fff);
@@ -1060,3 +1060,6 @@
   align-items: center;
   min-height: 44px;
 }
+
+.order-workflow .flow-danger { background:var(--store-primary,#111);border-color:var(--store-primary,#111);color:var(--store-primaryText,#fff) }
+.order-workflow .flow-danger:hover {background:var(--store-primaryHover,#242424)}

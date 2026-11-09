@@ -2,7 +2,7 @@
 import { movementLabel } from "../../src/components/admin/movement-label";
 import React from "react";
 import { afterEach, describe, it, expect, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { OperationNotice } from "../../src/components/admin/operation-notice";
 import { OperationForm } from "../../src/components/admin/operation-form";
 import { operationPayload } from "../../src/components/admin/operation-payload";
@@ -15,7 +15,7 @@ vi.stubGlobal("React", React);
 afterEach(() => { cleanup(); history.replaceState({}, "", "/"); sessionStorage.clear(); vi.unstubAllGlobals(); vi.stubGlobal("React", React); refresh.mockClear(); });
 const fields = [{ name: "reason", label: "Alasan", required: true }];
 function form() { return render(React.createElement(OperationForm, { url: "/api/test", label: "Simpan", confirmation: "Pastikan data benar.", fields, requestId: true })); }
-async function confirm() { fireEvent.change(screen.getByLabelText("Alasan *"), { target: { value: "Koreksi" } }); fireEvent.submit(screen.getByRole("form", { name: "Simpan" })); await screen.findByText("Pastikan data benar."); fireEvent.submit(screen.getByRole("form", { name: "Simpan" })); }
+async function confirm() { fireEvent.change(screen.getByLabelText("Alasan *"), { target: { value: "Koreksi" } }); fireEvent.submit(screen.getByRole("form", { name: "Simpan" })); await screen.findByText("Pastikan data benar."); fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button",{name:"Simpan"})); }
 describe("operations forms", () => {
   it("shows a one-time success notice only for the recently saved page", () => {
     sessionStorage.setItem("store:operation-saved", JSON.stringify({ path: location.pathname, at: Date.now() })); const view = render(React.createElement(OperationNotice));
@@ -26,21 +26,21 @@ describe("operations forms", () => {
   });
   it("requires confirmation before mutation and reports success", async () => {
     const fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ success: true }) }); vi.stubGlobal("fetch", fetch); form();
-    fireEvent.submit(screen.getByRole("form", { name: "Simpan" })); expect(fetch).not.toHaveBeenCalled();
-    fireEvent.submit(screen.getByRole("form", { name: "Simpan" })); await screen.findByRole("status"); expect(refresh).toHaveBeenCalledOnce(); expect(refresh).toHaveBeenCalledWith(true); expect(fetch).toHaveBeenCalledOnce();
+    fireEvent.change(screen.getByLabelText("Alasan *"),{target:{value:"Koreksi"}});fireEvent.submit(screen.getByRole("form", { name: "Simpan" })); expect(fetch).not.toHaveBeenCalled();
+    fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button",{name:"Simpan"})); await screen.findByRole("status"); expect(refresh).toHaveBeenCalledOnce(); expect(refresh).toHaveBeenCalledWith(true); expect(fetch).toHaveBeenCalledOnce();
   });
   it("prevents overlapping submits", async () => {
     let finish!: (value: unknown) => void; const fetch = vi.fn(() => new Promise(r => { finish = r; })); vi.stubGlobal("fetch", fetch); form(); await confirm();
-    fireEvent.submit(screen.getByRole("form", { name: "Simpan" })); expect(fetch).toHaveBeenCalledOnce();
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button",{name:"Memproses…"})); expect(fetch).toHaveBeenCalledOnce();
     finish({ ok: true, json: async () => ({ success: true }) }); await screen.findByRole("status");
   });
   it("shows field validation and conflict recovery with focus", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 409, json: async () => ({ success: false, error: { message: "Stok berubah", details: { fieldErrors: { reason: ["Alasan wajib"] } } } }) })); form(); await confirm();
     expect((await screen.findByRole("alert")).textContent).toContain("Muat ulang data"); expect(screen.getByText("Alasan wajib")).toBeTruthy();
-    await waitFor(() => expect(document.activeElement?.getAttribute("aria-label")).toBe("Hasil Simpan"));
+    await waitFor(() => expect(screen.getByRole("dialog").contains(document.activeElement)).toBe(true));
   });
   it("preserves idempotency key when retrying an uncertain network outcome", async () => {
-    const fetch = vi.fn().mockRejectedValueOnce(new Error("offline")).mockResolvedValue({ ok: true, json: async () => ({ success: true }) }); vi.stubGlobal("fetch", fetch); form(); await confirm(); await screen.findByRole("alert"); fireEvent.submit(screen.getByRole("form", { name: "Simpan" })); await screen.findByRole("status");
+    const fetch = vi.fn().mockRejectedValueOnce(new Error("offline")).mockResolvedValue({ ok: true, json: async () => ({ success: true }) }); vi.stubGlobal("fetch", fetch); form(); await confirm(); await screen.findByRole("alert"); fireEvent.click(within(screen.getByRole("dialog")).getByRole("button",{name:"Simpan"})); await screen.findByRole("status");
     expect(JSON.parse(fetch.mock.calls[0][1].body).requestId).toBe(JSON.parse(fetch.mock.calls[1][1].body).requestId);
   });
 });

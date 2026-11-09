@@ -103,7 +103,7 @@ async function PaymentContent({
                 o.status === "PENDING_PAYMENT" &&
                 a.permissions.includes(PERMISSIONS.PAYMENT_VERIFY) && (
                   <Suspense fallback={<OperationsSkeleton />}>
-                    <PaymentVerify paymentId={p.id} />
+                    <PaymentVerify amount={o.total} paymentId={p.id} />
                   </Suspense>
                 )}
             </section>
