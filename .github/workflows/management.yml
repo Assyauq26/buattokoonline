@@ -41,6 +41,7 @@ jobs:
       - name: Full application and security tests
         working-directory: app
         run: |
+          npm run lint
           npm run typecheck
           npm test
       - name: Email relay regression
@@ -48,7 +49,7 @@ jobs:
       - name: Validate operator upgrade syntax
         run: |
           python3 -m compileall -q deploy installer
-          python3 -m unittest discover -s deploy -p test_hubify_v130.py
+          python3 -m unittest discover -s deploy -p "test_hubify_v*.py"
       - name: Production build
         working-directory: app
         run: npm run build
@@ -60,6 +61,11 @@ jobs:
             cd ..
             node tests/management-browser.mjs
           fi
+      - name: Fixed PDF and barcode evidence
+        run: |
+          node tests/awb-evidence.mjs
+          python3 -m pip install --quiet pymupdf zxing-cpp pillow
+          python3 tests/verify-awb-pdf.py
       - uses: actions/upload-artifact@v4
         if: always()
         with:

@@ -148,8 +148,9 @@ export default async function OrderDetailPage({
       </section>
 
       {/* Shipping tracking */}
-      {order.shipment && (
-        <section className="rounded-2xl border border-line p-4">
+      {order.shipment?.cancelledAt && <section id="tracking" className="rounded-2xl border border-line p-4"><h2 className="font-bold">Pengiriman dibatalkan</h2><p className="text-sm text-ink-soft">Resi lama tidak aktif. Toko sedang menyiapkan pengiriman berikutnya. Pesanan dan pembayaran tetap mengikuti status yang tertera.</p></section>}
+      {order.shipment && !order.shipment.cancelledAt && (
+        <section id="tracking" className="rounded-2xl border border-line p-4">
           <h2 className="mb-3 flex items-center gap-2 font-display font-bold text-ink">
             <Truck size={18} /> Pengiriman
           </h2>

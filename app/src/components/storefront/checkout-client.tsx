@@ -299,9 +299,9 @@ export function CheckoutClient({
             <Truck size={18} /> Layanan Pengiriman
           </h2>
           {!location && <p className="checkout-shipping-placeholder"><Truck size={22} aria-hidden="true" /> {jntCheckout ? "Pilih lokasi untuk melihat ongkir J&T." : "Pilih lokasi untuk melihat ongkir."}</p>}
-          {location && quote?.status === "loading" && <p role="status" className="checkout-shipping-placeholder">Memeriksa layanan pengiriman…</p>}
+          {location && quote?.status === "loading" && <div role="status" aria-label="Memeriksa layanan pengiriman" className="grid min-h-20 gap-2" aria-busy="true"><span className="sr-only">Memeriksa layanan pengiriman…</span><div className="h-16 rounded-xl bg-zinc-100 motion-safe:animate-pulse" /></div>}
           <div className="space-y-2">
-            {rates.map((r, i) => (
+            {(currentQuote ? rates : []).map((r, i) => (
               <label
                 key={i}
                 className={cn(

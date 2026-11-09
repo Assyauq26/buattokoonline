@@ -9,7 +9,6 @@ import {
 } from "react";
 import { useFormState, useFormStatus } from "react-dom";
 import Link from "next/link";
-import Image from "next/image";
 import { Button, Checkbox, Icon, Input, Label } from "./lumen";
 import {
   loginAction,
@@ -185,7 +184,7 @@ export function LoginForm({ redirectTo, passwordReset }: { redirectTo?: string; 
   );
   return (
     <div className="auth-content">
-      <Heading title="Masuk">Selamat datang kembali di toko ini.</Heading>
+      <Heading title={/^\/admin(?:[/?]|$)/.test(redirectTo ?? "") ? "Masuk Seller" : "Masuk"}>Selamat datang kembali di toko ini.</Heading>
       <form
         action={action}
         className="auth-form"
@@ -224,11 +223,7 @@ export function LoginForm({ redirectTo, passwordReset }: { redirectTo?: string; 
       <p className="auth-switch">
         Belum punya akun? <Link href="/register">Daftar</Link>
       </p>
-      {!/^\/admin(?:[/?]|$)/.test(redirectTo ?? "") && (
-        <p className="auth-switch">
-          <Link href="/seller-password-reset">Lupa password akun seller?</Link>
-        </p>
-      )}
+
     </div>
   );
 }
@@ -528,7 +523,6 @@ export function ForgotForm() {
         <Submit label="Kirim Tautan Reset" />
       </form>
       <p className="auth-switch">
-        <Link href="/seller-password-reset">Lupa password dashboard seller?</Link><br />
         <Link href="/login">Kembali ke Masuk</Link>
       </p>
     </div>

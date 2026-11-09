@@ -18,7 +18,7 @@ const out = resolve(process.env.MANAGEMENT_EVIDENCE || 'management-evidence'); m
 let browser, child;
 const checks = [];
 try {
-  const adminRole = await db.role.findUniqueOrThrow({ where: { name: 'Admin' } });
+  const adminRole = await db.role.upsert({ where: { name: 'Admin' }, update: {}, create: { name:'Admin',label:'Admin' } });
   const permissionKeys = ['product.read','product.create','product.update','product.delete','inventory.read','order.read','customer.read','customer.update','customer.delete','bank.manage','store.customize.read','store.customize.update','store.customize.publish'];
   for (const key of permissionKeys) {
     const permission = await db.permission.upsert({ where: { key }, update: {}, create: { key, label: key } });
@@ -28,6 +28,8 @@ try {
   const customer = await db.user.create({ data: { name: 'Pelanggan Demo', email: `${run}-customer@example.test`, phone: '+628' + Date.now().toString().slice(-10), passwordHash: 'disabled-e2e-login', customer: { create: { fullName: 'Pelanggan Demo', addresses: { create: [{ recipientName: 'Pelanggan Demo', phone: '081234567890', line: 'Jalan Contoh Nomor 1', city: 'Batang', province: 'Jawa Tengah', district: 'Warungasem', village: 'Banjaran', postalCode: '', isDefault: true }, { recipientName: 'Pelanggan Demo', phone: '081234567890', line: 'Jalan Contoh Nomor 2', city: 'Batang', province: 'Jawa Tengah', postalCode: '' }] } } } } });
   const category = await db.category.create({ data: { name: 'Kategori Demo', slug: 'demo-' + run } });
   for (let i = 0; i < 25; i++) await db.product.create({ data: { name: `Produk Demo ${String(i).padStart(2, '0')} Nama Variasi Panjang`, slug: `${run}-${i}`, basePrice: i === 0 ? 19990000 : 89000, salePrice: i === 0 ? 12990000 : 59000, status: 'DRAFT', categoryId: category.id, variants: { create: { sku: `${run}-${i}`, inventory: { create: { onHand: 10 } } } } } });
+  const variant=await db.productVariant.findFirstOrThrow({where:{sku:`${run}-1`}});
+  for(const [n,status,paymentStatus] of [[1,'PENDING_PAYMENT','WAITING_VERIFICATION'],[2,'PACKED','PAID'],[3,'SHIPPED','PAID']])await db.order.create({data:{orderNumber:`ORD-DEMO-${run.slice(0,8)}-${n}`,userId:customer.id,status,paymentStatus,subtotal:59000,total:66000,shippingCost:7000,shippingCourier:'J&T Express',shippingService:'EZ',expiresAt:new Date(Date.now()+86400000),address:{create:{recipientName:'Pelanggan Demo',phone:'081234567890',line:'Jalan Contoh 1',city:'Batang',province:'Jawa Tengah',postalCode:''}},items:{create:{variantId:variant.id,productName:'Produk Contoh',variantLabel:'Biru / XL',unitPrice:59000,quantity:1,lineTotal:59000}},payment:{create:{provider:'manual',method:'bank_transfer',amount:66000,status:paymentStatus}}}});
   await db.storeAppearance.upsert({ where: { key: 'primary' }, update: { draft: appearance, published: appearance }, create: { key: 'primary', draft: appearance, published: appearance } });
   await db.flashSaleControl.upsert({ where: { key: 'primary' }, update: {}, create: { key: 'primary' } });
   const media = process.platform === 'win32' ? '/Users/HYPE AI/Documents/ChatGPT/Buat Toko Online/audit-tools/management-v130-media' : resolve(out, 'media');
@@ -45,18 +47,25 @@ try {
   }
   const staffContext = await context(admin), customerContext = await context(customer);
   const staffPage = await staffContext.newPage(), accountPage = await customerContext.newPage();
+  const anonymous=await browser.newContext();
+  const deniedAnonymous=await anonymous.request.get(origin+'/api/v1/admin/orders/not-owned/awb',{maxRedirects:0});
+  assert.ok([303,307,308,401,403,404].includes(deniedAnonymous.status()));assert.ok(!(deniedAnonymous.headers()['content-type']||'').includes('application/pdf'));
+  const deniedCustomer=await customerContext.request.get(origin+'/api/v1/admin/orders/not-owned/awb',{maxRedirects:0});assert.equal(deniedCustomer.status(),404);await anonymous.close();checks.push('AWB PDF rejects anonymous and customer access');
   staffPage.on('pageerror', e => console.log('Browser error:', e.message));
   staffPage.on('dialog', d => d.accept()); accountPage.on('dialog', d => d.accept());
-  for (const width of [360, 390, 768, 1024, 1280, 1440]) {
-    for (const [page, path, name] of [[staffPage, '/admin/products', 'products'], [staffPage, '/admin/bank-accounts', 'banks'], [staffPage, `/admin/customers/${customer.id}`, 'customer'], [accountPage, '/account', 'account']]) {
+  for (const width of [360, 390, 430, 768, 1024, 1280, 1440, 1920]) {
+    for (const [page, path, name] of [[staffPage, '/admin/products', 'products'], [staffPage, '/admin/bank-accounts', 'banks'], [staffPage, `/admin/customers/${customer.id}`, 'customer'], [accountPage, '/account', 'account'], [accountPage, '/orders', 'orders'], [staffPage, '/admin/orders', 'seller-orders'], [accountPage, '/login', 'login']]) {
       await page.setViewportSize({ width, height: 900 });
       const response = await page.goto(origin + path); assert.equal(response.status(), 200, `${name} HTTP`); await page.waitForLoadState('networkidle');
-      assert.ok(!page.url().includes('/login'), `Session on ${path}`);
+      if(path!=='/login') assert.ok(!page.url().includes('/login'), `Session on ${path}`);
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false, `${name} overflow at ${width}`);
       await page.screenshot({ path: resolve(out, `${name}-${width}.png`), fullPage: true });
       checks.push(`${name} ${width}: no overflow`);
     }
   }
+  await staffPage.goto(origin+'/admin/orders'); await staffPage.getByRole('button',{name:'Filter pesanan',exact:true}).click();
+  await staffPage.getByRole('dialog').waitFor();await staffPage.keyboard.press('Escape');await staffPage.getByRole('dialog').waitFor({state:'hidden'});checks.push('Order filter Escape dismissal');
+  await accountPage.goto(origin+'/login');assert.equal(await accountPage.getByText('Lupa password akun seller?',{exact:true}).count(),0);checks.push('No seller recovery on customer login');
   await staffPage.setViewportSize({ width: 390, height: 844 }); await staffPage.goto(origin + '/admin/products'); await staffPage.waitForLoadState('networkidle');
   const more = staffPage.getByRole('button', { name: 'Lainnya', exact: true });
   await more.click(); await assertExpanded(true); await staffPage.keyboard.press('Escape'); await assertExpanded(false);
@@ -64,9 +73,10 @@ try {
   await more.click(); await more.click(); await assertExpanded(false); checks.push('Mobile menu toggle / Escape / outside click');
   async function assertExpanded(value) { await staffPage.waitForFunction(({ value }) => document.querySelector('button[aria-label="Lainnya"]')?.getAttribute('aria-expanded') === String(value), { value }); }
   assert.equal(await staffPage.getByText('Banner Hero', { exact: true }).count(), 0);
+  await staffPage.waitForLoadState('networkidle');
   await staffPage.getByRole('combobox', { name: 'Filter kategori' }).selectOption(category.id);
   await staffPage.getByRole('textbox', { name: 'Cari produk' }).fill('Produk Demo 00'); await staffPage.getByRole('button', { name: 'Cari', exact: true }).click();
-  await staffPage.waitForURL(/q=/, { waitUntil: 'domcontentloaded' }); await staffPage.getByRole('link', { name: 'Produk Demo 00 Nama Variasi Panjang' }).waitFor(); checks.push('Product search');
+  try { await staffPage.waitForURL(/q=/, { waitUntil: 'domcontentloaded' }); } catch(e) { await staffPage.screenshot({path:resolve(out,'search-failure.png'),fullPage:true}); writeFileSync(resolve(out,'search-failure.txt'),await staffPage.locator('body').innerText()); throw e; } await staffPage.getByRole('link', { name: 'Produk Demo 00 Nama Variasi Panjang' }).waitFor(); checks.push('Product search');
   await staffPage.getByRole('button', { name: 'Aksi Produk Demo 00 Nama Variasi Panjang' }).click(); await staffPage.getByRole('button', { name: 'Hapus produk', exact: true }).click();
   await staffPage.waitForTimeout(1000); assert.equal(await db.product.count({ where: { slug: `${run}-0` } }), 0); checks.push('Product delete through UI');
   await staffPage.goto(origin + '/admin/bank-accounts');
@@ -82,8 +92,9 @@ try {
   await bankCard().getByRole('button', { name: 'Aktifkan', exact: true }).waitFor();
   await bankCard().getByRole('button', { name: 'Hapus', exact: true }).click();
   await bankCard().waitFor({ state: 'detached' }); checks.push('Bank edit / disable / delete through UI');
-  await accountPage.goto(origin + '/account'); await accountPage.getByLabel('Nama', { exact: true }).fill('Profil Browser Diperbarui'); await accountPage.getByRole('button', { name: 'Simpan Profil' }).click(); await accountPage.getByText('Profil berhasil diperbarui.', { exact: true }).waitFor();
+  await accountPage.goto(origin + '/account/settings?section=profile'); await accountPage.getByLabel('Nama', { exact: true }).fill('Profil Browser Diperbarui'); await accountPage.getByRole('button', { name: 'Simpan Profil' }).click(); await accountPage.getByText('Profil berhasil diperbarui.', { exact: true }).waitFor();
   assert.equal((await db.user.findUniqueOrThrow({ where: { id: customer.id } })).name, 'Profil Browser Diperbarui'); checks.push('Customer profile through UI');
+  await accountPage.goto(origin + '/account/settings?section=addresses');
   await accountPage.getByRole('button', { name: 'Jadikan Utama' }).first().click(); await accountPage.getByText('Alamat utama diperbarui.', { exact: true }).waitFor(); checks.push('Customer default address through UI');
   writeFileSync(resolve(out, 'results.json'), JSON.stringify({ passed: checks, productionWrites: false }, null, 2));
   console.log(JSON.stringify({ passed: checks.length, evidence: out }));

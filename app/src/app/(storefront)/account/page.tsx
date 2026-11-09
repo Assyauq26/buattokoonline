@@ -1,67 +1,22 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Package, Heart, MapPin, ShieldCheck, ChevronRight } from "lucide-react";
+import { Wallet, Package, Truck, CircleCheck, Heart, Ticket, MapPin, Settings, CircleHelp, ChevronRight, Pencil, ReceiptText, ShieldCheck } from "lucide-react";
 import { getCurrentUser } from "@/lib/auth/session";
-import { prisma } from "@/lib/prisma";
+import { listOrdersForUser } from "@/modules/orders/orders.service";
+import { customerOrderGroup } from "@/lib/customer-order-view";
 import { LogoutButton } from "@/components/storefront/logout-button";
-import { AccountSettings } from "@/components/storefront/account-settings";
-import { readShippingSettings } from "@/modules/shipping/shipping-settings.service";
-import { Badge } from "@/components/ui/badge";
-
-export const dynamic = "force-dynamic";
-export const metadata = { title: "Akun Saya", robots: { index: false } };
-
-export default async function AccountPage() {
-  const user = await getCurrentUser();
-  if (!user) redirect("/login?redirectTo=/account");
-  const customer = await prisma.customer.findUnique({
-    where: { userId: user.id },
-    include: { addresses: true },
-  });
-
-  const profile = await prisma.user.findUniqueOrThrow({ where: { id: user.id }, select: { id: true, name: true, email: true, phone: true, isActive: true, updatedAt: true } });
-  const shipping = await readShippingSettings();
-  const links = [
-    { href: "/orders", icon: Package, label: "Pesanan Saya" },
-    { href: "/wishlist", icon: Heart, label: "Wishlist" },
-  ];
-
-  return (
-    <div className="mx-auto max-w-2xl space-y-6">
-      <div className="flex items-center gap-4">
-        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-black text-xl font-bold text-white">
-          {user.name.charAt(0).toUpperCase()}
-        </div>
-        <div>
-          <h1 className="font-display text-2xl font-black text-ink">{user.name}</h1>
-          <p className="text-sm text-ink-soft">{user.email}</p>
-          <div className="mt-1 flex flex-wrap gap-1">
-            {user.roles.map((r) => (
-              <Badge key={r} variant="muted">{r}</Badge>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {user.isAdmin && (
-        <Link href="/admin" className="flex items-center justify-between rounded-2xl border border-black bg-black p-4 text-white" data-testid="admin-link">
-          <span className="flex items-center gap-2 font-semibold"><ShieldCheck size={18} /> Buka Panel Admin</span>
-          <ChevronRight size={18} />
-        </Link>
-      )}
-
-      <div className="divide-y divide-line rounded-2xl border border-line">
-        {links.map((l) => (
-          <Link key={l.href} href={l.href} className="flex items-center justify-between p-4 hover:bg-surface" data-testid={`account-link-${l.href.slice(1)}`}>
-            <span className="flex items-center gap-3 text-sm font-semibold text-ink"><l.icon size={18} /> {l.label}</span>
-            <ChevronRight size={18} className="text-ink-muted" />
-          </Link>
-        ))}
-      </div>
-
-      {!user.isAdmin && <AccountSettings profile={{ ...profile, updatedAt: profile.updatedAt.toISOString() }} addresses={customer?.addresses || []} jnt={!!shipping.activeJnt} />}
-
-      <LogoutButton />
-    </div>
-  );
+import "./account.css";
+export const dynamic="force-dynamic";
+export const metadata={title:"Akun Saya",robots:{index:false}};
+export default async function AccountPage(){
+ const user=await getCurrentUser(); if(!user) redirect("/login?redirectTo=/account");
+ const orders=await listOrdersForUser(user.id);
+ const groups=[{key:"unpaid",label:"Belum bayar",icon:Wallet},{key:"process",label:"Diproses",icon:Package},{key:"shipped",label:"Dikirim",icon:Truck},{key:"done",label:"Selesai",icon:CircleCheck}];
+ const verifying=orders.filter(o=>o.status==="PENDING_PAYMENT"&&o.paymentStatus==="WAITING_VERIFICATION").length;
+ return <div className="customer-account"><h1>Akun Saya</h1><section className="account-profile"><div className="account-avatar">{user.name.split(/\s+/).slice(0,2).map(s=>s[0]).join("")}</div><div><h2>{user.name}</h2><p>{user.email}</p></div><Link href="/account/settings?section=profile" className="account-edit"><Pencil size={18}/>Edit</Link></section>
+ {user.isAdmin&&<Link className="account-admin" href="/admin" data-testid="admin-link"><ShieldCheck size={20}/>Buka Panel Admin<ChevronRight size={18}/></Link>}
+ <section className="account-orders"><header><h2>Pesanan Saya</h2><Link href="/orders">Lihat semua <ChevronRight size={16}/></Link></header><div className="account-order-stats">{groups.map(g=>{const count=orders.filter(o=>customerOrderGroup(o)===g.key).length;return <Link key={g.key} href={`/orders?tab=${g.key}`}><span><g.icon size={30}/>{count>0&&<b>{count}</b>}</span>{g.label}</Link>})}</div>
+ {verifying>0&&<Link className="account-notice" href="/orders?tab=process"><ReceiptText size={28}/><span><strong>Bukti pembayaran sedang diperiksa</strong><small>Kami akan memberi kabar setelah diverifikasi.</small></span><ChevronRight size={18}/></Link>}</section>
+ <div className="account-shortcuts"><Link href="/wishlist"><Heart/>Wishlist</Link><Link href="/account/vouchers"><Ticket/>Voucher Saya</Link></div>
+ <nav className="account-menu" aria-label="Menu akun">{[{href:"/account/settings?section=addresses",label:"Alamat Pengiriman",icon:MapPin},{href:"/account/settings?section=security",label:"Pengaturan Akun",icon:Settings},{href:"/account/help",label:"Pusat Bantuan",icon:CircleHelp}].map(l=><Link key={l.href} href={l.href}><l.icon size={24}/>{l.label}<ChevronRight size={18}/></Link>)}</nav><LogoutButton/></div>
 }

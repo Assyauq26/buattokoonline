@@ -18,3 +18,7 @@ test-results/
 playwright-report/
 .jnt-mapping-report/
 app/resources/*.csv
+
+management-evidence/
+output/
+app/preview-awb.ts
