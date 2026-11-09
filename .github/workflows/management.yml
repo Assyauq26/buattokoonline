@@ -41,6 +41,7 @@ jobs:
       - name: Full application and security tests
         working-directory: app
         run: |
+          npm run lint
           npm run typecheck
           npm test
       - name: Email relay regression

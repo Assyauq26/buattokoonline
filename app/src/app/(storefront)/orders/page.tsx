@@ -1,60 +1,17 @@
 import Link from "next/link";
-import Image from "next/image";
-import { Package } from "lucide-react";
+import { Package, ArrowLeft, Search, Clock, Truck, Info } from "lucide-react";
 import { getCurrentUserBasic } from "@/lib/auth/session";
 import { listOrdersForUser } from "@/modules/orders/orders.service";
+import { customerOrderGroup, customerTabs } from "@/lib/customer-order-view";
 import { formatIDR } from "@/lib/money";
-import { Badge } from "@/components/ui/badge";
-import { EmptyState } from "@/components/ui/empty-state";
-import { Button } from "@/components/ui/button";
-import { orderDisplayStatus, orderBadgeVariant } from "@/lib/order-status";
-
-export const dynamic = "force-dynamic";
-export const metadata = { title: "Pesanan Saya", robots: { index: false } };
-
-export default async function OrdersPage() {
-  const user = await getCurrentUserBasic();
-  if (!user) {
-    return (
-      <EmptyState
-        icon={<Package size={40} />}
-        title="Masuk untuk melihat pesanan"
-        action={<Button asChild><Link href="/login?redirectTo=/orders">Masuk</Link></Button>}
-      />
-    );
-  }
-  const orders = await listOrdersForUser(user.id);
-
-  return (
-    <div className="space-y-6">
-      <h1 className="font-display text-2xl font-black text-ink md:text-3xl">Pesanan Saya</h1>
-      {orders.length === 0 ? (
-        <EmptyState icon={<Package size={40} />} title="Belum ada pesanan" action={<Button asChild><Link href="/shop">Belanja Sekarang</Link></Button>} />
-      ) : (
-        <div className="space-y-4">
-          {orders.map((o) => (
-            <Link key={o.id} href={`/orders/${o.id}`} className="block rounded-2xl border border-line p-4 transition-colors hover:bg-surface" data-testid={`order-row-${o.orderNumber}`}>
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-semibold text-ink">{o.orderNumber}</span>
-                <Badge variant={orderBadgeVariant(o.status)}>{orderDisplayStatus(o.status, o.paymentStatus)}</Badge>
-              </div>
-              <div className="mt-3 flex items-center gap-3">
-                <div className="flex -space-x-3">
-                  {o.items.slice(0, 3).map((it) => (
-                    <div key={it.id} className="relative h-12 w-12 overflow-hidden rounded-lg border-2 border-white bg-surface">
-                      {it.imageUrl && <Image src={it.imageUrl} alt={it.productName} fill className="object-cover" sizes="48px" />}
-                    </div>
-                  ))}
-                </div>
-                <div className="ml-auto text-right">
-                  <p className="text-xs text-ink-muted">{o.items.length} item</p>
-                  <p className="font-display font-bold text-ink">{formatIDR(o.total)}</p>
-                </div>
-              </div>
-            </Link>
-          ))}
-        </div>
-      )}
-    </div>
-  );
+import { orderDisplayStatus } from "@/lib/order-status";
+import "./orders.css";
+export const dynamic="force-dynamic";
+export default async function OrdersPage({searchParams}:{searchParams:Promise<{tab?:string;q?:string}>}){
+ const user=await getCurrentUserBasic();if(!user)return <Link href="/login?redirectTo=/orders">Masuk untuk melihat pesanan</Link>;
+ const params=await searchParams;const q=(params.q||"").trim().slice(0,200),tab=customerTabs.some(t=>t.key===params.tab)?params.tab:"all";
+ const orders=(await listOrdersForUser(user.id)).filter(o=>(tab==="all"||customerOrderGroup(o)===tab)&&(!q||[o.orderNumber,...o.items.map(i=>i.productName)].some(s=>s.toLocaleLowerCase().includes(q.toLocaleLowerCase()))));
+ return <div className="customer-orders"><header><Link href="/account" aria-label="Kembali ke akun"><ArrowLeft/></Link><h1>Pesanan Saya</h1></header><form className="customer-order-search"><Search size={20}/><input name="q" defaultValue={q} placeholder="Cari nama produk atau nomor pesanan" aria-label="Cari pesanan"/><input type="hidden" name="tab" value={tab}/><button type="submit" aria-label="Cari"><Search size={18}/></button></form><nav aria-label="Status pesanan">{customerTabs.map(t=><Link key={t.key} href={`/orders?tab=${t.key}&q=${encodeURIComponent(q)}`} aria-current={tab===t.key?"page":undefined}>{t.label}</Link>)}</nav>
+ <div className="customer-order-list">{orders.map(o=>{const it=o.items[0],verify=o.status==="PENDING_PAYMENT"&&o.paymentStatus==="WAITING_VERIFICATION",unpaid=customerOrderGroup(o)==="unpaid",shipped=o.status==="SHIPPED";return <article key={o.id} data-testid={`order-row-${o.orderNumber}`}><div className="customer-order-top"><strong>{o.orderNumber}</strong><span>{orderDisplayStatus(o.status,o.paymentStatus)}</span></div><div className="customer-order-product"><div className="customer-order-image">{it?.imageUrl?<img src={it.imageUrl} alt={it.productName}/>:<Package/>}</div><div><h2>{it?.productName||"Produk pesanan"}</h2><p>{it?.variantLabel}</p><p>×{it?.quantity}{o.items.length>1?` · +${o.items.length-1} produk`:""}</p></div><div className="customer-order-total"><span>Total</span><strong>{formatIDR(o.total)}</strong></div></div>
+ <p className="customer-order-note">{unpaid?<Clock size={18}/>:shipped?<Truck size={18}/>:<Info size={18}/>} {verify?"Bukti pembayaran sudah diterima":unpaid?(o.expiresAt?`Bayar sebelum ${o.expiresAt.toLocaleString("id-ID",{timeZone:"Asia/Jakarta"})}`:"Selesaikan pembayaran untuk melanjutkan."):shipped?`${o.shippingCourier} · Dalam perjalanan`:orderDisplayStatus(o.status,o.paymentStatus)}</p><div className="customer-order-actions"><Link href={`/orders/${o.id}`}>{verify?"Lihat detail":"Detail"}</Link>{(unpaid||shipped)&&<Link className="primary" href={shipped?`/orders/${o.id}#tracking`:`/checkout/payment/${o.id}`}>{shipped?"Lacak pesanan":"Bayar sekarang"}</Link>}</div></article>})}</div>{!orders.length&&<p className="py-12 text-center text-zinc-500">Tidak ada pesanan yang sesuai.</p>}</div>;
 }

@@ -1,0 +1,2 @@
+import Link from "next/link";
+export default function Page(){return <div className="mx-auto max-w-2xl space-y-6 py-6"><Link href="/account">← Akun Saya</Link><h1 className="text-2xl font-bold">Voucher Saya</h1><p>Masukkan kode voucher yang Anda miliki di checkout. Ketersediaan dan syarat voucher diperiksa saat diterapkan.</p><Link className="underline" href="/orders">Pesanan Saya</Link></div>}

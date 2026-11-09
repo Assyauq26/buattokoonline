@@ -11,7 +11,8 @@ export type CustomerProfile = { id: string; name: string; email: string; phone: 
 type Address = { id: string; recipientName: string; phone: string; line: string; isDefault: boolean; province: string; city: string; district: string | null; village: string | null; provinceCode: string | null; cityCode: string | null; districtCode: string | null; villageCode: string | null; postalCode: string; regionSource: string | null; regionUpdatedAt: string | null };
 type Result = { ok: boolean; error?: string; data?: { message: string; signOut?: boolean } };
 const section = "space-y-4 rounded-2xl border border-zinc-200 bg-white p-4 sm:p-6";
-export function AccountSettings({ profile, addresses = [], jnt = false, operator = false, canUpdate = true, canDelete = true }: { profile: CustomerProfile; addresses?: Address[]; jnt?: boolean; operator?: boolean; canUpdate?: boolean; canDelete?: boolean }) {
+export function AccountSettings({ profile, addresses = [], jnt = false, operator = false, canUpdate = true, canDelete = true, view = "profile" }: { profile: CustomerProfile; addresses?: Address[]; jnt?: boolean; operator?: boolean; canUpdate?: boolean; canDelete?: boolean; view?: string }) {
+  const selected = ["profile", "addresses", "security", "delete"].includes(view) ? view : "profile";
   const [pending, start] = useTransition(), [message, setMessage] = useState("");
   const [signedOut, setSignedOut] = useState(false);
   const router = useRouter();
@@ -19,9 +20,9 @@ export function AccountSettings({ profile, addresses = [], jnt = false, operator
     setMessage(""); start(async () => { const result = await action(); setMessage(result.ok ? result.data?.message || "Tersimpan." : result.error || "Tidak dapat menyimpan."); if (result.ok && result.data?.signOut) { setSignedOut(true); } else if (result.ok) router.refresh(); });
   }
   if (signedOut) return <section className={section}><p role="status">{message}</p><a href="/login" className="inline-flex rounded-xl bg-black px-5 py-3 text-white">Kembali ke Login</a></section>;
-  return <div className="space-y-5">
+  return <div className="account-settings space-y-5" data-section={operator ? "all" : selected}>
     {message && <p role="status" className="rounded-xl border p-4 text-sm">{message}</p>}
-    <nav className="flex flex-wrap gap-2 text-sm" aria-label="Pengaturan akun"><a className="rounded-lg border p-3" href="#profile">Profil Saya</a>{!operator && <><a className="rounded-lg border p-3" href="#addresses">Alamat Pengiriman</a><a className="rounded-lg border p-3" href="#security">Keamanan Akun</a></>}<a className="rounded-lg border p-3" href="#delete-account">Hapus Akun</a></nav>
+    <nav className="account-settings-nav flex flex-wrap gap-2 text-sm" aria-label="Pengaturan akun"><a className="rounded-lg border p-3" href="?section=profile">Profil Saya</a>{!operator && <><a className="rounded-lg border p-3" href="?section=addresses">Alamat Pengiriman</a><a className="rounded-lg border p-3" href="?section=security">Keamanan Akun</a></>}<a className="rounded-lg border p-3" href="?section=delete">Hapus Akun</a></nav>
     <form id="profile" key={profile.updatedAt} className={section} onSubmit={event => { event.preventDefault(); const data = new FormData(event.currentTarget); run(() => saveProfileAction(profile.updatedAt, { name: data.get("name"), phone: data.get("phone") }, operator ? profile.id : undefined)); }}>
       <h2 className="text-lg font-bold">{operator ? "Profil Pelanggan" : "Profil Saya"}</h2>
       <div><Label htmlFor="profile-name">Nama</Label><Input id="profile-name" name="name" defaultValue={profile.name} required minLength={2} maxLength={120} disabled={!canUpdate || pending} /></div>
