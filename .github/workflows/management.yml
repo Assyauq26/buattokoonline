@@ -30,6 +30,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: {node-version: '22'}
+      - name: Source boundary and template branding
+        run: node tests/repository-boundary.mjs
       - name: Install pinned dependencies
         working-directory: app
         run: |
