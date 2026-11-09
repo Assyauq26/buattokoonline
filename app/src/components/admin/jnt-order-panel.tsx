@@ -16,7 +16,7 @@ export function JntOrderPanel(props:{
   const [events,setEvents]=useState<Event[]|null>(null);
   if(!props.isOfficial)return null;
   const canIssue=props.canCreate&&props.hasPaid&&props.status==="PACKED"&&
-    ["EZ","HBO","JND","JSD"].includes(props.service || "")&&!props.awb&&!props.requestState;
+    ["EZ","HBO","JND","JSD"].includes(props.service || "")&&((!props.awb&&!props.requestState)||props.requestState==="CANCELLED");
   async function track() {
     if(busy)return;
     setBusy(true);setError("");setEvents(null);
@@ -36,7 +36,8 @@ export function JntOrderPanel(props:{
     <div>
       <h3 className="font-semibold">J&T Express — API Resmi</h3>
       <p className="mt-1 text-xs text-zinc-500">Pembuatan AWB tidak menandakan paket telah diserahkan kepada kurir.</p>
-      {props.requestState&&<p className="mt-2 text-sm">Status permintaan J&T: <strong>{props.requestState}</strong></p>}
+      {props.requestState&&<p className="mt-2 text-sm">Status permintaan J&T: <strong>{props.requestState === "CANCELLED" ? "Pengiriman Dibatalkan" : props.requestState}</strong></p>}
+      {props.requestState === "CANCELLED" && <p className="mt-2 text-sm">Pesanan tetap aktif dan pembayaran tidak dikembalikan otomatis. Anda dapat membuat resi baru setelah paket siap. Jika transaksi ingin dibatalkan, gunakan alur pembatalan pesanan dan refund yang tersedia pada detail pesanan.</p>}
       {props.awb&&<p className="mt-2 break-all text-sm">Resi: <strong>{props.awb}</strong></p>}
       {["DISPATCHED","UNKNOWN","PREPARED"].includes(props.requestState||"")&&
         <p role="alert" className="mt-2 text-sm text-amber-700">Hasil pengajuan tidak pasti. Hubungi operasional J&T untuk rekonsiliasi; jangan membuat permintaan baru.</p>}
@@ -44,10 +45,20 @@ export function JntOrderPanel(props:{
     </div>
     {canIssue&&<OperationForm
       url={"/api/v1/admin/orders/"+props.orderId+"/jnt"}
-      label="Buat Resi"
+      label={props.requestState === "CANCELLED" ? "Buat Ulang Pengiriman" : "Buat Resi"}
       confirmation="Anda akan mengirim request pembuatan resi ke sistem resmi J&T. Pastikan pesanan lunas, paket siap, alamat gudang dan penerima benar, dan data paket sudah sesuai. Jika respons tidak pasti, jangan mengulangi."
       fields={[
         {name:"action",label:"Aksi",type:"hidden",value:"create"},
+      ]}
+    />}
+    {props.canUpdate && props.requestState === "UNKNOWN" && <OperationForm
+      url={"/api/v1/admin/orders/"+props.orderId+"/jnt"}
+      label="Rekonsiliasi pembatalan"
+      confirmation="Gunakan hanya setelah J&T mengonfirmasi resi sudah dibatalkan melalui kanal resmi. Jangan gunakan untuk request pembuatan resi yang belum pasti. Sistem menunggu minimal 5 menit setelah permintaan pembatalan. Tindakan ini tidak membatalkan pesanan atau melakukan refund."
+      fields={[
+        {name:"action",label:"Aksi",type:"hidden",value:"reconcile-cancellation"},
+        {name:"evidenceReference",label:"Referensi konfirmasi resmi J&T",required:true,maxLength:120},
+        {name:"attested",label:"Saya sudah memeriksa bukti resmi J&T bahwa pengiriman ini dibatalkan.",type:"checkbox",required:true},
       ]}
     />}
     {props.canRead&&props.awb&&props.requestState==="SUCCEEDED"&&
