@@ -16,7 +16,7 @@ export function openDelivery(file, secret, { reserve, deliver, now = Date.now, m
     const fingerprint = createHmac('sha256', secret).update(JSON.stringify([
       store.tenantId, payload.purpose, payload.to.trim().toLowerCase(), payload.value,
       store.origin, store.brand, payload.requestId ||
-        (['customer-test', 'seller-changed'].includes(payload.purpose) ? randomUUID() : ''),
+        (['customer-test', 'seller-changed', 'customer-changed'].includes(payload.purpose) ? randomUUID() : ''),
     ])).digest('hex');
     const timestamp = now();
     let record;

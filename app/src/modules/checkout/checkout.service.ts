@@ -210,6 +210,8 @@ export async function createOrder(
   const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
   const result = await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "User" WHERE "id" = ${userId} FOR SHARE`);
+    if (!await tx.user.findFirst({ where: { id: userId, isActive: true, deletedAt: null }, select: { id: true } })) throw new HttpError("Akun tidak aktif. Silakan login kembali.", 401);
     await lockCampaignPricing(tx);
     // Serialize consumption of this cart; lock items too against concurrent edits/removal.
     if (input.intentId) {

@@ -11,8 +11,10 @@ type AuthOperation =
   | "reset"
   | "sellerResetRequest"
   | "mailTest"
+  | "accountSecurity"
   | "resetConfirm";
 const policies = {
+  accountSecurity: { perIdentity: 5, windowMs: 15 * 60_000, global: 60 },
   login: { perIdentity: 10, windowMs: 15 * 60_000, global: 300 },
   register: { perIdentity: 3, windowMs: 60 * 60_000, global: 30 },
   registerConfirm: { perIdentity: 12, windowMs: 60 * 60_000, global: 240 },

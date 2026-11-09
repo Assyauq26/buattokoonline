@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { storeOrigin } from "@/lib/store-config";
 import { deliverResend, mailSender, renderOtpMail, sanitizeMailBrand } from "./mail-contract.mjs";
 
-export type MailPurpose = "customer-registration" | "customer-reset" | "seller-reset" | "seller-changed" | "customer-test";
+export type MailPurpose = "customer-registration" | "customer-reset" | "customer-changed" | "seller-reset" | "seller-changed" | "customer-test";
 const relayUrl = "https://buattokosendiri.web.id/api/platform/store-mail";
 const resendUrl = "https://api.resend.com/emails";
 const unavailable = () => new HttpError("Layanan email belum tersedia. Coba lagi nanti.", 503);
