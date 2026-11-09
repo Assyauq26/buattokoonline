@@ -49,7 +49,7 @@ jobs:
       - name: Validate operator upgrade syntax
         run: |
           python3 -m compileall -q deploy installer
-          python3 -m unittest discover -s deploy -p test_hubify_v130.py
+          python3 -m unittest discover -s deploy -p "test_hubify_v*.py"
       - name: Production build
         working-directory: app
         run: npm run build
