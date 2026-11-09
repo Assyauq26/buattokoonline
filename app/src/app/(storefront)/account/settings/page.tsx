@@ -29,7 +29,7 @@ export default async function AccountSettingsPage({searchParams}:{searchParams:P
   ];
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6">
+    <div className="mx-auto max-w-2xl space-y-6"><Link href="/account" className="inline-flex min-h-11 items-center">← Akun Saya</Link>
       <div className="flex items-center gap-4">
         <div className="flex h-16 w-16 items-center justify-center rounded-full bg-black text-xl font-bold text-white">
           {user.name.charAt(0).toUpperCase()}

@@ -1,3 +1,4 @@
+import sharp from "sharp";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import bwipjs from "bwip-js/node";
 import { readFile } from "node:fs/promises";
@@ -16,12 +17,17 @@ export async function createAwbPdf(data:AwbLabel){
  const text=(s:string,x:number,y:number,size=9,heavy=false)=>page.drawText(safe(s),{x,y:h-y-size,font:heavy?bold:regular,size});
  function block(s:string,y:number,maxLines:number,size=10,heavy=false){
   const font=heavy?bold:regular,max=w-26;const lines:string[]=[];let current="";
-  for(const char of safe(s)){if(font.widthOfTextAtSize(current+char,size)>max){lines.push(current);current=char}else current+=char;}if(current)lines.push(current);
+  for(const word of safe(s).split(" ")){
+   if(font.widthOfTextAtSize(word,size)>max){
+    if(current){lines.push(current);current="";}
+    for(const char of word){if(font.widthOfTextAtSize(current+char,size)>max){lines.push(current);current=char;}else current+=char;}
+   }else if(font.widthOfTextAtSize(current+(current?" ":"")+word,size)>max){lines.push(current);current=word;}else current+=(current?" ":"")+word;
+  }if(current)lines.push(current);
   if(lines.length>maxLines)throw new Error("Label terlalu panjang untuk dicetak aman. Ringkas nama/alamat barang sebelum mencetak.");
   lines.forEach((s,i)=>text(s,13,y+i*(size+2),size,heavy));
  }
  page.drawRectangle({x:8,y:8,width:w-16,height:h-16,borderColor:rgb(0,0,0),borderWidth:1});
- const logo=await doc.embedPng(await readFile(path.join(process.cwd(),"public/carriers/jnt-express.png")));const logoSize=logo.scaleToFit(89,36);page.drawImage(logo,{x:13,y:h-43,width:logoSize.width,height:logoSize.height});
+ const logo=await doc.embedPng(await sharp(await readFile(path.join(process.cwd(),"public/carriers/jnt-express.png"))).modulate({brightness:0}).png().toBuffer());const logoSize=logo.scaleToFit(89,36);page.drawImage(logo,{x:13,y:h-43,width:logoSize.width,height:logoSize.height});
  const service=safe(data.service);const fs=Math.min(25,60/Math.max(bold.widthOfTextAtSize(service,1),1));text(service,(w-bold.widthOfTextAtSize(service,fs))/2,15,fs,true);
  const qr=await doc.embedPng(await bwipjs.toBuffer({bcid:"qrcode",text:data.awb,scale:5,padding:2}));page.drawImage(qr,{x:w-66,y:h-65,width:52,height:52});
  block("Pengirim: "+data.senderName+"  "+data.senderPhone,70,2,8);block(data.senderAddress,92,2,8);

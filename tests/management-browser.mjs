@@ -18,7 +18,7 @@ const out = resolve(process.env.MANAGEMENT_EVIDENCE || 'management-evidence'); m
 let browser, child;
 const checks = [];
 try {
-  const adminRole = await db.role.findUniqueOrThrow({ where: { name: 'Admin' } });
+  const adminRole = await db.role.upsert({ where: { name: 'Admin' }, update: {}, create: { name:'Admin',label:'Admin' } });
   const permissionKeys = ['product.read','product.create','product.update','product.delete','inventory.read','order.read','customer.read','customer.update','customer.delete','bank.manage','store.customize.read','store.customize.update','store.customize.publish'];
   for (const key of permissionKeys) {
     const permission = await db.permission.upsert({ where: { key }, update: {}, create: { key, label: key } });
@@ -69,6 +69,7 @@ try {
   await more.click(); await more.click(); await assertExpanded(false); checks.push('Mobile menu toggle / Escape / outside click');
   async function assertExpanded(value) { await staffPage.waitForFunction(({ value }) => document.querySelector('button[aria-label="Lainnya"]')?.getAttribute('aria-expanded') === String(value), { value }); }
   assert.equal(await staffPage.getByText('Banner Hero', { exact: true }).count(), 0);
+  await staffPage.waitForLoadState('networkidle');
   await staffPage.getByRole('combobox', { name: 'Filter kategori' }).selectOption(category.id);
   await staffPage.getByRole('textbox', { name: 'Cari produk' }).fill('Produk Demo 00'); await staffPage.getByRole('button', { name: 'Cari', exact: true }).click();
   await staffPage.waitForURL(/q=/, { waitUntil: 'domcontentloaded' }); await staffPage.getByRole('link', { name: 'Produk Demo 00 Nama Variasi Panjang' }).waitFor(); checks.push('Product search');
