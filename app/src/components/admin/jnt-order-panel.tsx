@@ -1,8 +1,9 @@
 "use client";
-import * as Dialog from "@radix-ui/react-dialog";
+import { AwbPrintButton } from "./awb-print-button";
+import { ActionDialog } from "@/components/ui/action-dialog";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
-import { X, Printer, RefreshCw } from "lucide-react";
+import { useRef, useState } from "react";
+import { RefreshCw } from "lucide-react";
 import { OperationForm } from "./operation-form";
 import { fulfillmentLabel } from "@/modules/orders/resolution-policy";
 export function JntOrderPanel(p: {
@@ -22,6 +23,8 @@ export function JntOrderPanel(p: {
   errorCode?: string | null;
   externalOrderId?: string;
 }) {
+  const root = useRef<HTMLDivElement>(null),
+    lock = useRef(false);
   const router = useRouter(),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
@@ -36,7 +39,8 @@ export function JntOrderPanel(p: {
       p.status === "PACKED" &&
       (!p.requestState || p.requestState === "CANCELLED");
   async function run(action: string) {
-    if (busy) return;
+    if (lock.current) return;
+    lock.current = true;
     setBusy(true);
     setError("");
     try {
@@ -64,11 +68,12 @@ export function JntOrderPanel(p: {
       setError(e instanceof Error ? e.message : "Tindakan belum berhasil");
       router.refresh();
     } finally {
+      lock.current = false;
       setBusy(false);
     }
   }
   return (
-    <div className="jnt-flow">
+    <div className="jnt-flow" ref={root}>
       <strong>
         J&amp;T Express <span className="flow-status">{p.service}</span>
       </strong>
@@ -96,7 +101,7 @@ export function JntOrderPanel(p: {
           melalui J&amp;T sebelum tindakan berikutnya.
         </p>
       )}
-      {error && (
+      {error && !open && (
         <p className="flow-error" role="alert">
           {error}
         </p>
@@ -199,14 +204,7 @@ export function JntOrderPanel(p: {
       )}
       {p.canRead && p.requestState === "SUCCEEDED" && p.awb && (
         <div className="flow-button-row">
-          <a
-            className="flow-secondary"
-            href={`/admin/orders/${p.orderId}/awb`}
-            target="_blank"
-            rel="noreferrer"
-          >
-            <Printer size={18} /> Cetak AWB
-          </a>
+          <AwbPrintButton orderId={p.orderId} />
           <button
             className="flow-secondary"
             disabled={busy}
@@ -244,74 +242,42 @@ export function JntOrderPanel(p: {
         !p.sellerHandoverAt && (
           <details>
             <summary>Tindakan lainnya</summary>
-            <Dialog.Root open={open} onOpenChange={setOpen}>
-              <Dialog.Trigger asChild>
-                <button className="flow-secondary">
-                  Batalkan resi J&amp;T
-                </button>
-              </Dialog.Trigger>
-              <Dialog.Portal
-                container={
-                  typeof document !== "undefined"
-                    ? document.querySelector<HTMLElement>(".order-workflow")
-                    : undefined
-                }
-              >
-                <Dialog.Overlay className="order-filter-overlay" />
-                <Dialog.Content
-                  className="order-filter-sheet order-workflow"
-                  aria-describedby="cancel-awb-desc"
+            <button
+              className="flow-secondary"
+              onClick={() => {
+                setError("");
+                setOpen(true);
+              }}
+            >
+              Batalkan resi J&amp;T
+            </button>
+            <ActionDialog
+              sourceRef={root}
+              open={open}
+              onClose={() => setOpen(false)}
+              title="Batalkan resi J&T"
+              description={`Resi ${p.awb}. Pesanan dan pembayaran tetap aktif. Stok tidak berubah.`}
+              primary="Batalkan resi"
+              busy={busy}
+              error={error}
+              confirmDisabled={!reason}
+              onConfirm={() => void run("cancel")}
+            >
+              <label>
+                Alasan wajib
+                <select
+                  required
+                  value={reason}
+                  disabled={busy}
+                  onChange={(e) => setReason(e.target.value)}
                 >
-                  <header>
-                    <Dialog.Title>Batalkan resi J&amp;T</Dialog.Title>
-                    <Dialog.Close asChild>
-                      <button aria-label="Tutup">
-                        <X />
-                      </button>
-                    </Dialog.Close>
-                  </header>
-                  <p>
-                    Resi <strong>{p.awb}</strong>
-                  </p>
-                  <p id="cancel-awb-desc" className="flow-info">
-                    Pesanan dan pembayaran tetap aktif. Stok tidak berubah.
-                  </p>
-                  <form
-                    onSubmit={(e) => {
-                      e.preventDefault();
-                      run("cancel");
-                    }}
-                  >
-                    <label>
-                      Alasan wajib
-                      <select
-                        required
-                        value={reason}
-                        onChange={(e) => setReason(e.target.value)}
-                      >
-                        <option value="">Pilih alasan</option>
-                        <option>Salah data pengiriman</option>
-                        <option>Perubahan layanan</option>
-                        <option>Pesanan dibatalkan</option>
-                      </select>
-                    </label>
-                    {error && (
-                      <p className="flow-error" role="alert">
-                        {error}
-                      </p>
-                    )}
-                    <footer>
-                      <Dialog.Close asChild>
-                        <button type="button">Kembali</button>
-                      </Dialog.Close>
-                      <button disabled={busy} className="flow-danger">
-                        {busy ? "Memproses…" : "Batalkan resi"}
-                      </button>
-                    </footer>
-                  </form>
-                </Dialog.Content>
-              </Dialog.Portal>
-            </Dialog.Root>
+                  <option value="">Pilih alasan</option>
+                  <option>Salah data pengiriman</option>
+                  <option>Perubahan layanan</option>
+                  <option>Pesanan dibatalkan</option>
+                </select>
+              </label>
+            </ActionDialog>
           </details>
         )}
     </div>

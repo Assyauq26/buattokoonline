@@ -75,6 +75,30 @@ export default async function OrderDetailPage({
         </Badge>
       </div>
 
+      {order.status === "CANCELLED" && (
+        <section className="rounded-xl border p-4">
+          <h2 className="font-semibold">Pembatalan pesanan</h2>
+          <p>
+            {[...order.history]
+              .reverse()
+              .find((h) => h.toStatus === "CANCELLED")?.note ||
+              order.resolutions.find((c) => c.kind === "CANCEL")?.reason ||
+              "Pesanan dibatalkan oleh toko."}
+          </p>
+          <p>
+            {[...order.history]
+              .reverse()
+              .find((h) => h.toStatus === "CANCELLED")
+              ?.createdAt.toLocaleString("id-ID", { timeZone: "Asia/Jakarta" })}
+          </p>
+          {order.paymentStatus === "PAID" && (
+            <p>
+              Pengembalian dana masih perlu ditangani. Lihat status kasus di
+              bawah.
+            </p>
+          )}
+        </section>
+      )}
       {order.status === "DELIVERED" && !activeCase && (
         <CompleteOrderButton orderId={id} />
       )}

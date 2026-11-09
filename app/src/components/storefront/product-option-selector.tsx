@@ -18,7 +18,12 @@ export function ProductOptionSelector({
   return (
     <div className="space-y-5">
       {product.groups.map((group) => (
-        <fieldset key={group.id} disabled={busy} className="min-w-0">
+        <fieldset
+          data-option-group={group.id}
+          key={group.id}
+          disabled={busy}
+          className="min-w-0"
+        >
           <legend className="mb-3 text-sm font-semibold">{group.name}</legend>
           <div className="flex flex-wrap gap-2">
             {group.values.map((value) => {
