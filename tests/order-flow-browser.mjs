@@ -1,15 +1,19 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { randomBytes, randomUUID, createCipheriv } from "node:crypto";
-import { mkdirSync, createWriteStream, writeFileSync, readdirSync } from "node:fs";
+import {
+  mkdirSync,
+  createWriteStream,
+  writeFileSync,
+  readdirSync,
+} from "node:fs";
 import { resolve } from "node:path";
 import { createRequire } from "node:module";
 const require = createRequire(import.meta.url),
   { PrismaClient } = require("../app/node_modules/@prisma/client"),
   { chromium } = require("../app/node_modules/playwright");
-const { SignJWT } = await import(
-  "../app/node_modules/jose/dist/node/esm/index.js"
-);
+const { SignJWT } =
+  await import("../app/node_modules/jose/dist/node/esm/index.js");
 const dbUrl = new URL(process.env.DATABASE_URL || "http://invalid");
 assert(
   ["127.0.0.1", "localhost"].includes(dbUrl.hostname) &&
@@ -42,7 +46,9 @@ try {
     "shipping.read",
     "shipping.create",
     "shipping.update",
-    "store.customize.read", "store.customize.update", "store.customize.publish",
+    "store.customize.read",
+    "store.customize.update",
+    "store.customize.publish",
   ]) {
     const p = await db.permission.upsert({
       where: { key },
@@ -75,7 +81,8 @@ try {
   const theme = makeDefault();
   theme.colors.primary = "#243C63";
   theme.colors.primaryText = "#FFFFFF";
-  theme.colors.primaryHover="#1E3355";theme.colors.primaryPressed="#182947";
+  theme.colors.primaryHover = "#1E3355";
+  theme.colors.primaryPressed = "#182947";
   await db.storeAppearance.upsert({
     where: { key: "primary" },
     update: { draft: theme, published: theme },
@@ -162,11 +169,78 @@ try {
       payloadFingerprint: "a".repeat(64),
     },
   });
-  const config={endpoints:{order:"https://demo-ecommerce.inuat-jntexpress.id/jts-idn-ecommerce-api/api/order/create",cancellation:"https://demo-ecommerce.inuat-jntexpress.id/jts-idn-ecommerce-api/api/order/cancel",tariff:"https://demo-general.inuat-jntexpress.id/jandt_track/inquiry.action",tracking:"https://demo-general.inuat-jntexpress.id/jandt_track/track/trackAction!tracking.action"},credentials:Object.fromEntries(["orderUsername","orderApiKey","orderKey","tariffCustomer","tariffKey","trackingUsername","trackingPassword"].map(k=>[k,"synthetic-unused"])),sharedCancellation:true,seller:{warehouse:{name:"Toko Contoh",contact:"Operator",phone:"+6281234567890",address:"Batang Jawa Tengah",originSite:"BATANG",originCityCode:"BGG"},services:[],selectedServices:["EZ","JND"]}};
-  const nonce=randomBytes(12),cipher=createCipheriv("aes-256-gcm",Buffer.from(encryption,"hex"),nonce);cipher.setAAD(Buffer.from("single-store:jnt:v2:sandbox"));const encrypted=Buffer.concat([cipher.update(JSON.stringify(config)),cipher.final()]);
-  const revision=await db.jntCheckoutRevision.create({data:{id:randomUUID(),environment:"sandbox",mappingVersion:"synthetic-only",encryptedConfig:["v2",nonce.toString("base64"),cipher.getAuthTag().toString("base64"),encrypted.toString("base64")].join(":")}});
-  await db.order.update({where:{id:shipping.id},data:{jntCheckoutRevisionId:revision.id,shippingWeightGram:450}});
-  await db.auditLog.create({data:{entity:"Order",entityId:shipping.id,action:"jnt.order.accepted",meta:{awb:"TEST12345678",routingCode:"410-1BGG06-12B"}}});
+  const config = {
+    endpoints: {
+      order:
+        "https://demo-ecommerce.inuat-jntexpress.id/jts-idn-ecommerce-api/api/order/create",
+      cancellation:
+        "https://demo-ecommerce.inuat-jntexpress.id/jts-idn-ecommerce-api/api/order/cancel",
+      tariff:
+        "https://demo-general.inuat-jntexpress.id/jandt_track/inquiry.action",
+      tracking:
+        "https://demo-general.inuat-jntexpress.id/jandt_track/track/trackAction!tracking.action",
+    },
+    credentials: Object.fromEntries(
+      [
+        "orderUsername",
+        "orderApiKey",
+        "orderKey",
+        "tariffCustomer",
+        "tariffKey",
+        "trackingUsername",
+        "trackingPassword",
+      ].map((k) => [k, "synthetic-unused"]),
+    ),
+    sharedCancellation: true,
+    seller: {
+      warehouse: {
+        name: "Toko Contoh",
+        contact: "Operator",
+        phone: "+6281234567890",
+        address: "Batang Jawa Tengah",
+        originSite: "BATANG",
+        originCityCode: "BGG",
+      },
+      services: [],
+      selectedServices: ["EZ", "JND"],
+    },
+  };
+  const nonce = randomBytes(12),
+    cipher = createCipheriv(
+      "aes-256-gcm",
+      Buffer.from(encryption, "hex"),
+      nonce,
+    );
+  cipher.setAAD(Buffer.from("single-store:jnt:v2:sandbox"));
+  const encrypted = Buffer.concat([
+    cipher.update(JSON.stringify(config)),
+    cipher.final(),
+  ]);
+  const revision = await db.jntCheckoutRevision.create({
+    data: {
+      id: randomUUID(),
+      environment: "sandbox",
+      mappingVersion: "synthetic-only",
+      encryptedConfig: [
+        "v2",
+        nonce.toString("base64"),
+        cipher.getAuthTag().toString("base64"),
+        encrypted.toString("base64"),
+      ].join(":"),
+    },
+  });
+  await db.order.update({
+    where: { id: shipping.id },
+    data: { jntCheckoutRevisionId: revision.id, shippingWeightGram: 450 },
+  });
+  await db.auditLog.create({
+    data: {
+      entity: "Order",
+      entityId: shipping.id,
+      action: "jnt.order.accepted",
+      meta: { awb: "TEST12345678", routingCode: "410-1BGG06-12B" },
+    },
+  });
   const paid = await create("PACKED", "PAID"),
     waiting = await create("PENDING_PAYMENT", "WAITING_VERIFICATION");
   const png = Buffer.from(
@@ -210,7 +284,10 @@ try {
         APP_ORIGIN: origin,
         JWT_SECRET: jwt,
         ORDER_DATA_ENCRYPTION_KEY: encryption,
-        JNT_API_ENV:"sandbox",JNT_INTEGRATION_ENCRYPTION_KEY:Buffer.from(encryption,"hex").toString("base64"),
+        JNT_API_ENV: "sandbox",
+        JNT_INTEGRATION_ENCRYPTION_KEY: Buffer.from(encryption, "hex").toString(
+          "base64",
+        ),
         STORAGE_LOCAL_ROOT: media,
         MAINTENANCE_MODE: "0",
         STORE_MAIL_MODE: "",
@@ -289,7 +366,7 @@ try {
     kind: "CANCEL",
     reason: "Stok salah sebelum pengiriman",
   });
-  for (const width of (process.env.ORDER_FLOW_DEBUG || process.env.V151_FAST)
+  for (const width of process.env.ORDER_FLOW_DEBUG || process.env.V151_FAST
     ? [390]
     : [360, 390, 430, 768, 1440]) {
     await page.setViewportSize({ width, height: 900 });
@@ -338,15 +415,45 @@ try {
     console.log(JSON.stringify({ errors }));
     process.exitCode = errors.length ? 1 : 0;
   }
-  await (await import(process.env.PRODUCT_SETTINGS_BROWSER?"./v152-browser-checks.mjs":"./v151-browser-checks.mjs")).verify({db,origin,admin,customer,foreign,page,buyerPage,buyer,variant,shipping,waiting,paid,checks,out,run});
+  await (
+    await import(
+      process.env.JNT_CANCEL_BROWSER
+        ? "./v156-browser-checks.mjs"
+        : process.env.PRODUCT_SETTINGS_BROWSER
+          ? "./v152-browser-checks.mjs"
+          : "./v151-browser-checks.mjs"
+    )
+  ).verify({
+    db,
+    origin,
+    admin,
+    customer,
+    foreign,
+    page,
+    buyerPage,
+    buyer,
+    variant,
+    shipping,
+    waiting,
+    paid,
+    checks,
+    out,
+    run,
+  });
   // Cancel a paid transaction through the actual staged UI (no carrier request / no money transfer).
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(origin + `/admin/orders/${paid.id}/resolution?case=${c.id}`);
   await page
     .getByRole("button", { name: "Batalkan dan lanjut ke refund", exact: true })
     .click();
-  assert.equal((await db.order.findUnique({where:{id:paid.id}})).status,"PACKED");
-  await page.getByRole("dialog").getByRole("button",{name:"Batalkan dan lanjutkan",exact:true}).click();
+  assert.equal(
+    (await db.order.findUnique({ where: { id: paid.id } })).status,
+    "PACKED",
+  );
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Batalkan dan lanjutkan", exact: true })
+    .click();
   await page
     .getByRole("heading", { name: "Rekening tujuan pengembalian", exact: true })
     .waitFor();
@@ -383,7 +490,10 @@ try {
       exact: true,
     })
     .click();
-  await page.getByRole("dialog").getByRole("button",{name:"Lanjutkan transfer manual",exact:true}).click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Lanjutkan transfer manual", exact: true })
+    .click();
   await page
     .getByRole("heading", { name: "Catat transfer refund", exact: true })
     .waitFor();
@@ -418,7 +528,10 @@ try {
   await page
     .getByRole("button", { name: "Konfirmasi dana dikembalikan", exact: true })
     .click();
-  await page.getByRole("dialog").getByRole("button",{name:"Konfirmasi dana dikembalikan",exact:true}).click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Konfirmasi dana dikembalikan", exact: true })
+    .click();
   await page
     .getByRole("heading", { name: "Transfer dicatat seller", exact: true })
     .waitFor();
@@ -487,7 +600,10 @@ try {
       r.url().endsWith(`/api/v1/admin/payments/${waiting.payment.id}/reject`) &&
       r.request().method() === "POST",
   );
-  await page.getByRole("dialog").getByRole("button", { name: "Kirim permintaan perbaikan",exact:true }).click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Kirim permintaan perbaikan", exact: true })
+    .click();
   assert.equal((await rejected).status(), 200);
   assert.equal(
     (await db.payment.findUnique({ where: { id: waiting.payment.id } })).status,
@@ -498,7 +614,6 @@ try {
   checks.push("Payment correction through UI requires a reason");
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(origin + `/admin/orders/${shipping.id}`);
-  await page.getByText("Tindakan lainnya", { exact: true }).click();
   await page
     .getByRole("button", { name: "Batalkan resi J&T", exact: true })
     .click();
@@ -513,8 +628,7 @@ try {
     JSON.stringify(
       {
         checks,
-        screenshots:
-          readdirSync(out).filter(n=>n.endsWith(".png")).length,
+        screenshots: readdirSync(out).filter((n) => n.endsWith(".png")).length,
         carrierRequests: 0,
         actualMoneyTransfers: 0,
       },

@@ -214,20 +214,18 @@ describe("official J&T API transport (network mocked)", () => {
     );
   });
   it("sends the documented no-postcode value without dropping the village address", async () => {
-    const mock = vi
-      .fn()
-      .mockResolvedValue(
-        respond({
-          success: true,
-          detail: [
-            {
-              orderid: "GHV-TEST-001",
-              status: "Sukses",
-              awb_no: "JO9001348812",
-            },
-          ],
-        }),
-      );
+    const mock = vi.fn().mockResolvedValue(
+      respond({
+        success: true,
+        detail: [
+          {
+            orderid: "GHV-TEST-001",
+            status: "Sukses",
+            awb_no: "JO9001348812",
+          },
+        ],
+      }),
+    );
     vi.stubGlobal("fetch", mock);
     await createJntOrder({
       ...createPayload,
@@ -351,24 +349,63 @@ describe("official J&T API transport (network mocked)", () => {
       trackJntOrder(fixture.awb, "SYNTHETIC-ORDER"),
     ).rejects.toThrow();
   });
+  it("acknowledges only the documented, exact-identity already-cancelled state", async () => {
+    const reason = "Tidak dapat dibatalkan,Status pesanan adalah:CANCEL_ORDER";
+    const mock = vi.fn().mockResolvedValue(
+      respond({
+        success: true,
+        detail: [{ orderid: "GHV-TEST-001", status: "Error", reason }],
+      }),
+    );
+    vi.stubGlobal("fetch", mock);
+    await expect(
+      cancelJntOrder("GHV-TEST-001", "Data salah"),
+    ).resolves.toMatchObject({
+      cancelled: true,
+      alreadyCancelled: true,
+      orderId: "GHV-TEST-001",
+    });
+    mock.mockResolvedValueOnce(
+      respond({
+        success: true,
+        detail: [{ orderid: "OTHER", status: "Error", reason }],
+      }),
+    );
+    await expect(
+      cancelJntOrder("GHV-TEST-001", "Data salah"),
+    ).rejects.toThrow();
+    mock.mockResolvedValueOnce(
+      respond({
+        success: true,
+        detail: [
+          {
+            orderid: "GHV-TEST-001",
+            status: "Error",
+            reason: "unknown CANCEL_ORDER failure",
+          },
+        ],
+      }),
+    );
+    await expect(
+      cancelJntOrder("GHV-TEST-001", "Data salah"),
+    ).rejects.toThrow();
+  });
   it("uses Basic Authorization for tracking and keeps AWB in JSON body", async () => {
-    const mock = vi
-      .fn()
-      .mockResolvedValue(
-        respond({
-          awb: "JO9001348812",
-          orderid: "SO-TEST-ID",
-          detail: { receiver: { phone: "SECRET-PHONE" } },
-          history: [
-            {
-              status: "Paket diproses",
-              date_time: "2026-10-31 10:30:00",
-              city_name: "JAKARTA",
-              driverPhone: "SECRET-PHONE",
-            },
-          ],
-        }),
-      );
+    const mock = vi.fn().mockResolvedValue(
+      respond({
+        awb: "JO9001348812",
+        orderid: "SO-TEST-ID",
+        detail: { receiver: { phone: "SECRET-PHONE" } },
+        history: [
+          {
+            status: "Paket diproses",
+            date_time: "2026-10-31 10:30:00",
+            city_name: "JAKARTA",
+            driverPhone: "SECRET-PHONE",
+          },
+        ],
+      }),
+    );
     vi.stubGlobal("fetch", mock);
     const result = await trackJntOrder("JO9001348812");
     expect(result).toMatchObject({

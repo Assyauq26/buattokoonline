@@ -6,6 +6,8 @@ import { useRef, useState } from "react";
 import { RefreshCw } from "lucide-react";
 import { OperationForm } from "./operation-form";
 import { fulfillmentLabel } from "@/modules/orders/resolution-policy";
+import { canRequestJntCancellation } from "@/modules/shipping/jnt-cancellation-policy";
+import { CopyValue } from "./copy-value";
 export function JntOrderPanel(p: {
   orderId: string;
   isOfficial: boolean;
@@ -19,6 +21,7 @@ export function JntOrderPanel(p: {
   requestState: string | null;
   awb: string | null;
   shipmentStatus: string | null;
+  carrierCondition?: string | null;
   sellerHandoverAt?: boolean;
   errorCode?: string | null;
   externalOrderId?: string;
@@ -38,6 +41,16 @@ export function JntOrderPanel(p: {
       p.hasPaid &&
       p.status === "PACKED" &&
       (!p.requestState || p.requestState === "CANCELLED");
+  const canCancel =
+    p.canUpdate &&
+    !!p.awb &&
+    !!p.externalOrderId &&
+    canRequestJntCancellation({
+      orderStatus: p.status,
+      requestState: p.requestState,
+      shipmentStatus: p.shipmentStatus,
+      carrierCondition: p.carrierCondition,
+    });
   async function run(action: string) {
     if (lock.current) return;
     lock.current = true;
@@ -48,7 +61,9 @@ export function JntOrderPanel(p: {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(
-            action === "cancel" ? { action, reason } : { action },
+            action === "cancel"
+              ? { action, reason, expectedExternalOrderId: p.externalOrderId }
+              : { action },
           ),
         }),
         j = await r.json();
@@ -59,8 +74,10 @@ export function JntOrderPanel(p: {
         );
       setSuccess(
         action === "cancel"
-          ? "Resi dibatalkan. Pesanan dan pembayaran tetap aktif."
-          : "Status pengiriman diperbarui.",
+          ? "Pembatalan resi dikonfirmasi J&T. Periksa status pesanan dan refund di halaman ini."
+          : j.data.cancelled
+            ? "J&T mengonfirmasi resi dibatalkan. Status pesanan telah disinkronkan."
+            : "Status pengiriman diperbarui.",
       );
       setOpen(false);
       router.refresh();
@@ -81,6 +98,14 @@ export function JntOrderPanel(p: {
         <p className="break-all">
           No. resi: <strong>{p.awb}</strong>
         </p>
+      )}
+      {p.externalOrderId && (
+        <div className="flow-button-row">
+          <span>
+            ID order J&amp;T: <strong>{p.externalOrderId}</strong>
+          </span>
+          <CopyValue value={p.externalOrderId} label="Salin ID order J&T" />
+        </div>
       )}
       <p className="flow-info">
         {fulfillmentLabel({
@@ -185,6 +210,12 @@ export function JntOrderPanel(p: {
                   value: "reconcile-cancellation",
                 },
                 {
+                  name: "expectedExternalOrderId",
+                  label: "ID order J&T",
+                  type: "hidden",
+                  value: p.externalOrderId || "",
+                },
+                {
                   name: "evidenceReference",
                   label: "Referensi konfirmasi resmi J&T",
                   required: true,
@@ -202,21 +233,28 @@ export function JntOrderPanel(p: {
           )}
         </div>
       )}
-      {p.canRead && p.requestState === "SUCCEEDED" && p.awb && (
-        <div className="flow-button-row">
-          <AwbPrintButton orderId={p.orderId} />
-          <button
-            className="flow-secondary"
-            disabled={busy}
-            onClick={() => run("track")}
-          >
-            <RefreshCw size={18} />
-            {busy ? "Memeriksa…" : "Perbarui tracking"}
-          </button>
-        </div>
-      )}
+      {p.canRead &&
+        (p.requestState === "SUCCEEDED" ||
+          (p.requestState === "UNKNOWN" &&
+            p.errorCode === "CANCELLATION_PENDING")) &&
+        p.awb && (
+          <div className="flow-button-row">
+            {p.requestState === "SUCCEEDED" && (
+              <AwbPrintButton orderId={p.orderId} />
+            )}
+            <button
+              className="flow-secondary"
+              disabled={busy}
+              onClick={() => run("track")}
+            >
+              <RefreshCw size={18} />
+              {busy ? "Memeriksa…" : "Perbarui tracking"}
+            </button>
+          </div>
+        )}
       {p.canUpdate &&
         !p.fulfillmentHeld &&
+        p.hasPaid &&
         p.requestState === "SUCCEEDED" &&
         p.shipmentStatus === "PENDING" &&
         p.status === "PACKED" &&
@@ -235,51 +273,59 @@ export function JntOrderPanel(p: {
             ]}
           />
         )}
-      {p.canUpdate &&
-        p.requestState === "SUCCEEDED" &&
-        p.shipmentStatus === "PENDING" &&
-        p.status === "PACKED" &&
-        !p.sellerHandoverAt && (
-          <details>
-            <summary>Tindakan lainnya</summary>
-            <button
-              className="flow-secondary"
-              onClick={() => {
-                setError("");
-                setOpen(true);
-              }}
-            >
-              Batalkan resi J&amp;T
-            </button>
-            <ActionDialog
-              sourceRef={root}
-              open={open}
-              onClose={() => setOpen(false)}
-              title="Batalkan resi J&T"
-              description={`Resi ${p.awb}. Pesanan dan pembayaran tetap aktif. Stok tidak berubah.`}
-              primary="Batalkan resi"
-              busy={busy}
-              error={error}
-              confirmDisabled={!reason}
-              onConfirm={() => void run("cancel")}
-            >
-              <label>
-                Alasan wajib
-                <select
-                  required
-                  value={reason}
-                  disabled={busy}
-                  onChange={(e) => setReason(e.target.value)}
-                >
-                  <option value="">Pilih alasan</option>
-                  <option>Salah data pengiriman</option>
-                  <option>Perubahan layanan</option>
-                  <option>Pesanan dibatalkan</option>
-                </select>
-              </label>
-            </ActionDialog>
-          </details>
-        )}
+      {canCancel && (
+        <div>
+          {p.sellerHandoverAt && (
+            <p className="flow-warning">
+              Penyerahan dicatat seller. J&amp;T akan menentukan apakah paket
+              masih dapat dibatalkan. Batalkan pesanan dan tangani refund secara
+              terpisah.
+            </p>
+          )}
+          <button
+            className="flow-secondary"
+            onClick={() => {
+              setError("");
+              setOpen(true);
+            }}
+          >
+            Batalkan resi J&amp;T
+          </button>
+          <ActionDialog
+            sourceRef={root}
+            open={open}
+            onClose={() => setOpen(false)}
+            title="Batalkan resi J&T"
+            description={`Resi ${p.awb} · ID J&T ${p.externalOrderId}. Ini membatalkan resi, bukan mengirim refund. Stok tidak berubah. Jika refund penuh sudah diakui pembeli dan tidak ada penerimaan kurir, pesanan akan ditutup.`}
+            primary="Batalkan resi"
+            busy={busy}
+            error={error}
+            confirmDisabled={!reason}
+            onConfirm={() => void run("cancel")}
+          >
+            <label>
+              Alasan wajib
+              <select
+                required
+                value={reason}
+                disabled={busy}
+                onChange={(e) => setReason(e.target.value)}
+              >
+                <option value="">Pilih alasan</option>
+                <option>Salah data pengiriman</option>
+                <option>Perubahan layanan</option>
+                <option>Pesanan dibatalkan</option>
+              </select>
+            </label>
+          </ActionDialog>
+        </div>
+      )}
+      {p.canUpdate && p.requestState === "SUCCEEDED" && !canCancel && (
+        <p className="flow-muted">
+          Pembatalan resi tidak tersedia pada status ini. Jika paket sudah
+          diproses kurir, lanjutkan melalui retur/refund.
+        </p>
+      )}
     </div>
   );
 }

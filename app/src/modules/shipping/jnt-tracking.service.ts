@@ -7,7 +7,9 @@ import {
   trackingOutcome,
   trackingTime,
   latestTracking,
+  trackingCancellation,
 } from "./jnt-tracking-policy";
+import { closeFullyRefundedCancelledOrder } from "@/modules/orders/cancelled-refund-reconciliation";
 import { writeAudit } from "@/modules/audit/audit.service";
 import { HttpError } from "@/lib/response";
 
@@ -27,7 +29,11 @@ export async function syncJntTracking(
     shipment.cancelledAt ||
     shipment.provider !== "jnt" ||
     !shipment.trackingNumber ||
-    request?.state !== "SUCCEEDED" ||
+    !(
+      request?.state === "SUCCEEDED" ||
+      (request?.state === "UNKNOWN" &&
+        request.errorCode === "CANCELLATION_PENDING")
+    ) ||
     shipment.trackingNumber !== request.awb
   )
     throw new HttpError("Resi aktif tidak tersedia", 409);
@@ -56,7 +62,10 @@ export async function syncJntTracking(
         cancelledAt: null,
         order: {
           jntShipmentRequest: {
-            state: "SUCCEEDED",
+            OR: [
+              { state: "SUCCEEDED" },
+              { state: "UNKNOWN", errorCode: "CANCELLATION_PENDING" },
+            ],
             externalOrderId: request.externalOrderId,
             awb: shipment.trackingNumber,
           },
@@ -83,7 +92,10 @@ export async function syncJntTracking(
       !current ||
       current.id !== shipment.id ||
       current.cancelledAt ||
-      req?.state !== "SUCCEEDED" ||
+      !(
+        req?.state === "SUCCEEDED" ||
+        (req?.state === "UNKNOWN" && req.errorCode === "CANCELLATION_PENDING")
+      ) ||
       req.externalOrderId !== request.externalOrderId ||
       current.trackingNumber !== shipment.trackingNumber
     )
@@ -115,6 +127,50 @@ export async function syncJntTracking(
                   : current.status,
           },
         });
+    }
+    const cancelledAt = trackingCancellation(result.events);
+    // Equality intentionally heals events persisted by older code without their terminal meaning.
+    if (
+      cancelledAt &&
+      (!current.carrierEventAt || +cancelledAt >= +current.carrierEventAt)
+    ) {
+      await tx.jntShipmentRequest.update({
+        where: { orderId },
+        data: { state: "CANCELLED", errorCode: null },
+      });
+      await tx.shipment.update({
+        where: { id: current.id },
+        data: {
+          cancelledAt,
+          carrierEventAt: cancelledAt,
+          notes:
+            "Pembatalan resi dikonfirmasi tracking J&T. Pesanan dan dana ditangani terpisah.",
+        },
+      });
+      await writeAudit(
+        {
+          userId: actorId || null,
+          action: "jnt.cancel.tracking-confirmed",
+          entity: "Order",
+          entityId: orderId,
+          meta: {
+            externalOrderId: req.externalOrderId,
+            shipmentId: current.id,
+          },
+        },
+        tx,
+      );
+      const closed = await closeFullyRefundedCancelledOrder(
+        tx,
+        orderId,
+        actorId,
+      );
+      return {
+        ...result,
+        failed: false,
+        cancelled: true,
+        orderClosed: closed.closed,
+      };
     }
     const unambiguous =
       !!latest &&
@@ -214,7 +270,12 @@ export async function syncDailyJntTracking() {
       updatedAt: { lte: new Date(Date.now() - 86400000) },
       order: {
         status: { in: ["PACKED", "SHIPPED"] },
-        jntShipmentRequest: { state: "SUCCEEDED" },
+        jntShipmentRequest: {
+          OR: [
+            { state: "SUCCEEDED" },
+            { state: "UNKNOWN", errorCode: "CANCELLATION_PENDING" },
+          ],
+        },
       },
     },
     orderBy: { updatedAt: "asc" },

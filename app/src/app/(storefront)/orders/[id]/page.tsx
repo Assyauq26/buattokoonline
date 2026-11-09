@@ -1,4 +1,5 @@
 import { CompleteOrderButton } from "@/components/storefront/complete-order-button";
+import { shipmentHasLeftWarehouse } from "@/modules/shipping/jnt-cancellation-policy";
 import { reviewableOrderItems } from "@/modules/reviews/reviews.service";
 import Link from "next/link";
 import Image from "next/image";
@@ -44,13 +45,11 @@ export default async function OrderDetailPage({
   const activeCase = order.resolutions.some(
     (c) => !["RECEIVED", "REJECTED", "CANCELLED_NO_REFUND"].includes(c.state),
   );
-  const leftWarehouse =
-    !!order.shipment?.sellerHandoverAt ||
-    !!order.shipment?.shippedDate ||
-    ["SHIPPED", "IN_TRANSIT", "DELIVERED"].includes(
-      order.shipment?.status || "",
-    ) ||
-    ["SHIPPED", "DELIVERED", "COMPLETED"].includes(order.status);
+  const leftWarehouse = shipmentHasLeftWarehouse({
+    orderStatus: order.status,
+    requestState: order.jntShipmentRequest?.state,
+    shipment: order.shipment,
+  });
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
@@ -219,8 +218,9 @@ export default async function OrderDetailPage({
         <section id="tracking" className="rounded-2xl border border-line p-4">
           <h2 className="font-bold">Pengiriman dibatalkan</h2>
           <p className="text-sm text-ink-soft">
-            Resi lama tidak aktif. Toko sedang menyiapkan pengiriman berikutnya.
-            Pesanan dan pembayaran tetap mengikuti status yang tertera.
+            {order.status === "CANCELLED" || order.paymentStatus === "REFUNDED"
+              ? "Resi tidak aktif. Lihat status pembatalan dan pengembalian dana pada ringkasan pesanan."
+              : "Resi ini telah dibatalkan. Hubungi toko mengenai kelanjutan pesanan; pembayaran tetap mengikuti status yang tertera."}
           </p>
         </section>
       )}

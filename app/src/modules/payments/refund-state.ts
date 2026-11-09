@@ -41,9 +41,10 @@ export async function assertNoActiveRefund(
   if (
     resolution &&
     !(
+      // Stopping an uncollected AWB does not release stock, pay money or close the case.
+      // Physical eligibility and the carrier's decision are checked by cancelJntAwb.
       options.allowShipmentCancellation &&
-      resolution.kind === "CANCEL" &&
-      ["REVIEW", "WAITING_SHIPMENT"].includes(resolution.state)
+      ["CANCEL", "RETURN"].includes(resolution.kind)
     )
   )
     throw new HttpError(

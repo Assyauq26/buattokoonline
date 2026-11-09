@@ -35,12 +35,14 @@ const input = z.discriminatedUnion("action", [
     .object({
       action: z.literal("cancel"),
       reason: z.string().trim().min(3).max(30),
+      expectedExternalOrderId: z.string().min(1).max(20),
     })
     .strict(),
   z.object({ action: z.literal("track") }).strict(),
   z
     .object({
       action: z.literal("reconcile-cancellation"),
+      expectedExternalOrderId: z.string().min(1).max(20),
       evidenceReference: z.string().min(8).max(120),
       attested: z.literal(true),
     })
@@ -81,7 +83,12 @@ export async function POST(
             : body.action === "deliver"
               ? await confirmJntDelivery(id, actor.id, body)
               : body.action === "cancel"
-                ? await cancelJntAwb(id, actor.id, body.reason)
+                ? await cancelJntAwb(
+                    id,
+                    actor.id,
+                    body.reason,
+                    body.expectedExternalOrderId,
+                  )
                 : body.action === "handover"
                   ? await handoverJntPackage(id, actor.id)
                   : await getJntTracking(id, actor.id);

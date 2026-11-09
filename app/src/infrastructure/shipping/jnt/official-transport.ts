@@ -306,8 +306,15 @@ export async function cancelJntOrder(
         .length(1),
     })
     .safeParse(response);
-  // CANCEL_ORDER is evidence of an already-cancelled provider order, not a successful response to this call.
-  // Keep it uncertain for explicit reconciliation; never silently reinterpret an Error as Sukses.
+  // The documented exact, identity-matched terminal state is an idempotent acknowledgement,
+  // not a new successful dispatch. Other Error responses remain rejected/uncertain.
+  if (
+    rejection.success &&
+    /^Tidak dapat dibatalkan,\s*Status pesanan adalah:\s*CANCEL_ORDER\s*$/i.test(
+      rejection.data.detail[0].reason,
+    )
+  )
+    return { orderId, cancelled: true, alreadyCancelled: true };
   if (
     rejection.success &&
     !rejection.data.detail[0].reason.includes("CANCEL_ORDER")

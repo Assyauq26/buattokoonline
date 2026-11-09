@@ -175,7 +175,7 @@ export function fulfillmentLabel(input: {
   carrierEventAt?: unknown;
 }) {
   if (input.cancelledAt || input.requestState === "CANCELLED")
-    return "Perlu pengiriman baru";
+    return "Resi dibatalkan";
   if (input.requestState === "UNKNOWN")
     return input.errorCode === "CANCELLATION_PENDING"
       ? "Pembatalan menunggu kepastian"

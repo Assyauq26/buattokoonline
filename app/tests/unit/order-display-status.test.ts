@@ -55,6 +55,7 @@ it.each([
   ],
   [OrderStatus.PAID, PaymentStatus.PAID, "Pembayaran Berhasil"],
   [OrderStatus.PROCESSING, PaymentStatus.PAID, "Sedang Diproses"],
+  [OrderStatus.PACKED, PaymentStatus.REFUNDED, "Dana dikembalikan"],
   [OrderStatus.SHIPPED, PaymentStatus.PAID, "Dalam Pengiriman"],
 ] as const)(
   "preserves financial state while presenting %s/%s",

@@ -35,7 +35,7 @@ describe("resolution snapshot policy", () => {
       fulfillmentLabel({ requestState: "SUCCEEDED", sellerHandoverAt: true }),
     ).toBe("Penyerahan dicatat seller");
     expect(fulfillmentLabel({ requestState: "CANCELLED" })).toBe(
-      "Perlu pengiriman baru",
+      "Resi dibatalkan",
     );
   });
   it("encrypts bank details, binds case identity and rejects tampering", () => {
