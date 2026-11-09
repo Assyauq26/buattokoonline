@@ -47,6 +47,10 @@ try {
   }
   const staffContext = await context(admin), customerContext = await context(customer);
   const staffPage = await staffContext.newPage(), accountPage = await customerContext.newPage();
+  const anonymous=await browser.newContext();
+  const deniedAnonymous=await anonymous.request.get(origin+'/api/v1/admin/orders/not-owned/awb',{maxRedirects:0});
+  assert.ok([303,307,308,401,403,404].includes(deniedAnonymous.status()));assert.ok(!(deniedAnonymous.headers()['content-type']||'').includes('application/pdf'));
+  const deniedCustomer=await customerContext.request.get(origin+'/api/v1/admin/orders/not-owned/awb',{maxRedirects:0});assert.equal(deniedCustomer.status(),404);await anonymous.close();checks.push('AWB PDF rejects anonymous and customer access');
   staffPage.on('pageerror', e => console.log('Browser error:', e.message));
   staffPage.on('dialog', d => d.accept()); accountPage.on('dialog', d => d.accept());
   for (const width of [360, 390, 430, 768, 1024, 1280, 1440, 1920]) {
