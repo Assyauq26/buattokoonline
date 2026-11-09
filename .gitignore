@@ -22,3 +22,5 @@ app/resources/*.csv
 management-evidence/
 output/
 app/preview-awb.ts
+
+/order-flow-evidence/

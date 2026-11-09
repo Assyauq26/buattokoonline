@@ -445,6 +445,8 @@ model Order {
   @@index([userId])
   @@index([status])
   @@index([couponCode, userId])
+  resolutions OrderResolution[]
+
 }
 
 model OrderItem {
@@ -657,6 +659,10 @@ model Shipment {
   order  Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
   items  ShipmentItem[]
   events ShipmentEvent[]
+  sellerHandoverAt DateTime?
+  carrierEventAt DateTime?
+  carrierCondition String @default("NONE")
+
 }
 
 model ShipmentItem {
@@ -1021,4 +1027,72 @@ model JntMappingImport {
   uploadedAt DateTime @default(now())
   report Json
   file Bytes
+}
+
+// Independent post-order workflow; legacy payment/refund ledger remains intact.
+model OrderResolution {
+  id String @id @default(uuid())
+  orderId String
+  requestKey String @unique
+  fingerprint String
+  kind String
+  state String
+  reason String
+  policyReason String?
+  productsAmount Int @default(0)
+  shippingAmount Int @default(0)
+  refundAmount Int @default(0)
+  items Json
+  returnState String @default("NONE")
+  returnTracking String?
+  bankCipher String?
+  bankDigest String?
+  stockRestored Boolean @default(false)
+  revision Int @default(0)
+  createdBy String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  order Order @relation(fields:[orderId],references:[id],onDelete:Restrict)
+  events OrderResolutionEvent[]
+  transfer ResolutionTransfer?
+  evidence ResolutionEvidence[]
+  @@index([orderId,createdAt])
+  @@index([state,updatedAt])
+}
+
+model ResolutionEvidence {
+  id String @id @default(uuid())
+  resolutionId String
+  resolution OrderResolution @relation(fields: [resolutionId], references: [id], onDelete: Restrict)
+  proofPath String
+  proofMime String
+  proofHash String
+  createdBy String
+  createdAt DateTime @default(now())
+  @@index([resolutionId])
+}
+model OrderResolutionEvent {
+  id String @id @default(uuid())
+  resolutionId String
+  action String
+  actorId String
+  note String
+  createdAt DateTime @default(now())
+  resolution OrderResolution @relation(fields:[resolutionId],references:[id],onDelete:Restrict)
+  @@index([resolutionId,createdAt])
+}
+model ResolutionTransfer {
+  id String @id @default(uuid())
+  resolutionId String @unique
+  amount Int
+  referenceDigest String @unique
+  reference String
+  bankDigest String
+  proofPath String
+  proofMime String
+  proofHash String
+  settledAt DateTime
+  recordedBy String
+  createdAt DateTime @default(now())
+  resolution OrderResolution @relation(fields:[resolutionId],references:[id],onDelete:Restrict)
 }

@@ -1,3 +1,4 @@
+import { CompleteOrderButton } from "@/components/storefront/complete-order-button";
 import { reviewableOrderItems } from "@/modules/reviews/reviews.service";
 import Link from "next/link";
 import Image from "next/image";
@@ -40,6 +41,16 @@ export default async function OrderDetailPage({
     order.paymentStatus === "PENDING_PAYMENT" ||
     order.payment?.status === "REJECTED";
   const locality = order.address ? formatAddressLocality(order.address) : "";
+  const activeCase = order.resolutions.some(
+    (c) => !["RECEIVED", "REJECTED", "CANCELLED_NO_REFUND"].includes(c.state),
+  );
+  const leftWarehouse =
+    !!order.shipment?.sellerHandoverAt ||
+    !!order.shipment?.shippedDate ||
+    ["SHIPPED", "IN_TRANSIT", "DELIVERED"].includes(
+      order.shipment?.status || "",
+    ) ||
+    ["SHIPPED", "DELIVERED", "COMPLETED"].includes(order.status);
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
@@ -64,13 +75,45 @@ export default async function OrderDetailPage({
         </Badge>
       </div>
 
-      {needPayment && (
+      {order.status === "DELIVERED" && !activeCase && (
+        <CompleteOrderButton orderId={id} />
+      )}
+      {order.resolutions.length > 0 && (
+        <section className="rounded-xl border p-4">
+          <h2 className="font-semibold">Pembatalan, retur &amp; refund</h2>
+          {order.resolutions.map((c) => (
+            <Link
+              className="block min-h-11 py-3 underline"
+              key={c.id}
+              href={`/orders/${id}/resolution?case=${c.id}`}
+            >
+              {c.kind === "CANCEL" ? "Pembatalan" : "Retur / refund"} · Lihat
+              status, rekening &amp; tindak lanjut
+            </Link>
+          ))}
+        </section>
+      )}
+      {order.paymentStatus === "PAID" && leftWarehouse && !activeCase && (
+        <Link
+          className="block rounded-xl border p-4 underline"
+          href={`/orders/${id}/resolution`}
+        >
+          Ajukan retur / refund
+        </Link>
+      )}
+      {needPayment && order.status === "PENDING_PAYMENT" && (
         <div className="flex items-center justify-between rounded-2xl border border-warning/40 bg-amber-50 p-4">
           <p className="text-sm font-semibold text-amber-800">
-            Selesaikan pembayaran pesananmu.
+            {order.payment?.status === "REJECTED"
+              ? "Perbaiki bukti pembayaran. Jangan membayar ulang sebelum toko memeriksa dana masuk."
+              : "Selesaikan pembayaran pesananmu."}
           </p>
           <Button asChild size="sm">
-            <Link href={`/checkout/payment/${order.id}`}>Bayar Sekarang</Link>
+            <Link href={`/checkout/payment/${order.id}`}>
+              {order.payment?.status === "REJECTED"
+                ? "Perbaiki bukti"
+                : "Bayar sekarang"}
+            </Link>
           </Button>
         </div>
       )}
@@ -148,7 +191,15 @@ export default async function OrderDetailPage({
       </section>
 
       {/* Shipping tracking */}
-      {order.shipment?.cancelledAt && <section id="tracking" className="rounded-2xl border border-line p-4"><h2 className="font-bold">Pengiriman dibatalkan</h2><p className="text-sm text-ink-soft">Resi lama tidak aktif. Toko sedang menyiapkan pengiriman berikutnya. Pesanan dan pembayaran tetap mengikuti status yang tertera.</p></section>}
+      {order.shipment?.cancelledAt && (
+        <section id="tracking" className="rounded-2xl border border-line p-4">
+          <h2 className="font-bold">Pengiriman dibatalkan</h2>
+          <p className="text-sm text-ink-soft">
+            Resi lama tidak aktif. Toko sedang menyiapkan pengiriman berikutnya.
+            Pesanan dan pembayaran tetap mengikuti status yang tertera.
+          </p>
+        </section>
+      )}
       {order.shipment && !order.shipment.cancelledAt && (
         <section id="tracking" className="rounded-2xl border border-line p-4">
           <h2 className="mb-3 flex items-center gap-2 font-display font-bold text-ink">
@@ -176,7 +227,7 @@ export default async function OrderDetailPage({
               <li key={e.id} className="relative">
                 <span className="absolute -left-[23px] top-1 h-3 w-3 rounded-full bg-black" />
                 <p className="text-sm font-semibold text-ink">
-                  {e.description}
+                  {e.description.replace(/^J&T\s+\d+\s*·\s*/, "")}
                 </p>
                 <p className="text-xs text-ink-muted">
                   {new Date(e.occurredAt).toLocaleString("id-ID")}
@@ -199,8 +250,9 @@ export default async function OrderDetailPage({
             </p>
             <p className="text-sm text-ink-soft">{order.address.phone}</p>
             <p className="text-sm text-ink-soft">
-              {order.address.line}, {locality && `${locality}, `}{order.address.city},{" "}
-              {order.address.province} {order.address.postalCode}
+              {order.address.line}, {locality && `${locality}, `}
+              {order.address.city}, {order.address.province}{" "}
+              {order.address.postalCode}
             </p>
           </section>
         )}
