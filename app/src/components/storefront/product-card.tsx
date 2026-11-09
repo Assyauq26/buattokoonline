@@ -31,6 +31,7 @@ export function ProductCard({
   compact = false,
   featured = false,
   homeFeatured = false,
+  hideEmptyRating = false,
   preview = false,
 }: {
   product: ProductCardData;
@@ -39,6 +40,7 @@ export function ProductCard({
   /** Product Pilihan uses a simplified card with no wishlist/add-to-cart actions. */
   featured?: boolean;
   homeFeatured?: boolean;
+  hideEmptyRating?: boolean;
   preview?: boolean;
 }) {
   const price = effectivePrice(product.basePrice, product.salePrice);
@@ -85,7 +87,6 @@ export function ProductCard({
           {pct > 0 && !compact && (
             <div className="absolute left-2 top-2 z-10">
               <Badge variant="sale">{pct}%</Badge>
-
             </div>
           )}
         </div>
@@ -99,7 +100,11 @@ export function ProductCard({
       )}
 
       <div className="product-card-body flex flex-col px-0.5 pb-1 pt-2">
-        <Rating value={product.ratingAvg} count={product.reviewCount} />
+        {hideEmptyRating && product.reviewCount === 0 ? (
+          <span className="text-xs text-ink-muted">Belum ada ulasan</span>
+        ) : (
+          <Rating value={product.ratingAvg} count={product.reviewCount} />
+        )}
         <Link
           prefetch={preview ? false : undefined}
           href={`/product/${product.slug}`}
@@ -111,12 +116,17 @@ export function ProductCard({
 
         {product.flashCampaign && (
           <div className="product-card-flash my-1">
-            <span className="product-card-flash-label"><Tag size={13} aria-hidden="true" />Flash Sale</span>
+            <span className="product-card-flash-label">
+              <Tag size={13} aria-hidden="true" />
+              Flash Sale
+            </span>
             <FlashSaleTimer campaign={product.flashCampaign} inline />
           </div>
         )}
         <div className="product-card-purchase mt-2 min-w-0">
-          <FittedCardPrices longDiscount={pct > 0 && product.basePrice >= 1_000_000}>
+          <FittedCardPrices
+            longDiscount={pct > 0 && product.basePrice >= 1_000_000}
+          >
             <span
               data-theme-role="price"
               data-discount={pct > 0}

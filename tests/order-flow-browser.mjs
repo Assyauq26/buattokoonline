@@ -338,7 +338,7 @@ try {
     console.log(JSON.stringify({ errors }));
     process.exitCode = errors.length ? 1 : 0;
   }
-  await (await import("./v151-browser-checks.mjs")).verify({db,origin,admin,customer,foreign,page,buyerPage,buyer,variant,shipping,waiting,paid,checks,out,run});
+  await (await import(process.env.PRODUCT_SETTINGS_BROWSER?"./v152-browser-checks.mjs":"./v151-browser-checks.mjs")).verify({db,origin,admin,customer,foreign,page,buyerPage,buyer,variant,shipping,waiting,paid,checks,out,run});
   // Cancel a paid transaction through the actual staged UI (no carrier request / no money transfer).
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(origin + `/admin/orders/${paid.id}/resolution?case=${c.id}`);

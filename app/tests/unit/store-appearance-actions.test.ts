@@ -8,6 +8,11 @@ const mocks = vi.hoisted(() => ({
   invalidateAdmin: vi.fn(),
 }));
 vi.mock("server-only", () => ({}));
+// Sender-registry checks have their own integration/command tests; this suite
+// exercises authorization and post-commit cache invalidation.
+vi.mock("@/modules/auth/registration-otp-email", () => ({
+  checkMailBrandChange: vi.fn().mockResolvedValue(undefined),
+}));
 vi.mock("@/lib/auth/session", () => ({ requirePermission: mocks.permission }));
 vi.mock("@/lib/prisma", () => ({
   prisma: { storeAppearanceRevision: { findMany: mocks.history } },
@@ -33,7 +38,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.permission.mockResolvedValue({ id: "admin", isAdmin: true });
   mocks.change.mockResolvedValue({ draftVersion: 1, publishedVersion: 0 });
-  mocks.read.mockResolvedValue({ draftVersion: 0 });
+  mocks.read.mockResolvedValue({ draftVersion: 0, config: { identity: { name: "Toko" } } });
 });
 describe("appearance server actions", () => {
   it("denies a customer identity even with a misplaced DB permission", async () => { mocks.permission.mockResolvedValue({id:"customer",isAdmin:false}); expect((await appearanceAction({kind:"save",draftVersion:0,publishedVersion:0})).ok).toBe(false); expect(mocks.change).not.toHaveBeenCalled(); });

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
+import { ActionDialog } from "@/components/ui/action-dialog";
 import { useProductSelection } from "./product-selection";
 
 export function ProductGallery({
@@ -11,6 +12,8 @@ export function ProductGallery({
   images: { url: string; alt: string }[];
   name: string;
 }) {
+  const [zoom, setZoom] = useState(false);
+  const zoomRoot = useRef<HTMLDivElement>(null);
   const selection = useProductSelection();
   const optionImage = selection?.image;
   const [failed, setFailed] = useState<string[]>([]);
@@ -78,6 +81,7 @@ export function ProductGallery({
 
   return (
     <div
+      ref={zoomRoot}
       className="pdp-gallery min-w-0"
       data-testid="product-gallery"
       aria-busy={
@@ -85,6 +89,22 @@ export function ProductGallery({
       }
       aria-label="Galeri produk"
     >
+      <ActionDialog
+        sourceRef={zoomRoot}
+        open={zoom}
+        onClose={() => setZoom(false)}
+        title={name}
+        primary="Tutup"
+        onConfirm={() => setZoom(false)}
+      >
+        {displayed && (
+          <img
+            src={displayed.url}
+            alt={displayed.alt || name}
+            style={{ width: "100%", maxHeight: "65dvh", objectFit: "contain" }}
+          />
+        )}
+      </ActionDialog>
       <div
         className="pdp-gallery-frame"
         onTouchStart={(event) => {
@@ -92,6 +112,21 @@ export function ProductGallery({
         }}
         onTouchEnd={(event) => swipe(event.changedTouches[0]?.clientX ?? 0)}
       >
+        {displayed && (
+          <>
+            <button
+              type="button"
+              className="pdp-zoom"
+              aria-label="Perbesar foto produk"
+              onClick={() => setZoom(true)}
+            >
+              Perbesar
+            </button>
+            <span className="pdp-count">
+              {index + 1}/{list.length}
+            </span>
+          </>
+        )}
         {displayed?.url ? (
           <Image
             key={displayed.url}
