@@ -436,6 +436,10 @@
 /* Keep photo navigation separate from zoom/counter; transparent space must not intercept taps. */
 .pdp-gallery-dots{bottom:64px;pointer-events:none}
 .pdp-gallery-dots>button{pointer-events:auto}
+/* Override the legacy wide-price/card grid only inside product recommendations. */
+.storefront-root .pdp-page .pdp-related-grid.grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+.storefront-root .pdp-page .pdp-related-grid.grid>.product-card{grid-column:auto}
+@media(min-width:768px){.storefront-root .pdp-page .pdp-related-grid.grid{grid-template-columns:repeat(4,minmax(0,1fr))}}
 .pdp-page .purchase-option[aria-pressed=true]{border:2px solid var(--store-primary,#111);font-weight:700}
 .pdp-info .my-5{margin-block:12px}.pdp-below{margin-top:24px}.pdp-below>section+section{border-top:1px solid var(--store-decorative-border,#eee);padding-top:20px}
 @media(min-width:768px){.pdp-sheet{display:contents}.pdp-below{grid-column:1/-1}.pdp-info{position:sticky;top:90px}}

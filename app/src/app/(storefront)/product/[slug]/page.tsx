@@ -486,7 +486,7 @@ export default async function ProductPage({ params }: ProductRouteProps) {
                 <section>
                   <SectionHeader title="Kamu Mungkin Suka" href="/shop" />
 
-                  <div className="grid grid-cols-2 gap-x-4 gap-y-8 md:grid-cols-4">
+                  <div className="pdp-related-grid grid grid-cols-2 gap-x-4 gap-y-8 md:grid-cols-4">
                     {related.slice(0, 4).map((p) => (
                       <ProductCard
                         hideEmptyRating

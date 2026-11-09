@@ -136,6 +136,12 @@ export async function verify({
     });
     await buyerPage.goto(origin + "/product/" + product.slug);
     await buyerPage.waitForLoadState("networkidle");
+    const grid = buyerPage.locator('.pdp-related-grid');
+    assert.equal(await grid.evaluate(e => getComputedStyle(e).gridTemplateColumns.split(' ').length), width < 768 ? 2 : 4);
+    assert.equal(await grid.locator('.product-card').first().evaluate(e => {
+      e.setAttribute('data-wide-price', 'true');
+      return getComputedStyle(e).gridColumn;
+    }), 'auto', 'Discount/long prices must not expand a recommendation across both columns');
     assert.equal(
       await buyerPage.evaluate(
         () => document.documentElement.scrollWidth > innerWidth + 1,
