@@ -21,13 +21,15 @@ import {
 import { openRefundBank, sealRefundBank } from "./refund-bank";
 import { putObject, removeObject, STORAGE_APP } from "@/lib/storage";
 import { validatePaymentProof } from "@/modules/payments/payment-proof-validation";
+import { closeFullyRefundedCancelledOrder } from "./cancelled-refund-reconciliation";
+import { shipmentHasLeftWarehouse } from "@/modules/shipping/jnt-cancellation-policy";
 
 const hash = (v: unknown) =>
   createHash("sha256").update(JSON.stringify(v)).digest("hex");
 const include = {
   items: { orderBy: { variantId: "asc" as const } },
   payment: { include: { events: true, confirmations: true } },
-  shipment: true,
+  shipment: { include: { events: { select: { status: true } } } },
   jntShipmentRequest: true,
   resolutions: { include: { transfer: true } },
 } satisfies Prisma.OrderInclude;
@@ -121,12 +123,11 @@ function paid(o: Order) {
   );
 }
 function leftWarehouse(o: Order) {
-  return (
-    !!o.shipment?.sellerHandoverAt ||
-    !!o.shipment?.shippedDate ||
-    ["SHIPPED", "IN_TRANSIT", "DELIVERED"].includes(o.shipment?.status || "") ||
-    ["SHIPPED", "DELIVERED", "COMPLETED"].includes(o.status)
-  );
+  return shipmentHasLeftWarehouse({
+    orderStatus: o.status,
+    requestState: o.jntShipmentRequest?.state,
+    shipment: o.shipment,
+  });
 }
 function activeShipment(o: Order) {
   return (
@@ -521,6 +522,8 @@ export async function commandResolution(
     }
     await tx.orderResolution.update({ where: { id }, data });
     await event(tx, c, a, input.action, note);
+    if (input.action === "received")
+      await closeFullyRefundedCancelledOrder(tx, o.id, a.id);
     return { id };
   });
 }

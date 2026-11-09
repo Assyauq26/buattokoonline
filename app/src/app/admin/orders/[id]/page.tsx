@@ -54,20 +54,24 @@ export default async function Page({
       (c) => !terminalResolutionStates.includes(c.state),
     ),
     legacy = p ? await activeRefund(prisma, p.id) : null,
-    hold = !!active || !!legacy;
+    hold = !!active || !!legacy,
+    refunded = o.paymentStatus === "REFUNDED" && p?.status === "REFUNDED";
   const next =
-    o.status === "PAID"
+    !refunded && o.status === "PAID"
       ? "PROCESSING"
-      : o.status === "PROCESSING"
+      : !refunded && o.status === "PROCESSING"
         ? "PACKED"
         : null;
-  const phase = ["PAID", "PROCESSING", "PACKED"].includes(o.status)
-    ? 1
-    : ["SHIPPED", "DELIVERED"].includes(o.status)
-      ? 2
-      : o.status === "COMPLETED"
-        ? 3
-        : -1;
+  const phase =
+    refunded && ["PAID", "PROCESSING", "PACKED"].includes(o.status)
+      ? -1
+      : ["PAID", "PROCESSING", "PACKED"].includes(o.status)
+        ? 1
+        : ["SHIPPED", "DELIVERED"].includes(o.status)
+          ? 2
+          : o.status === "COMPLETED"
+            ? 3
+            : -1;
   const shipping = fulfillmentLabel({
     requestState: r?.state,
     errorCode: r?.errorCode,
@@ -99,9 +103,11 @@ export default async function Page({
         <span className="flow-status">
           {hold
             ? "Kasus perlu diselesaikan"
-            : ["PACKED", "SHIPPED"].includes(o.status)
-              ? shipping
-              : orderDisplayStatus(o.status, o.paymentStatus)}
+            : refunded && ["PAID", "PROCESSING", "PACKED"].includes(o.status)
+              ? "Refund selesai · Periksa pengiriman"
+              : ["PACKED", "SHIPPED"].includes(o.status)
+                ? shipping
+                : orderDisplayStatus(o.status, o.paymentStatus)}
         </span>
         <span>{paymentDisplayStatus(o.paymentStatus)}</span>
       </div>
@@ -144,17 +150,21 @@ export default async function Page({
               ) : (
                 <>
                   <p>
-                    {p?.status === "WAITING_VERIFICATION"
-                      ? "Periksa bukti dan dana masuk sebelum menyetujui pembayaran."
-                      : next
-                        ? "Periksa produk dan alamat, lalu siapkan paket."
-                        : o.status === "PACKED"
-                          ? "Periksa data pengiriman, buat resi, dan cetak AWB sebelum menyerahkan paket."
-                          : o.status === "SHIPPED"
-                            ? "Pantau perjalanan paket. Tracking diperiksa setiap hari."
-                            : o.status === "DELIVERED"
-                              ? "Paket terkirim. Penyelesaian mengikuti konfirmasi pembeli atau tindakan eksplisit yang tersedia."
-                              : "Lihat pembayaran dan aktivitas pesanan."}
+                    {o.status === "CANCELLED" && refunded
+                      ? "Pesanan dibatalkan dan dana telah dikembalikan. Tidak ada pengiriman yang perlu disiapkan."
+                      : refunded
+                        ? "Dana sudah dikembalikan. Periksa tracking untuk memastikan pembatalan atau kondisi paket; jangan siapkan pengiriman baru."
+                        : p?.status === "WAITING_VERIFICATION"
+                          ? "Periksa bukti dan dana masuk sebelum menyetujui pembayaran."
+                          : next
+                            ? "Periksa produk dan alamat, lalu siapkan paket."
+                            : o.status === "PACKED"
+                              ? "Periksa data pengiriman, buat resi, dan cetak AWB sebelum menyerahkan paket."
+                              : o.status === "SHIPPED"
+                                ? "Pantau perjalanan paket. Tracking diperiksa setiap hari."
+                                : o.status === "DELIVERED"
+                                  ? "Paket terkirim. Penyelesaian mengikuti konfirmasi pembeli atau tindakan eksplisit yang tersedia."
+                                  : "Lihat pembayaran dan aktivitas pesanan."}
                   </p>
                   {next && has(PERMISSIONS.ORDER_UPDATE) && (
                     <OperationForm
@@ -184,7 +194,7 @@ export default async function Page({
                         Verifikasi pembayaran
                       </Link>
                     )}
-                  {o.status === "PACKED" && (
+                  {o.status === "PACKED" && !refunded && (
                     <a className="flow-primary" href="#order-shipping">
                       Siapkan pengiriman
                     </a>
@@ -215,28 +225,28 @@ export default async function Page({
                   status={o.status}
                   hasPaid={o.paymentStatus === "PAID" && p?.status === "PAID"}
                   canCreate={!hold && has(PERMISSIONS.SHIPPING_CREATE)}
-                  fulfillmentHeld={hold}
-                  canUpdate={
-                    has(PERMISSIONS.SHIPPING_UPDATE) &&
-                    (!hold || active?.kind === "CANCEL")
-                  }
+                  fulfillmentHeld={hold || refunded}
+                  canUpdate={has(PERMISSIONS.SHIPPING_UPDATE)}
                   canRead
                   requestState={r?.state || null}
                   errorCode={r?.errorCode}
                   externalOrderId={r?.externalOrderId}
                   awb={r?.awb || null}
                   shipmentStatus={s?.status || null}
+                  carrierCondition={s?.carrierCondition}
                   sellerHandoverAt={!!s?.sellerHandoverAt}
                 />
-                {s?.carrierCondition !== "NONE" && s?.carrierCondition && (
-                  <p className="flow-warning">
-                    {s.carrierCondition === "RETURNING"
-                      ? "Paket dalam proses retur oleh kurir"
-                      : s.carrierCondition === "RETURNED"
-                        ? "Kurir mencatat paket dikembalikan. Gudang tetap perlu memeriksa barang."
-                        : "Ada kendala pengiriman. Periksa detail tracking."}
-                  </p>
-                )}
+                {!s?.cancelledAt &&
+                  s?.carrierCondition !== "NONE" &&
+                  s?.carrierCondition && (
+                    <p className="flow-warning">
+                      {s.carrierCondition === "RETURNING"
+                        ? "Paket dalam proses retur oleh kurir"
+                        : s.carrierCondition === "RETURNED"
+                          ? "Kurir mencatat paket dikembalikan. Gudang tetap perlu memeriksa barang."
+                          : "Ada kendala pengiriman. Periksa detail tracking."}
+                    </p>
+                  )}
                 {o.shippingMode !== "official" && s?.provider !== "jnt" && (
                   <>
                     <p>
@@ -397,6 +407,17 @@ export default async function Page({
               </Link>
             )}
             {!hold &&
+              !cancelable &&
+              !refunded &&
+              s?.provider === "jnt" &&
+              s.status === "PENDING" &&
+              r?.state === "SUCCEEDED" &&
+              has(PERMISSIONS.SHIPPING_UPDATE) && (
+                <a className="flow-secondary" href="#order-shipping">
+                  Batalkan resi sebelum membatalkan pesanan
+                </a>
+              )}
+            {!hold &&
               view.paid &&
               view.leftWarehouse &&
               has(PERMISSIONS.PAYMENT_VERIFY) && (
@@ -408,8 +429,8 @@ export default async function Page({
                 </Link>
               )}
             <p className="flow-muted">
-              Pembatalan resi tersedia di Pengiriman. Pembatalan transaksi tidak
-              otomatis mengembalikan uang.
+              Pembatalan resi tersedia di bagian Pengiriman pada halaman ini.
+              Pembatalan transaksi tidak otomatis mengembalikan uang.
             </p>
           </section>
           <details className="order-panel">

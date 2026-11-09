@@ -42,6 +42,11 @@ export function orderDisplayStatus(
   status: OrderStatus,
   paymentStatus?: PaymentStatus | null,
 ): string {
+  if (
+    paymentStatus === "REFUNDED" &&
+    ["PAID", "PROCESSING", "PACKED"].includes(status)
+  )
+    return "Dana dikembalikan";
   if (status === "PENDING_PAYMENT") {
     if (paymentStatus === "WAITING_VERIFICATION")
       return "Menunggu Verifikasi Pembayaran";

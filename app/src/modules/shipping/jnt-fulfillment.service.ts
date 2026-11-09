@@ -1,5 +1,10 @@
 import { JntCancellationRejected } from "@/infrastructure/shipping/jnt/official-transport";
 import "server-only";
+import {
+  canRequestJntCancellation,
+  hasCarrierMovement,
+} from "./jnt-cancellation-policy";
+import { closeFullyRefundedCancelledOrder } from "@/modules/orders/cancelled-refund-reconciliation";
 import { jntDistrictCodePattern } from "@/infrastructure/shipping/jnt/mapping-codes";
 import { createHash } from "node:crypto";
 import { prisma } from "@/lib/prisma";
@@ -111,6 +116,11 @@ export async function createJntAwb(orderId: string, actorId: string) {
       const replacing =
         order.jntShipmentRequest?.state === "CANCELLED" &&
         !!order.shipment?.cancelledAt;
+      if (replacing && hasCarrierMovement(order.shipment))
+        throw new HttpError(
+          "Paket pernah diproses kurir; rekonsiliasi pengiriman diperlukan sebelum resi baru",
+          409,
+        );
       if (order.jntShipmentRequest && !replacing) {
         if (
           order.jntShipmentRequest.state === "SUCCEEDED" &&
@@ -530,7 +540,11 @@ export async function getJntTracking(orderId: string, actorId: string) {
   if (
     !order?.shipment ||
     order.shipment.provider !== "jnt" ||
-    order.jntShipmentRequest?.state !== "SUCCEEDED" ||
+    !(
+      order.jntShipmentRequest?.state === "SUCCEEDED" ||
+      (order.jntShipmentRequest?.state === "UNKNOWN" &&
+        order.jntShipmentRequest.errorCode === "CANCELLATION_PENDING")
+    ) ||
     !order.shipment.trackingNumber ||
     order.shipment.trackingNumber !== order.jntShipmentRequest.awb
   )
@@ -542,6 +556,7 @@ export async function cancelJntAwb(
   orderId: string,
   actorId: string,
   reason: string,
+  expectedExternalOrderId?: string,
 ) {
   if (
     typeof reason !== "string" ||
@@ -559,14 +574,33 @@ export async function cancelJntAwb(
       where: { id: orderId },
       include: { shipment: true, jntShipmentRequest: true, payment: true },
     });
-    if (order.jntShipmentRequest?.state === "CANCELLED")
-      return { existing: true as const };
+    const identity = {
+      orderNumber: order.orderNumber,
+      externalOrderId: order.jntShipmentRequest?.externalOrderId,
+      awb: order.jntShipmentRequest?.awb,
+    };
     if (
-      !["PACKED", "PROCESSING"].includes(order.status) ||
-      order.shipment?.status !== "PENDING" ||
+      expectedExternalOrderId !== undefined &&
+      expectedExternalOrderId !== identity.externalOrderId
+    )
+      throw new HttpError(
+        "Resi/order J&T berubah. Muat ulang sebelum membatalkan.",
+        409,
+      );
+    if (order.jntShipmentRequest?.state === "CANCELLED") {
+      await closeFullyRefundedCancelledOrder(tx, orderId, actorId);
+      return { existing: true as const, ...identity };
+    }
+    if (
+      !canRequestJntCancellation({
+        orderStatus: order.status,
+        requestState: order.jntShipmentRequest?.state,
+        shipmentStatus: order.shipment?.status,
+        carrierCondition: order.shipment?.carrierCondition,
+      }) ||
       order.shipment?.provider !== "jnt" ||
-      order.shipment.sellerHandoverAt ||
       !order.shipment.trackingNumber ||
+      order.shipment.trackingNumber !== order.jntShipmentRequest?.awb ||
       order.jntShipmentRequest?.state !== "SUCCEEDED"
     )
       throw new HttpError(
@@ -597,11 +631,20 @@ export async function cancelJntAwb(
     );
     return {
       existing: false as const,
+      orderNumber: order.orderNumber,
+      awb: order.jntShipmentRequest.awb,
       externalOrderId: order.jntShipmentRequest.externalOrderId,
       config,
     };
   });
-  if (request.existing) return { cancelled: true, replayed: true };
+  if (request.existing)
+    return {
+      cancelled: true,
+      replayed: true,
+      orderNumber: request.orderNumber,
+      externalOrderId: request.externalOrderId,
+      awb: request.awb,
+    };
   let cancelled = false;
   try {
     await cancelJntOrder(
@@ -649,6 +692,13 @@ export async function cancelJntAwb(
         where: { orderId },
       });
       if (
+        current.externalOrderId === request.externalOrderId &&
+        current.state === "CANCELLED"
+      ) {
+        await closeFullyRefundedCancelledOrder(tx, orderId, actorId);
+        return;
+      }
+      if (
         current.externalOrderId !== request.externalOrderId ||
         current.state !== "UNKNOWN" ||
         current.errorCode !== "CANCELLATION_PENDING"
@@ -679,16 +729,27 @@ export async function cancelJntAwb(
         },
         tx,
       );
+      await closeFullyRefundedCancelledOrder(tx, orderId, actorId);
     });
   }
-  return { cancelled: true, replayed: false };
+  return {
+    cancelled: true,
+    replayed: false,
+    orderNumber: request.orderNumber,
+    externalOrderId: request.externalOrderId,
+    awb: request.awb,
+  };
 }
 
 /** Explicit operator attestation after checking cancellation with the carrier; never dispatches an API order. */
 export async function reconcileJntCancellation(
   orderId: string,
   actorId: string,
-  input: { evidenceReference: string; attested: boolean },
+  input: {
+    evidenceReference: string;
+    attested: boolean;
+    expectedExternalOrderId?: string;
+  },
 ) {
   const reference = input.evidenceReference?.trim();
   if (
@@ -708,6 +769,14 @@ export async function reconcileJntCancellation(
       include: { shipment: true, jntShipmentRequest: true },
     });
     const request = order.jntShipmentRequest;
+    if (
+      input.expectedExternalOrderId !== undefined &&
+      input.expectedExternalOrderId !== request?.externalOrderId
+    )
+      throw new HttpError(
+        "Resi/order J&T berubah. Muat ulang sebelum rekonsiliasi.",
+        409,
+      );
     if (request?.state === "CANCELLED" && order.shipment?.cancelledAt)
       return { cancelled: true, replayed: true };
     if (
@@ -716,8 +785,11 @@ export async function reconcileJntCancellation(
       Date.now() - request.updatedAt.getTime() < 300000 ||
       order.shipment?.provider !== "jnt" ||
       order.shipment.status !== "PENDING" ||
-      order.shipment.sellerHandoverAt ||
-      !["PACKED", "PROCESSING"].includes(order.status)
+      hasCarrierMovement(order.shipment) ||
+      !["PACKED", "PROCESSING", "CANCELLED", "REFUNDED"].includes(
+        order.status,
+      ) ||
+      order.shipment.trackingNumber !== request.awb
     )
       throw new HttpError(
         "Rekonsiliasi hanya untuk pembatalan tidak pasti setelah 5 menit, sebelum serah-terima paket",
@@ -749,6 +821,7 @@ export async function reconcileJntCancellation(
       },
       tx,
     );
+    await closeFullyRefundedCancelledOrder(tx, orderId, actorId);
     return { cancelled: true, replayed: false };
   });
 }
