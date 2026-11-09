@@ -14,6 +14,9 @@ export async function verify({
   out,
   run,
 }) {
+  await buyerPage.route("**/fixture-product*.svg", (r) =>
+    r.fulfill({ contentType: "image/svg+xml", body: '<svg xmlns="http://www.w3.org/2000/svg" width="500" height="600"><rect width="500" height="600" fill="#9aaca8"/></svg>' }),
+  );
   await buyerPage.route("**/_next/image?*", (r) =>
     r.fulfill({
       contentType: "image/svg+xml",
@@ -92,11 +95,11 @@ export async function verify({
       basePrice: 29000,
       status: "PUBLISHED",
       images: {
-        create: {
+        create: [{
           url: "/fixture-product.svg",
           alt: "Produk uji",
           sortOrder: 0,
-        },
+        }, { url: "/fixture-product-second.svg", alt: "Foto kedua", sortOrder: 1 }],
       },
       variants: {
         create: [
@@ -176,6 +179,18 @@ export async function verify({
         .get("text")
         .includes("Variasi: Biru • M"),
     );
+    assert.equal(await buyerPage.locator('.pdp-gallery-dots button').count(), 2);
+    await buyerPage.locator('.pdp-gallery-frame').evaluate(e => {
+      window.scrollTo(0, e.getBoundingClientRect().top + window.scrollY - 80);
+    });
+    assert.equal(await buyerPage.locator('.pdp-zoom').evaluate(e => {
+      const r = e.getBoundingClientRect();
+      return e.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2));
+    }), true, 'Multi-photo indicator must not intercept the zoom target');
+    await buyerPage.locator('.pdp-gallery-dots button').nth(1).click();
+    assert.equal(await buyerPage.locator('.pdp-count').textContent(), '2/2');
+    await buyerPage.locator('.pdp-gallery-dots button').first().click();
+    assert.equal(await buyerPage.locator('.pdp-count').textContent(), '1/2');
     await buyerPage
       .getByRole("button", { name: "Perbesar foto produk" })
       .click();
