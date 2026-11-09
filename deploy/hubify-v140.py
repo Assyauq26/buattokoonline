@@ -18,11 +18,12 @@ def main():
         sha=sys.argv[1]
         if not re.fullmatch('[a-f0-9]{40}',sha):raise RuntimeError('Exact commit required')
         installed=core.read_json(core.CONFIG/'version.json')
-        if installed['version']!='1.3.0':raise RuntimeError('Expected 1.3.0')
+        if installed['version'] not in ['1.3.0','1.4.0']:raise RuntimeError('Expected 1.3.0')
         source=core.ROOT/'development-sources'/sha
         if not source.exists():core.run(['git','clone','--no-checkout','https://github.com/Assyauq26/buattokoonline.git',source],timeout=180)
         core.run(['git','-C',source,'fetch','origin',sha],timeout=180);core.run(['git','-C',source,'checkout','--detach',sha])
-        if (source/'VERSION').read_text().strip()!='1.4.0' or core.run(['git','-C',source,'rev-parse','HEAD'])!=sha:raise RuntimeError('Source mismatch')
+        if (source/'VERSION').read_text().strip() not in ['1.4.0','1.4.1'] or core.run(['git','-C',source,'rev-parse','HEAD'])!=sha:raise RuntimeError('Source mismatch')
+        release_version=(source/'VERSION').read_text().strip()
         if core.inventory(source)!=installed['migrations']:raise RuntimeError('Schema differs')
         ledger=json.loads(core.sql('SELECT coalesce(json_object_agg(migration_name,checksum),\'{}\') FROM "_prisma_migrations" WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL;'))
         if ledger!=installed['migrations'] or core.sql('SELECT count(*) FROM "_prisma_migrations" WHERE finished_at IS NULL AND rolled_back_at IS NULL;')!='0':raise RuntimeError('Ledger mismatch')
@@ -30,7 +31,7 @@ def main():
         old=core.read_json(core.COMPOSE);new=copy.deepcopy(old)
         new['services']['app']['build']={'context':str(source/'app'),'target':'runtime'}
         new['services']['app']['image']='single-store-app:v140-'+sha[:12]
-        new['services']['app'].setdefault('environment',{}).update(STORE_INSTALLED_VERSION='1.4.0',STORE_BUILD_SHA=sha,STORE_UPDATE_CHANNEL='stable')
+        new['services']['app'].setdefault('environment',{}).update(STORE_INSTALLED_VERSION=release_version,STORE_BUILD_SHA=sha,STORE_UPDATE_CHANNEL='stable')
         stage=source/'compose.v140.json';core.atomic_json(stage,new)
         print('BUILDING_V140 '+sha,flush=True)
         core.dc(['build','app'],file=stage,timeout=2400)
@@ -41,7 +42,7 @@ def main():
         try:
             core.atomic_json(core.COMPOSE,new);core.dc(['up','-d','--no-build','--wait','--wait-timeout','90','app'])
             core.healthy();core.public_health(core.read_json(core.STATE))
-            core.atomic_json(core.CONFIG/'version.json',{**installed,'version':'1.4.0','source_sha':sha,'channel':'stable'})
+            core.atomic_json(core.CONFIG/'version.json',{**installed,'version':release_version,'source_sha':sha,'channel':'stable'})
             journal['status']='complete';core.atomic_json(JOURNAL,journal)
             print('HUBIFY_V140_SUCCESS '+sha+' backup='+backup,flush=True)
         except Exception:restore(journal);raise

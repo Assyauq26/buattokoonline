@@ -11,7 +11,7 @@ export function maskRecipientPhone(value:string){
 }
 const safe=(s:string)=>s.normalize("NFKD").replace(/[^\x20-\x7e\xa0-\xff]/g," ").replace(/\s+/g," ").trim();
 export async function createAwbPdf(data:AwbLabel){
- const doc=await PDFDocument.create(); doc.setTitle("J&T AWB "+safe(data.awb));doc.setAuthor("Buat Toko Online Sendiri");
+ const doc=await PDFDocument.create(); doc.setTitle("J&T AWB "+safe(data.awb));doc.setAuthor(safe(data.senderName));
  const w=100*72/25.4,h=150*72/25.4,page=doc.addPage([w,h]);const regular=await doc.embedFont(StandardFonts.TimesRoman),bold=await doc.embedFont(StandardFonts.TimesRomanBold);
  const line=(y:number)=>page.drawLine({start:{x:8,y:h-y},end:{x:w-8,y:h-y},thickness:.7});
  const text=(s:string,x:number,y:number,size=9,heavy=false)=>page.drawText(safe(s),{x,y:h-y-size,font:heavy?bold:regular,size});
