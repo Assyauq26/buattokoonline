@@ -1,5 +1,6 @@
 "use client";
 import Image from "next/image";
+import { Check } from "lucide-react";
 import {
   canChoose,
   type PurchaseProduct,
@@ -20,11 +21,22 @@ export function ProductOptionSelector({
       {product.groups.map((group) => (
         <fieldset
           data-option-group={group.id}
+          data-image-options={group.allowsImage || group.id === "color"}
           key={group.id}
           disabled={busy}
           className="min-w-0"
         >
-          <legend className="mb-3 text-sm font-semibold">{group.name}</legend>
+          <legend className="mb-3 text-sm font-semibold">
+            {group.name}
+            {options[group.id] && (
+              <>
+                :{" "}
+                <strong>
+                  {group.values.find((v) => v.id === options[group.id])?.value}
+                </strong>
+              </>
+            )}
+          </legend>
           <div className="flex flex-wrap gap-2">
             {group.values.map((value) => {
               const selected = options[group.id] === value.id,
@@ -63,6 +75,7 @@ export function ProductOptionSelector({
                     </span>
                   )}
                   <span>{value.value}</span>
+                  {selected && <Check size={16} aria-hidden="true" />}
                   {!available && !selected && (
                     <span className="sr-only"> — tidak tersedia</span>
                   )}

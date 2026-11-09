@@ -1,18 +1,14 @@
-import { requireBackofficeUser } from "@/modules/admin/backoffice-access";
-import { PERMISSIONS } from "@/lib/auth/permissions";
-import { prisma } from "@/lib/prisma";
-import { BankAccountManager } from "@/components/admin/bank-account-manager";
-
-export const dynamic = "force-dynamic";
-
-export default async function AdminBankAccountsPage() {
-  await requireBackofficeUser(PERMISSIONS.BANK_MANAGE);
-  const accounts = await prisma.bankAccount.findMany({ where: { deletedAt: null }, orderBy: { createdAt: "asc" } });
-
-  return (
-    <div className="space-y-6">
-      <h1 className="font-display text-2xl font-black text-ink">Rekening Bank</h1>
-      <BankAccountManager accounts={accounts.map(a => ({ ...a, updatedAt: a.updatedAt.toISOString() }))} />
-    </div>
+import { redirect } from "next/navigation";
+export default async function Page({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const q = new URLSearchParams();
+  for (const [k, v] of Object.entries(await searchParams)) {
+    for (const x of Array.isArray(v) ? v : v ? [v] : []) q.append(k, x);
+  }
+  redirect(
+    "/admin/settings/bank-accounts" + (q.size ? "?" + q.toString() : ""),
   );
 }

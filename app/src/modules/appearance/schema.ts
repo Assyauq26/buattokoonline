@@ -1,3 +1,4 @@
+import { normalizeWhatsApp } from "../../lib/store-contact";
 import { z } from "zod";
 
 export const HEX = z
@@ -202,8 +203,25 @@ export const appearanceSchema = z
         logoAssetId: z.string().uuid().nullable(),
         logoWidth: z.number().int().min(32).max(240),
         position: z.enum(["left", "center"]),
+        description: z.string().max(1000).default(""),
+        operationalAddress: z.string().max(1000).default(""),
+        serviceHours: z.string().max(200).default(""),
+        whatsapp: z
+          .string()
+          .max(40)
+          .transform((v) => (v.trim() ? normalizeWhatsApp(v) || v : ""))
+          .refine(
+            (v) => !v || !!normalizeWhatsApp(v),
+            "Nomor WhatsApp tidak valid",
+          )
+          .default(""),
+        showWhatsApp: z.boolean().default(false),
       })
-      .strict(),
+      .strict()
+      .refine(
+        (v) => !v.showWhatsApp || !!normalizeWhatsApp(v.whatsapp),
+        "Isi nomor WhatsApp valid sebelum menampilkan chat",
+      ),
     colors: z.object(tokenShape).strict(),
     gradients: z
       .object(
@@ -369,16 +387,40 @@ export function legacyDefault(): StoreAppearanceV1 {
 /** New/reset drafts only. Never rewrite an existing published config or legacy revision. */
 export function makeMandiriPreset(): StoreAppearanceV1 {
   const v = monochromeDefault();
-  v.identity = { ...v.identity, name: "Toko Anda", tagline: "", logoAssetId: null, mode: "text" };
+  v.identity = {
+    ...v.identity,
+    name: "Toko Anda",
+    tagline: "",
+    logoAssetId: null,
+    mode: "text",
+  };
   v.footer.tagline = "";
   Object.assign(v.colors, {
-    surface: "#F7F7F8", disabled: "#F7F7F8", text: "#111418", secondaryText: "#667085", disabledText: "#667085",
-    primary: "#E1251B", primaryHover: "#B3121A", primaryPressed: "#931017",
-    accent: "#E1251B", accentHover: "#B3121A", accentPressed: "#931017",
-    headerText: "#111418", footerText: "#111418", navText: "#111418",
-    navActive: "#E1251B", badge: "#E1251B", selected: "#E1251B",
-    fieldText: "#111418", modalText: "#111418", outlineText: "#111418", price: "#111418",
-    link: "#B3121A", linkHover: "#931017", linkPressed: "#931017", focus: "#B3121A"
+    surface: "#F7F7F8",
+    disabled: "#F7F7F8",
+    text: "#111418",
+    secondaryText: "#667085",
+    disabledText: "#667085",
+    primary: "#E1251B",
+    primaryHover: "#B3121A",
+    primaryPressed: "#931017",
+    accent: "#E1251B",
+    accentHover: "#B3121A",
+    accentPressed: "#931017",
+    headerText: "#111418",
+    footerText: "#111418",
+    navText: "#111418",
+    navActive: "#E1251B",
+    badge: "#E1251B",
+    selected: "#E1251B",
+    fieldText: "#111418",
+    modalText: "#111418",
+    outlineText: "#111418",
+    price: "#111418",
+    link: "#B3121A",
+    linkHover: "#931017",
+    linkPressed: "#931017",
+    focus: "#B3121A",
   });
   return parseAppearance(v);
 }
@@ -386,13 +428,25 @@ export function makeMandiriPreset(): StoreAppearanceV1 {
 /** Neutral storefront defaults; existing published palettes remain explicit snapshots. */
 export function makeDefault(): StoreAppearanceV1 {
   const v = monochromeDefault();
-  v.identity = { ...v.identity, name: "Toko Anda", tagline: "", logoAssetId: null, mode: "text" };
+  v.identity = {
+    ...v.identity,
+    name: "Toko Anda",
+    tagline: "",
+    logoAssetId: null,
+    mode: "text",
+  };
   v.footer.tagline = "";
   v.styling.radius = "soft";
   Object.assign(v.colors, {
-    accent: "#111111", accentHover: "#242424", accentPressed: "#000000",
-    link: "#111111", linkHover: "#444444", linkPressed: "#000000",
-    focus: "#111111", info: "#444444", discount: "#111111",
+    accent: "#111111",
+    accentHover: "#242424",
+    accentPressed: "#000000",
+    link: "#111111",
+    linkHover: "#444444",
+    linkPressed: "#000000",
+    focus: "#111111",
+    info: "#444444",
+    discount: "#111111",
   });
   return parseAppearance(v);
 }

@@ -3,7 +3,10 @@ import { z } from "zod";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { requireCustomizePermission } from "./authorization";
-import { changeAppearance } from "./service";
+import { checkMailBrandChange } from "@/modules/auth/registration-otp-email";
+import { prisma } from "@/lib/prisma";
+import { parseAppearance } from "./schema";
+import { changeAppearance, readDraft } from "./service";
 import { appearanceSessionHash } from "./session";
 import { APPEARANCE_TAG } from "./published";
 const command = z
@@ -23,6 +26,17 @@ export async function executeAppearanceCommand(value: unknown) {
       ? PERMISSIONS.STORE_CUSTOMIZE_PUBLISH
       : PERMISSIONS.STORE_CUSTOMIZE_UPDATE,
   );
+  if (input.kind === "publish")
+    await checkMailBrandChange((await readDraft()).config.identity.name);
+  if (input.kind === "rollback" && input.revision !== undefined) {
+    const revision = await prisma.storeAppearanceRevision.findUnique({
+      where: { version: input.revision },
+    });
+    if (revision)
+      await checkMailBrandChange(
+        parseAppearance(revision.config).identity.name,
+      );
+  }
   const result = await changeAppearance(
     input,
     actor.id,
