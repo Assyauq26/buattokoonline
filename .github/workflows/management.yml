@@ -1,0 +1,64 @@
+name: Management release verification
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: management-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  management:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16-bookworm
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: disposable-management-only
+          POSTGRES_DB: management_v130_test
+        ports: ['5432:5432']
+        options: --health-cmd "pg_isready -U postgres" --health-interval 5s --health-retries 12
+    env:
+      DATABASE_URL: postgresql://postgres:disposable-management-only@127.0.0.1:5432/management_v130_test
+      DIRECT_URL: postgresql://postgres:disposable-management-only@127.0.0.1:5432/management_v130_test
+      TEST_DATABASE_ENABLED: 'yes'
+      STORE_ISOLATED_TESTS: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - name: Install pinned dependencies
+        working-directory: app
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          node node_modules/@prisma/engines/scripts/postinstall.js
+          npm run security:prepare
+          node node_modules/prisma/build/index.js generate
+          npm run db:migrate
+      - name: Full application and security tests
+        working-directory: app
+        run: |
+          npm run typecheck
+          npm test
+      - name: Email relay regression
+        run: node --test services/mail-relay/*.test.mjs
+      - name: Production build
+        working-directory: app
+        run: npm run build
+      - name: Browser responsive and workflows
+        run: |
+          if test -f tests/management-browser.mjs; then
+            cd app
+            node node_modules/playwright/cli.js install --with-deps chromium
+            cd ..
+            node tests/management-browser.mjs
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: management-evidence-${{ github.sha }}
+          path: management-evidence/
+          if-no-files-found: ignore

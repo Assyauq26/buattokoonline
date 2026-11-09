@@ -704,6 +704,7 @@ export async function listManagedProducts(
   q = "",
   status?: ProductStatus,
   page = 1,
+  categoryId?: string,
 ) {
   assertCatalogPermission(actor, PERMISSIONS.PRODUCT_READ);
   const where: Prisma.ProductWhereInput = {
@@ -716,6 +717,7 @@ export async function listManagedProducts(
         }
       : {}),
     ...(status ? { status } : {}),
+    ...(categoryId ? { categoryId } : {}),
   };
   page = Number.isSafeInteger(page) && page > 0 ? Math.min(page, 100_000) : 1;
   const [items, total] = await Promise.all([
@@ -728,6 +730,8 @@ export async function listManagedProducts(
         status: true,
         basePrice: true,
         salePrice: true,
+        updatedAt: true,
+        variants: { select: { inventory: { select: { onHand: true, reserved: true } } } },
         category: { select: { name: true } },
         images: {
           where: { isVariation: false },
