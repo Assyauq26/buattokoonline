@@ -262,3 +262,13 @@ it("a new action failure replaces stale restart feedback and obsolete conflict r
     ).toBeNull();
   }
 });
+it("customer login only offers customer password recovery",()=>{
+ render(createElement(LoginForm));
+ expect(screen.getByRole("link",{name:"Lupa password?"}).getAttribute("href")).toBe("/forgot-password");
+ expect(screen.queryByText("Lupa password akun seller?")).toBeNull();
+});
+it("seller login uses its own recovery context",()=>{
+ render(createElement(LoginForm,{redirectTo:"/admin/orders"}));
+ expect(screen.getByRole("heading",{name:"Masuk Seller"})).toBeTruthy();
+ expect(screen.getByRole("link",{name:"Lupa password?"}).getAttribute("href")).toBe("/seller-password-reset");
+});
