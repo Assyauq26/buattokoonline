@@ -15,7 +15,9 @@ export default defineConfig({
   },
   test: {
     environment: "node",
-    include: ["tests/unit/**/*.test.ts"],
+    include: ["tests/unit/**/*.test.ts", ...(process.env.TEST_DATABASE_ENABLED === "yes" ? ["tests/database/**/*.test.ts"] : [])],
+    hookTimeout: 30000,
+    testTimeout: 30000,
     api: false,
     ui: false,
     browser: { enabled: false },

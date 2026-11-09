@@ -39,7 +39,7 @@ async function OrderDetailContent({ params, actor }: { params: Promise<{ id: str
   const ledger = payment && has(PERMISSIONS.PAYMENT_READ) ? await listRefundLedger(id, actor.id) : null;
   const canReturn = has(PERMISSIONS.INVENTORY_READ) && has(PERMISSIONS.INVENTORY_ADJUST);
   const eligibility = canReturn ? await refundReturnEligibility(id, actor.id) : null;
-  const banks = has(PERMISSIONS.PAYMENT_READ) && has(PERMISSIONS.PAYMENT_VERIFY) && active ? await prisma.bankAccount.findMany({ orderBy: { displayName: "asc" }, select: { id: true, displayName: true, accountNumber: true } }) : [];
+  const banks = has(PERMISSIONS.PAYMENT_READ) && has(PERMISSIONS.PAYMENT_VERIFY) && active ? await prisma.bankAccount.findMany({ where: { deletedAt: null, isActive: true }, orderBy: { displayName: "asc" }, select: { id: true, displayName: true, accountNumber: true } }) : [];
   const canRequest = payment?.provider === "manual" && payment.status === "PAID" && order.paymentStatus === "PAID" && (REFUNDABLE_ORDER_STATUSES as readonly string[]).includes(order.status) && !active;
   const allowedShipment = !active ? manualShipmentOptions({ status: order.status, paymentStatus: order.paymentStatus, paymentStatusActual: payment?.status, shipmentStatus: order.shipment?.status || null }) : [];
   const nextStatus = order.status === "PAID" ? "PROCESSING" : order.status === "PROCESSING" ? "PACKED" : null;

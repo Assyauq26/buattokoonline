@@ -1,39 +1,34 @@
 "use server";
-
-import { z } from "zod";
 import { revalidatePath } from "next/cache";
-import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/auth/session";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { runAction } from "@/lib/action";
-import { writeAudit } from "@/modules/audit/audit.service";
+import { manageBankAccount } from "./bank-management.service";
 
-const schema = z.object({
-  bankName: z.string().min(1),
-  accountNumber: z.string().min(3),
-  accountHolder: z.string().min(2),
-  displayName: z.string().min(2),
-});
-
-export async function createBankAccountAction(_prev: unknown, formData: FormData) {
-  const parsed = schema.safeParse(Object.fromEntries(formData));
-  if (!parsed.success) return { ok: false as const, error: "Data rekening tidak lengkap" };
-  const res = await runAction(async () => {
-    const admin = await requirePermission(PERMISSIONS.BANK_MANAGE);
-    const acct = await prisma.bankAccount.create({ data: parsed.data });
-    await writeAudit({ userId: admin.id, action: "bank.create", entity: "BankAccount", entityId: acct.id });
-    return acct;
-  });
-  revalidatePath("/admin/bank-accounts");
-  return res;
-}
-
-export async function toggleBankAccountAction(id: string) {
+export async function saveBankAccountAction(id: string | null, revision: string, value: unknown) {
   return runAction(async () => {
-    await requirePermission(PERMISSIONS.BANK_MANAGE);
-    const acct = await prisma.bankAccount.findUnique({ where: { id } });
-    if (acct) await prisma.bankAccount.update({ where: { id }, data: { isActive: !acct.isActive } });
+    const actor = await requirePermission(PERMISSIONS.BANK_MANAGE);
+    const result = await manageBankAccount(actor.id, id ? { kind: "edit", id, revision, value } : { kind: "create", value });
     revalidatePath("/admin/bank-accounts");
-    return { ok: true };
+    revalidatePath("/checkout");
+    return result;
+  });
+}
+export async function toggleBankAccountAction(id: string, revision: string, active: boolean) {
+  return runAction(async () => {
+    const actor = await requirePermission(PERMISSIONS.BANK_MANAGE);
+    const result = await manageBankAccount(actor.id, { kind: "status", id, revision, active });
+    revalidatePath("/admin/bank-accounts");
+    revalidatePath("/checkout");
+    return result;
+  });
+}
+export async function deleteBankAccountAction(id: string, revision: string) {
+  return runAction(async () => {
+    const actor = await requirePermission(PERMISSIONS.BANK_MANAGE);
+    const result = await manageBankAccount(actor.id, { kind: "delete", id, revision });
+    revalidatePath("/admin/bank-accounts");
+    revalidatePath("/checkout");
+    return result;
   });
 }
