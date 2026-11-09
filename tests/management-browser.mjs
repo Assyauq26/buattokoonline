@@ -45,6 +45,7 @@ try {
   }
   const staffContext = await context(admin), customerContext = await context(customer);
   const staffPage = await staffContext.newPage(), accountPage = await customerContext.newPage();
+  staffPage.on('pageerror', e => console.log('Browser error:', e.message));
   staffPage.on('dialog', d => d.accept()); accountPage.on('dialog', d => d.accept());
   for (const width of [360, 390, 768, 1024, 1280, 1440]) {
     for (const [page, path, name] of [[staffPage, '/admin/products', 'products'], [staffPage, '/admin/bank-accounts', 'banks'], [staffPage, `/admin/customers/${customer.id}`, 'customer'], [accountPage, '/account', 'account']]) {
@@ -65,7 +66,7 @@ try {
   assert.equal(await staffPage.getByText('Banner Hero', { exact: true }).count(), 0);
   await staffPage.getByRole('combobox', { name: 'Filter kategori' }).selectOption(category.id);
   await staffPage.getByRole('textbox', { name: 'Cari produk' }).fill('Produk Demo 00'); await staffPage.getByRole('button', { name: 'Cari', exact: true }).click();
-  console.log('Search location:', staffPage.url()); await staffPage.waitForURL(/q=/); await staffPage.getByRole('link', { name: 'Produk Demo 00 Nama Variasi Panjang' }).waitFor(); checks.push('Product search');
+  await staffPage.waitForURL(/q=/, { waitUntil: 'domcontentloaded' }); await staffPage.getByRole('link', { name: 'Produk Demo 00 Nama Variasi Panjang' }).waitFor(); checks.push('Product search');
   await staffPage.getByRole('button', { name: 'Aksi Produk Demo 00 Nama Variasi Panjang' }).click(); await staffPage.getByRole('button', { name: 'Hapus produk', exact: true }).click();
   await staffPage.waitForTimeout(1000); assert.equal(await db.product.count({ where: { slug: `${run}-0` } }), 0); checks.push('Product delete through UI');
   await staffPage.goto(origin + '/admin/bank-accounts');
