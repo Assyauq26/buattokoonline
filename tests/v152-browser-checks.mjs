@@ -142,6 +142,15 @@ export async function verify({
       e.setAttribute('data-wide-price', 'true');
       return getComputedStyle(e).gridColumn;
     }), 'auto', 'Discount/long prices must not expand a recommendation across both columns');
+    if (width >= 768) {
+      await grid.evaluate(e => window.scrollTo(0, e.getBoundingClientRect().top + window.scrollY - 80));
+      const bounds = await buyerPage.evaluate(() => ({
+        infoBottom: document.querySelector('.pdp-info').getBoundingClientRect().bottom,
+        relatedTop: document.querySelector('.pdp-related-grid').getBoundingClientRect().top,
+      }));
+      assert(bounds.infoBottom <= bounds.relatedTop, 'Product information must not stick over recommendations after scrolling');
+      await buyerPage.evaluate(() => window.scrollTo(0, 0));
+    }
     assert.equal(
       await buyerPage.evaluate(
         () => document.documentElement.scrollWidth > innerWidth + 1,

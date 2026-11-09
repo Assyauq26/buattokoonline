@@ -442,7 +442,7 @@
 @media(min-width:768px){.storefront-root .pdp-page .pdp-related-grid.grid{grid-template-columns:repeat(4,minmax(0,1fr))}}
 .pdp-page .purchase-option[aria-pressed=true]{border:2px solid var(--store-primary,#111);font-weight:700}
 .pdp-info .my-5{margin-block:12px}.pdp-below{margin-top:24px}.pdp-below>section+section{border-top:1px solid var(--store-decorative-border,#eee);padding-top:20px}
-@media(min-width:768px){.pdp-sheet{display:contents}.pdp-below{grid-column:1/-1}.pdp-info{position:sticky;top:90px}}
+@media(min-width:768px){.pdp-sheet{display:contents}.pdp-below{grid-column:1/-1}.pdp-info{position:relative;top:auto}}
 
 .pdp-page{color:var(--store-text,#111)}.pdp-purchase-actions .pdp-buy-pill{background:var(--store-primary,#111);color:var(--store-primaryText,#fff)}.pdp-purchase-actions .pdp-cart-pill{background:var(--store-outline,#fff);color:var(--store-outlineText,#111)}.pdp-page .pdp-product-price>span:first-child{color:var(--store-price,#111)}
 
