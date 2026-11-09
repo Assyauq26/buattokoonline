@@ -110,6 +110,17 @@ class InstallerTests(unittest.TestCase):
             if os.name=='posix':
                 self.assertEqual((destination/'app/package-lock.json').stat().st_mode & 0o777,0o644)
                 self.assertEqual((destination/'app').stat().st_mode & 0o777,0o755)
+            # A financial-workflow release may not claim automatic rollback
+            # compatibility merely because all its schema additions are present.
+            manifest['compatibility']['rollback_compatible'] = False
+            with tarfile.open(package, 'w:gz') as archive:
+                for name, content in [(name,data) for name in names]+[('release.json',json.dumps(manifest).encode())]:
+                    member=tarfile.TarInfo(name);member.size=len(content);archive.addfile(member,io.BytesIO(content))
+            blocked = Path(directory)/'blocked'
+            blocked.mkdir()
+            with self.assertRaisesRegex(core.StoreError, 'Kontrak database/rollback'):
+                updater.extract_package(package, blocked, release, installed)
+            self.assertEqual(list(blocked.iterdir()), [])
 
 
 if __name__ == '__main__':

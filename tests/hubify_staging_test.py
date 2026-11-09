@@ -85,7 +85,10 @@ class StagingSafetyTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory)
             (path / 'VERSION').write_text('1.0.0')
-            (path / 'release-policy.json').write_bytes((repository / 'release-policy.json').read_bytes())
+            # This fixture exercises the historic reviewed shipping migration,
+            # independently of the current release's financial rollback policy.
+            (path / 'release-policy.json').write_text(json.dumps({
+                'db_contract': 1, 'postgres_major': 16, 'rollback_compatible': True}))
             source = migrations / name / 'migration.sql'
             target = path / source
             target.parent.mkdir(parents=True)

@@ -20,6 +20,11 @@ digest bukan tanda tangan independen yang melindungi dari akun penerbit yang dib
 
 ## Menerbitkan versi
 
+**Upgrade ke v1.5.0:** memerlukan migrasi operator dan menandai
+`rollback_compatible: false`, sehingga updater otomatis berhenti sebelum downtime.
+Jangan memaksa melewati guard. Kode lama tidak mengenali ledger refund baru.
+Lihat [catatan rilis v1.5.0](v1.5.0-release.md) untuk batasan dan prosedur rollback.
+
 **Upgrade v1.0.0 → v1.1.0:** updater otomatis menghentikan pemasangan jika
 migrasi `20261105100000_shipping_settings` belum tercatat. Migrasi ini menyiapkan
 tabel pengaturan J&T, foreign key, dan menyalin konfigurasi aktif. Operator perlu
