@@ -72,7 +72,7 @@ try {
   await staffPage.waitForLoadState('networkidle');
   await staffPage.getByRole('combobox', { name: 'Filter kategori' }).selectOption(category.id);
   await staffPage.getByRole('textbox', { name: 'Cari produk' }).fill('Produk Demo 00'); await staffPage.getByRole('button', { name: 'Cari', exact: true }).click();
-  await staffPage.waitForURL(/q=/, { waitUntil: 'domcontentloaded' }); await staffPage.getByRole('link', { name: 'Produk Demo 00 Nama Variasi Panjang' }).waitFor(); checks.push('Product search');
+  try { await staffPage.waitForURL(/q=/, { waitUntil: 'domcontentloaded' }); } catch(e) { await staffPage.screenshot({path:resolve(out,'search-failure.png'),fullPage:true}); writeFileSync(resolve(out,'search-failure.txt'),await staffPage.locator('body').innerText()); throw e; } await staffPage.getByRole('link', { name: 'Produk Demo 00 Nama Variasi Panjang' }).waitFor(); checks.push('Product search');
   await staffPage.getByRole('button', { name: 'Aksi Produk Demo 00 Nama Variasi Panjang' }).click(); await staffPage.getByRole('button', { name: 'Hapus produk', exact: true }).click();
   await staffPage.waitForTimeout(1000); assert.equal(await db.product.count({ where: { slug: `${run}-0` } }), 0); checks.push('Product delete through UI');
   await staffPage.goto(origin + '/admin/bank-accounts');
