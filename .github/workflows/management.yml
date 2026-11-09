@@ -45,6 +45,8 @@ jobs:
           npm test
       - name: Email relay regression
         run: node --test services/mail-relay/*.test.mjs
+      - name: Validate operator upgrade syntax
+        run: python3 -m compileall -q deploy installer
       - name: Production build
         working-directory: app
         run: npm run build
