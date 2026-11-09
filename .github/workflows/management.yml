@@ -61,6 +61,11 @@ jobs:
             cd ..
             node tests/management-browser.mjs
           fi
+      - name: Fixed PDF and barcode evidence
+        run: |
+          node tests/awb-evidence.mjs
+          python3 -m pip install --quiet pymupdf zxing-cpp pillow
+          python3 tests/verify-awb-pdf.py
       - uses: actions/upload-artifact@v4
         if: always()
         with:
