@@ -19,21 +19,39 @@ export interface PaymentProofFields {
 async function assertUploadAllowed(userId: string, orderId: string) {
   const order = await prisma.order.findFirst({
     where: { id: orderId, userId },
-    select: { status: true, expiresAt: true, payment: { select: { status: true } } },
+    select: {
+      status: true,
+      expiresAt: true,
+      payment: { select: { status: true } },
+    },
   });
   if (!order?.payment) throw new HttpError("Pesanan tidak ditemukan", 404);
-  if (order.status !== "PENDING_PAYMENT" ||
-      (order.expiresAt && order.expiresAt < new Date()) ||
-      !["PENDING_PAYMENT", "REJECTED"].includes(order.payment.status)) {
+  if (
+    order.status !== "PENDING_PAYMENT" ||
+    (order.payment.status !== "REJECTED" &&
+      order.expiresAt &&
+      order.expiresAt < new Date()) ||
+    !["PENDING_PAYMENT", "REJECTED"].includes(order.payment.status)
+  ) {
     throw new HttpError("Pesanan tidak menerima bukti pembayaran", 409);
   }
 }
 
-export async function uploadPaymentProof(userId: string, fields: PaymentProofFields, data: Uint8Array, mime: string) {
+export async function uploadPaymentProof(
+  userId: string,
+  fields: PaymentProofFields,
+  data: Uint8Array,
+  mime: string,
+) {
   const extension = validatePaymentProof(data, mime);
   const date = new Date(fields.transferDate);
-  if (!Number.isSafeInteger(fields.amount) || fields.amount <= 0 ||
-      !Number.isFinite(date.getTime()) || !fields.senderBank.trim() || !fields.senderName.trim()) {
+  if (
+    !Number.isSafeInteger(fields.amount) ||
+    fields.amount <= 0 ||
+    !Number.isFinite(date.getTime()) ||
+    !fields.senderBank.trim() ||
+    !fields.senderName.trim()
+  ) {
     throw new HttpError("Konfirmasi pembayaran tidak valid", 422);
   }
   await assertUploadAllowed(userId, fields.orderId);
@@ -52,8 +70,11 @@ export async function uploadPaymentProof(userId: string, fields: PaymentProofFie
     });
   } catch (error) {
     // The DB transaction has failed. Never overwrite the business error if compensation fails.
-    try { await removeObject(stored.path); }
-    catch { console.error("[storage] Payment proof compensation failed"); }
+    try {
+      await removeObject(stored.path);
+    } catch {
+      console.error("[storage] Payment proof compensation failed");
+    }
     throw error;
   }
 }

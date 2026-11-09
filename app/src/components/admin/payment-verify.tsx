@@ -1,4 +1,33 @@
 import { OperationForm } from "./operation-form";
 export function PaymentVerify({ paymentId }: { paymentId: string }) {
-  return <div className="space-y-6" data-testid={`payment-verify-${paymentId}`}><OperationForm url={`/api/v1/admin/payments/${paymentId}/approve`} label="Setujui pembayaran" confirmation="Saya sudah memeriksa bukti transfer dan penerimaan dana. Approval akan mengubah reservasi menjadi penjualan." fields={[]} /><details><summary className="cursor-pointer text-sm font-medium underline">Tolak bukti transfer</summary><div className="pt-4"><OperationForm url={`/api/v1/admin/payments/${paymentId}/reject`} label="Tolak pembayaran" confirmation="Tolak bukti ini dan minta pelanggan mengajukan ulang?" fields={[{ name: "reason", label: "Alasan penolakan", type: "textarea", required: true }]} /></div></details></div>;
+  return (
+    <div
+      data-testid={`payment-verify-${paymentId}`}
+      className="flow-payment-actions"
+    >
+      <OperationForm
+        url={`/api/v1/admin/payments/${paymentId}/approve`}
+        label="Terima pembayaran"
+        confirmation="Saya telah memeriksa mutasi dan dana benar-benar diterima. Reservasi stok akan dicatat sebagai penjualan."
+        fields={[]}
+      />
+      <details>
+        <summary>Minta perbaikan</summary>
+        <OperationForm
+          url={`/api/v1/admin/payments/${paymentId}/reject`}
+          label="Kirim permintaan perbaikan"
+          confirmation="Minta pembeli memperbaiki bukti tanpa meminta pembayaran ulang otomatis?"
+          fields={[
+            {
+              name: "reason",
+              label: "Alasan perbaikan (wajib)",
+              type: "textarea",
+              required: true,
+              maxLength: 1500,
+            },
+          ]}
+        />
+      </details>
+    </div>
+  );
 }
