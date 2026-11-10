@@ -22,7 +22,11 @@ export function ActionDialog({
   confirmDisabled = false,
   error,
   sourceRef,
+  variant,
+  busyLabel = "Memproses…",
 }: {
+  variant?: "shipping";
+  busyLabel?: string;
   open: boolean;
   onClose: () => void;
   title: string;
@@ -57,7 +61,7 @@ export function ActionDialog({
       <Dialog.Portal>
         <Dialog.Overlay className="action-overlay" />
         <Dialog.Content
-          className="action-dialog"
+          className={`action-dialog${variant === "shipping" ? " shipping-dialog" : ""}`}
           style={style}
           onOpenAutoFocus={() => {
             trigger.current =
@@ -78,6 +82,9 @@ export function ActionDialog({
             if (busy) e.preventDefault();
           }}
         >
+          {variant === "shipping" && (
+            <div className="shipping-handle" aria-hidden="true" />
+          )}
           <header>
             <Dialog.Title>{title}</Dialog.Title>
             <Dialog.Close aria-label="Tutup" disabled={busy}>
@@ -94,14 +101,16 @@ export function ActionDialog({
             </p>
           )}
           <footer>
-            <button
-              type="button"
-              className="action-secondary"
-              disabled={busy}
-              onClick={onClose}
-            >
-              Kembali
-            </button>
+            {variant !== "shipping" && (
+              <button
+                type="button"
+                className="action-secondary"
+                disabled={busy}
+                onClick={onClose}
+              >
+                Kembali
+              </button>
+            )}
             <button
               type="button"
               className="action-primary"
@@ -109,7 +118,7 @@ export function ActionDialog({
               onClick={onConfirm}
             >
               {busy && <LoaderCircle size={18} className="animate-spin" />}
-              {busy ? "Memproses…" : primary}
+              {busy ? busyLabel : primary}
             </button>
           </footer>
         </Dialog.Content>

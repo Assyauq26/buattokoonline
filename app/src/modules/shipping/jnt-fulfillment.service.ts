@@ -1,3 +1,4 @@
+import { shippingFingerprint } from "./shipping-review";
 import {
   JntCancellationRejected,
   JntCreationRejected,
@@ -96,7 +97,7 @@ const payloadHash = (v: unknown) =>
 type Tx = Prisma.TransactionClient;
 
 /** Reserve intent transactionally BEFORE contacting J&T. Never automatically retry UNKNOWN. */
-export async function createJntAwb(orderId: string, actorId: string) {
+export async function createJntAwb(orderId: string, actorId: string, reviewFingerprint?: string) {
   requireFlag("JNT_ENABLE_ORDER_CREATE");
   if (process.env.JNT_API_ENV === "production") {
     requireFlag("JNT_PRODUCTION_ORDER_APPROVED");
@@ -116,6 +117,7 @@ export async function createJntAwb(orderId: string, actorId: string) {
           jntShipmentRequest: true,
         },
       });
+      if (reviewFingerprint && shippingFingerprint(order) !== reviewFingerprint) throw new HttpError("Data pengiriman berubah. Buka kembali rincian sebelum membuat resi.", 409);
       const replacing =
         order.jntShipmentRequest?.state === "CANCELLED" &&
         !!order.shipment?.cancelledAt;

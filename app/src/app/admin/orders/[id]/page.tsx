@@ -235,9 +235,6 @@ export default async function Page({
                   ))}
                 </ol>
               </details>
-              <p className="simple-note">
-                <Info size={16} /> Pembuatan resi tidak otomatis memesan pickup.
-              </p>
             </section>
           )}
           <section className="order-panel simple-products">
@@ -421,7 +418,7 @@ export default async function Page({
           </details>
           <details className="order-panel">
             <summary>
-              <Clock size={19} /> Aktivitas pesanan
+              <Clock size={19} /> Status Pesanan
             </summary>
             <ol className="flow-history">
               {o.history.map((h) => (
@@ -445,13 +442,7 @@ export default async function Page({
               ))}
             </details>
           )}
-          <details className="order-panel">
-            <summary>Bantuan</summary>
-            <p>
-              Verifikasi pembayaran, siapkan paket, buat resi. Pengiriman
-              mengikuti tracking J&amp;T. Retur dan refund ditangani terpisah.
-            </p>
-          </details>
+
         </aside>
       </div>
     </div>

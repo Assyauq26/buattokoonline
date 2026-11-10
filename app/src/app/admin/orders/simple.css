@@ -36,7 +36,7 @@
   overflow-x: auto;
   white-space: nowrap;
   padding: 3px 0 8px;
-  scrollbar-width: thin;
+  scrollbar-width: none;
 }
 .simple-tabs a {
   display: flex;
@@ -513,3 +513,6 @@
     transition: transform 120ms cubic-bezier(0.23, 1, 0.32, 1);
   }
 }
+
+.simple-tabs::-webkit-scrollbar { display: none; }
+.simple-orders .compact-status .flow-status { border-radius: 6px; }
