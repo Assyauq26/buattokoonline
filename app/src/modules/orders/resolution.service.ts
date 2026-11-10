@@ -457,7 +457,9 @@ export async function commandResolution(
     } else if (input.action === "bank") {
       if (
         !["WAITING_BANK", "WAITING_RETURN", "READY"].includes(c.state) ||
-        c.transfer
+        c.transfer ||
+        c.refundAmount <= 0 ||
+        !paid(o)
       )
         fail("Rekening tidak dapat diubah pada tahap ini");
       data.bankCipher = sealRefundBank(input.bank, c.id);
@@ -520,11 +522,16 @@ export async function commandResolution(
         fail("Kasus belum memerlukan tindak lanjut transfer");
       note = input.note;
     }
-    await tx.orderResolution.update({ where: { id }, data });
+    const saved = await tx.orderResolution.update({ where: { id }, data });
     await event(tx, c, a, input.action, note);
     if (input.action === "received")
       await closeFullyRefundedCancelledOrder(tx, o.id, a.id);
-    return { id };
+    return {
+      id,
+      state: saved.state,
+      revision: saved.revision,
+      hasBank: !!saved.bankCipher,
+    };
   });
 }
 const transferSchema = z
