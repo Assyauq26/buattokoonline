@@ -11,6 +11,7 @@ import {
   Shield,
   ScrollText,
   Package,
+  MessageCircle,
 } from "lucide-react";
 import "./settings.css";
 const items = [
@@ -20,6 +21,7 @@ const items = [
   ["payment-methods", "Metode Pembayaran", CreditCard],
   ["bank-accounts", "Rekening Bank", Landmark],
   ["email-otp", "Email & OTP", Mail],
+  ["whatsapp", "Integrasi WhatsApp", MessageCircle],
   ["security", "Keamanan Akun", Shield],
   ["audit", "Audit Log", ScrollText],
   ["updates", "Update Versi", Package],

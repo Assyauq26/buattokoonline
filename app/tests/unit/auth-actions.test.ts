@@ -15,6 +15,7 @@ vi.mock("@/modules/auth/auth.service", () => ({
   resetPassword: vi.fn(),
 }));
 vi.mock("next/navigation", () => ({ redirect: auth.redirect }));
+vi.mock("@/modules/whatsapp/registration-proof", () => ({whatsappRegistrationProof: async () => undefined}));
 
 import { loginAction, logoutAction } from "@/modules/auth/auth.actions";
 import { POST as logoutRoute } from "@/app/api/v1/auth/logout/route";

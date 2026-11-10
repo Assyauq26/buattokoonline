@@ -24,7 +24,7 @@ export default async function Layout({
       style={themeStyle((await getPublishedAppearance()).config)}
       allowed={Object.entries(permissions)
         .filter(([, p]) => !p || u.permissions.includes(p))
-        .map(([k]) => k)}
+        .map(([k]) => k).concat(process.env.STORE_WHATSAPP_ENABLED === "1" && u.roles.includes("Admin") ? ["whatsapp"] : [])}
     >
       {children}
     </SettingsShell>

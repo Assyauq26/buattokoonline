@@ -4,6 +4,7 @@ import { registrationVerificationSchema } from "@/modules/auth/registration-sche
 import { ok, HttpError } from "@/lib/response";
 import { verifyRegistrationOtp } from "@/modules/auth/auth.service";
 import { createSession } from "@/lib/auth/session";
+import { whatsappRegistrationProof } from "@/modules/whatsapp/registration-proof";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +19,7 @@ export async function POST(req: Request) {
       input.email,
       input.otp,
       input.challengeId,
+      await whatsappRegistrationProof(),
     );
     await createSession(user.id, user.email, user.sessionVersion);
     return ok({ id: user.id, name: user.name, email: user.email }, 201);

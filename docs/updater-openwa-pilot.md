@@ -120,7 +120,17 @@ private signing material remains in a separate root-only directory.
 Live HTTPS checks passed: anonymous command rejected, anonymous status rejected,
 authenticated status/check returned 200, and revoking the temporary operator
 session immediately invalidated its status capability. No existing seller
-password/session was changed. A real version update is still pending.
+password/session was changed.
+
+The authenticated Hubify update completed successfully on 2026-11-10, job
+`6f174e172254a0b3e74e4160e675e7a9`, from the installed pilot bootstrap to v1.7.0
+commit `9ba615254da7408033c154892aed058712f6a35b`. Repeating start returned the
+same job. The durable worker downloaded 2,120,895 verified bytes, built the app,
+created and verified backup `/var/backups/single-store/20261110-104135-b4a7ac8c`,
+ran migrations, activated, and checked actual image/version/public readiness.
+All 26 ledger entries, business counts, runtime/Caddy fingerprints, and unrelated
+container IDs/start times were unchanged. Temporary operator access was revoked.
+Root-only evidence: `/var/lib/single-store/updater-pilot-result.json`.
 
 ## v1.7.0 pilot artifact
 
@@ -130,3 +140,24 @@ PostgreSQL 16, worker 2. The source changes introduce no database migration;
 reviewed historical newline-only SQL differences are preserved explicitly.
 The policy allows code rollback, never automatic database rollback. WhatsApp
 is not enabled by this artifact. Fresh-VPS bootstrap remains unverified live.
+
+## WhatsApp candidate (separate from the v1.7.0 artifact)
+
+Local application checks: production build/typecheck, 34 targeted tests (customer
+identity, email registration proof, auth actions, event semantics and durable
+outbox), browser checks at 360/390/430/1440. No real WhatsApp delivery is implied.
+The central registry UUID is passed as STORE_WHATSAPP_TENANT_ID separately from
+the updater installation ID. Only the scoped store token is mounted read-only.
+All flags default off. Public admission remains restricted to the authorized pilot
+phone at the relay; notification preference and customer consent remain separate.
+
+| Before | After | Why |
+| --- | --- | --- |
+| No seller connection controls | Private pairing, actual connection status, disconnect | Owners pair their own number without access to the provider dashboard |
+| Pale helper copy inherited a surface color | Existing muted foreground text token | Readable contrast while retaining the store theme |
+| Ambiguous delivery feedback | Queued/submitted/delivered/read/unknown displayed distinctly | Provider acceptance is not recipient delivery |
+| Repeated clicks can overlap | Pending guard; backend lease, dedup and limited retry | Prevent duplicate external submissions |
+| No notification consent UI | Separate customer opt-in and revocation | Logging in does not authorize order notifications |
+
+Screenshots: ignored output/whatsapp-audit. The QR fixture is synthetic and is
+removed after connection or when the page becomes hidden. Real pairing pending.

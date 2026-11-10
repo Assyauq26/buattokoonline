@@ -613,3 +613,7 @@
 .auth-ui .auth-submit:is(:disabled, [aria-busy="true"]) { background: var(--auth-primary, #111); border-color: var(--auth-primary, #111); color: var(--auth-foreground, #fff); }
 
 .auth-ui .auth-submit[aria-busy="true"] {opacity:1}
+.auth-wa-link { display: inline-flex; align-items: center; justify-content: center; min-height: 48px; padding: 12px 20px; border: 1px solid #d4d4d8; border-radius: 12px; font-weight: 600; text-align: center; }
+.auth-wa-link:focus-visible { outline: 2px solid var(--auth-primary); outline-offset: 3px; }
+.auth-wa-link:active { transform: scale(.98); }
+@media (prefers-reduced-motion: no-preference) { .auth-wa-link { transition: transform 120ms cubic-bezier(.23,1,.32,1); } }
