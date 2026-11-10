@@ -450,7 +450,9 @@ export function CustomerRefund({
           <h2>Transfer dicatat penjual</h2>
           <p>
             {formatIDR(c.transfer.amount)} ·{" "}
-            {new Date(c.transfer.settledAt).toLocaleString("id-ID")}
+            {new Date(c.transfer.settledAt).toLocaleString("id-ID", {
+              timeZone: "Asia/Jakarta",
+            })} WIB
           </p>
           <p>Referensi: {c.transfer.reference}</p>
           <a

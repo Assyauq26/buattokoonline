@@ -320,7 +320,7 @@ try {
       .setAudience("storefront")
       .setExpirationTime("1h")
       .sign(new TextEncoder().encode(jwt));
-    const c = await browser.newContext();
+    const c = await browser.newContext({ timezoneId: "America/Los_Angeles" });
     await c.route("**/fixture-product.svg", (route) =>
       route.fulfill({
         contentType: "image/svg+xml",

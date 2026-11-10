@@ -393,6 +393,10 @@ export async function verify({
     true,
   );
   const transferred = (await get()).cases[0];
+  const transferPanel = p.locator("section").filter({
+    has: p.getByRole("heading", { name: "Transfer dicatat penjual", exact: true }),
+  });
+  await transferPanel.getByText(/WIB/).waitFor();
   const proof = endpoint + "/proof?kind=transfer&id=" + transferred.transfer.id;
   assert.equal((await customer.request.get(proof)).status(), 200);
   assert.equal((await foreign.request.get(proof)).status(), 404);

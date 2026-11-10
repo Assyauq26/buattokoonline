@@ -738,7 +738,7 @@ export function ResolutionFlow({
                       {formatIDR(c.transfer.amount)} · {c.transfer.reference}
                     </p>
                     <p>
-                      {new Date(c.transfer.settledAt).toLocaleString("id-ID")}
+                      {new Date(c.transfer.settledAt).toLocaleString("id-ID", { timeZone: "Asia/Jakarta" })} WIB
                     </p>
                     <a
                       className="flow-secondary"
@@ -830,7 +830,7 @@ export function ResolutionFlow({
                       <li key={e.id}>
                         <p>{e.note}</p>
                         <time>
-                          {new Date(e.createdAt).toLocaleString("id-ID")}
+                          {new Date(e.createdAt).toLocaleString("id-ID", { timeZone: "Asia/Jakarta" })} WIB
                         </time>
                       </li>
                     ))}
