@@ -81,4 +81,3 @@ if __name__=='__main__':
     install()
     try:activate(Path(sys.argv[1]))
     except Exception:raise SystemExit('Activation incomplete. Check operator rollback plan; no database mutation performed.')
-

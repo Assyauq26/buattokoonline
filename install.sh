@@ -22,6 +22,9 @@ echo "Profil server: $(nproc) vCPU; RAM $RAM_KIB KiB; swap $SWAP_KIB KiB. Build 
 exec 9>/run/single-store-install.lock
 flock -n 9 || { echo 'Installer lain sedang berjalan.'; exit 1; }
 if [[ -f /etc/single-store/installed ]]; then
+  if [[ -f /opt/single-store/manager/update_service/resume_install.py ]]; then
+    (cd /opt/single-store/manager && python3 -m update_service.resume_install)
+  fi
   echo 'Toko sudah terpasang. Database, akun, dan konfigurasi dipertahankan. Gunakan update.sh untuk pembaruan versi.'
   exit 0
 fi

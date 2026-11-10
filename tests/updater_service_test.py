@@ -106,6 +106,20 @@ class TrustTests(unittest.TestCase):
             with self.subTest(url=url), self.assertRaises(Rejected):SafeRedirect().redirect_request(None,None,302,'',{},url)
 
 class PlanTests(unittest.TestCase):
+    def test_interrupted_finalization_never_reinitializes_database(self):
+        with tempfile.TemporaryDirectory() as directory:
+            folder=Path(directory)
+            state={'store_ready':True,'source_sha':'a'*40,'local_test':False}
+            core.atomic_json(folder/'version.json',{'source_sha':'a'*40})
+            with patch('core.CONFIG',folder),patch('core.STATE',folder/'setup.json'),patch('core.healthy'),patch('core.public_health'),patch('core.create_secrets') as secrets,patch('core.dc') as dc,patch('update_service.new_install.install_new') as hook:
+                hook.side_effect=Rejected('activation_failed_restored')
+                with self.assertRaises(Rejected):core.initialize_store(state)
+                self.assertFalse(state.get('complete',False))
+                hook.side_effect=None
+                core.initialize_store(state)
+                self.assertTrue(state['complete'])
+                secrets.assert_not_called();dc.assert_not_called()
+                self.assertEqual(hook.call_count,2)
     def test_new_install_uses_private_common_bridge_and_pinned_bundle(self):
         with tempfile.TemporaryDirectory() as directory:
             root=Path(directory);(root/'manager').mkdir()
@@ -252,5 +266,3 @@ class PipelineTests(unittest.TestCase):
     def test_errors_are_redacted(self):self.assertNotIn('secret',self.execute('backup')['detail'])
 
 if __name__=='__main__':unittest.main()
-
-

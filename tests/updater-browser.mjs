@@ -28,7 +28,7 @@ try {
   response = await context.request.post(origin+'/api/v1/auth/login',{headers:{Origin:origin},data:{identifier:user.email,password}});
   assert.equal(response.status(),200);
   // Local HTTP test transport only; production cookie remains Secure.
-  await context.addCookies((await context.cookies()).map(cookie=>({...cookie,secure:false}))); 
+  await context.addCookies((await context.cookies()).map(cookie=>({...cookie,secure:false})));
   response = await context.request.post(origin+'/api/v1/admin/updater',{headers:{Origin:'https://evil.test'},data:{action:'start',sha:'a'.repeat(40),requestKey:randomUUID()}});
   assert.equal(response.status(),403);results.push('Cross-origin request denied');
   response = await context.request.post(origin+'/api/v1/admin/updater',{headers:{Origin:origin},data:{action:'start',sha:'a'.repeat(40),requestKey:randomUUID(),url:'https://evil.test'}});
@@ -83,7 +83,3 @@ try {
   if(user){await db.auditLog.deleteMany({where:{userId:user.id}});await db.userRole.deleteMany({where:{userId:user.id}});await db.user.delete({where:{id:user.id}});}
   await db.$disconnect();
 }
-
-
-
-
