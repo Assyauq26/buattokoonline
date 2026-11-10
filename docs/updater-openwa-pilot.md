@@ -89,9 +89,8 @@ idempotence, recovery, socket authorization, migration byte preservation and
 mocked pipeline failure states. Browser tests use the real app/auth/local
 PostgreSQL but mock worker status. These are not evidence of a real Docker update.
 
-The OpenWA provider/auth foundation is in the platform branch, remains disabled
-and is not installed by this app release. Central number and seller/test recipient
-were authorized by the owner; pairing and live send are still outstanding.
+The v1.7.0 updater artifact does not enable WhatsApp. A separate operator pilot
+candidate and its live evidence are recorded below.
 
 ## Tencent preparation, 2026-11-10
 
@@ -160,4 +159,42 @@ phone at the relay; notification preference and customer consent remain separate
 | No notification consent UI | Separate customer opt-in and revocation | Logging in does not authorize order notifications |
 
 Screenshots: ignored output/whatsapp-audit. The QR fixture is synthetic and is
-removed after connection or when the page becomes hidden. Real pairing pending.
+removed after connection or when the page becomes hidden.
+
+## Hubify WhatsApp activation and live evidence, 2026-11-10
+
+Operator candidate `b4a4ad94f051bcf62ea99c020359f8a68ed0a5c2` is live on Hubify,
+separate from the immutable v1.7.0 updater artifact. Additive WhatsApp migration
+is applied (27 ledger entries). Backup
+`/var/backups/single-store/20261110-125600-36a69812` passed scratch restore;
+4 products, 10 orders, 10 payments, 2 users, stock 207/reserved 0 were retained.
+Runtime/proxy fingerprints and unrelated containers were preserved at activation.
+Linux typecheck and production build passed in separate sequential processes to
+fit the bounded builder memory. Runtime Next config retains typecheck enabled.
+
+Public authenticated settings, status/preferences/history, anonymous/foreign-origin
+denial, caller session injection rejection and temporary-session revocation passed.
+The independent drain timer is active. Both owner-paired numbers are ready and
+match their registered expected numbers. Operator central pairing is disabled.
+
+A real incoming challenge initially exposed OpenWA's resolved private-ID format.
+Relay fix `e1eac9fc106662729eeea8d2ddc6404341cb9e49` accepts only signed,
+engine-resolved phone metadata, never the private ID as a phone. Its 38 tests pass.
+The owner received the fresh OTP and completed browser verification: central
+challenge/exchange consumed and local challenge verified. New-phone profile/email
+completion or existing-account password linking remains required; no identity
+was automatically assigned. Full account registration/linking live checks remain
+outstanding.
+
+The owner confirmed receipt of `ORD-PILOT-UJI-1794316320482`, sent once with
+duplicate enqueue deduplicated. Provider status remains submitted; owner receipt
+is separately recorded, never relabeled as provider delivered. No real order,
+payment, stock, or shipment was changed for this test. Test consent was revoked
+and notification preferences restored to disabled. No general enrollment enabled.
+
+Code-only rollback is recorded by `/etc/single-store/hubify-whatsapp-pilot.json`;
+it preserves the additive schema and all business data. Relay rollback is retained
+at `/var/backups/btos-platform/whatsapp-lid-1794317211`. The independent updater
+baseline was intentionally not rebased to this operator-only candidate; a new
+compatible signed artifact is required before promising its next dashboard update.
+Fresh-VPS bootstrap and fleet rollout remain unverified/unapproved.
