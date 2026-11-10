@@ -349,6 +349,8 @@ def initialize_store(state, password=None):
     run(['systemctl', 'daemon-reload'])
     run(['systemctl', 'enable', '--now', 'single-store-maintenance.timer'])
     (CONFIG / 'installed').touch(mode=0o600)
+    from update_service.new_install import install_new
+    install_new(state)
     state.update(step=4, complete=True, setup_hash=None, busy=False, message='Toko berhasil dibuat. Konfigurasikan pembayaran dan pengiriman sebelum menerima pesanan.')
     atomic_json(STATE, state)
     (CONFIG / 'setup-token').unlink(missing_ok=True)
