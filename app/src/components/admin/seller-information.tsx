@@ -130,8 +130,9 @@ export function SellerInformation({
             </span>
           )}
           <p id="seller-phone-help" className="text-sm text-zinc-600">
-            Nomor kontak pribadi, tidak ditampilkan di toko. Perubahan ini tidak
-            mengubah nomor login atau memverifikasi nomor HP.
+            Nomor pribadi, tidak ditampilkan di toko. Aktifkan login WhatsApp di
+            Keamanan Akun. Jika nomor yang ditautkan berubah, masuk kembali
+            dengan email dan tautkan nomor baru.
           </p>
         </fieldset>
         <SettingsFeedback message={message} />

@@ -239,10 +239,13 @@ export async function finishWhatsApp(
           ...account,
         },
       });
+      const profilePhone = isSeller
+        ? (user?.sellerContactPhone ?? user?.phone)
+        : user?.phone;
       if (
         !user ||
-        !user.phone ||
-        normalizeRegistrationPhone(user.phone) !== row.phone
+        !profilePhone ||
+        normalizeRegistrationPhone(profilePhone) !== row.phone
       )
         throw new HttpError(
           "Gunakan nomor yang tersimpan di profil Anda. Ubah profil terlebih dahulu jika nomor sudah berganti.",
@@ -296,10 +299,13 @@ export async function finishWhatsApp(
       });
       // Password reset, changed phone, inactivity or role changes require account
       // proof again; possessing a recycled number alone never relinks an account.
+      const profilePhone = isSeller
+        ? (user?.sellerContactPhone ?? user?.phone)
+        : user?.phone;
       if (
         user &&
-        user.phone &&
-        normalizeRegistrationPhone(user.phone) === row.phone &&
+        profilePhone &&
+        normalizeRegistrationPhone(profilePhone) === row.phone &&
         identity.verifiedAt.getTime() > Date.now() - 30 * 86400000
       ) {
         await tx.whatsAppIdentity.update({
@@ -319,6 +325,31 @@ export async function finishWhatsApp(
         data: { state: "failed" },
       });
       return { user: null, state: "seller_link_required" };
+    }
+    // Only after phone ownership is verified, distinguish an existing account
+    // from a new registration. Contact data never grants a login or admin role.
+    const phoneForms = [
+      row.phone,
+      row.phone.slice(1),
+      ...(row.phone.startsWith("+62") ? ["0" + row.phone.slice(3)] : []),
+    ];
+    const existing =
+      identity ||
+      (await tx.user.findFirst({
+        where: {
+          OR: [
+            { phone: { in: phoneForms } },
+            { sellerContactPhone: { in: phoneForms } },
+          ],
+        },
+        select: { id: true },
+      }));
+    if (existing) {
+      await tx.whatsAppChallenge.update({
+        where: { id: row.id },
+        data: { state: "failed" },
+      });
+      return { user: null, state: "account_link_required" };
     }
     // Verified phone is only a pending proof. Existing accounts still need their
     // password; new accounts still complete the existing mandatory email OTP flow.

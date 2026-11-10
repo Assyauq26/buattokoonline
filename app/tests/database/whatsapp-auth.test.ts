@@ -131,7 +131,9 @@ const start = () => startWhatsApp({ phone, purpose: "login" });
 it("legacy contact phone does not grant account access", async () => {
   await user();
   await start();
-  expect(await finishWhatsApp("123456")).toEqual({ state: "profile_required" });
+  expect(await finishWhatsApp("123456")).toEqual({
+    state: "account_link_required",
+  });
   expect(mocks.session).not.toHaveBeenCalled();
   expect(
     await prisma.whatsAppIdentity.findUnique({ where: { phone } }),
@@ -192,7 +194,7 @@ it("wrong tenant/audience/phone/purpose cannot create session", async () => {
 it("customer WhatsApp never creates a seller session", async () => {
   await linked(true);
   await start();
-  expect((await finishWhatsApp("123456")).state).toBe("profile_required");
+  expect((await finishWhatsApp("123456")).state).toBe("account_link_required");
   expect(mocks.session).not.toHaveBeenCalled();
 });
 it("reset session version and stale ownership require password relinking", async () => {
@@ -202,7 +204,7 @@ it("reset session version and stale ownership require password relinking", async
     data: { sessionVersion: { increment: 1 } },
   });
   await start();
-  expect((await finishWhatsApp("123456")).state).toBe("profile_required");
+  expect((await finishWhatsApp("123456")).state).toBe("account_link_required");
   expect(mocks.session).not.toHaveBeenCalled();
 });
 it("linking requires authenticated account password and rotates sessions", async () => {
@@ -339,7 +341,7 @@ it("seller links with password, then logs in only through the seller scope", asy
   mocks.session.mockReset();
   centralId = randomUUID();
   await start();
-  expect((await finishWhatsApp("123456")).state).toBe("profile_required");
+  expect((await finishWhatsApp("123456")).state).toBe("account_link_required");
   expect(mocks.session).not.toHaveBeenCalled();
 });
 it("seller flow does not promote customers or trust a legacy admin phone", async () => {
@@ -368,4 +370,52 @@ it("a customer cannot link a seller identity", async () => {
     }),
   ).rejects.toThrow();
   expect(mocks.relay).not.toHaveBeenCalled();
+});
+
+it("seller uses separately saved contact only after password and WhatsApp verification", async () => {
+  const u = await user(true);
+  const saved = await prisma.user.update({
+    where: { id: u.id },
+    data: { phone: null, sellerContactPhone: phone },
+  });
+  mocks.current = { ...saved, isAdmin: true, roles: ["Admin"] };
+  mocks.authenticated = saved;
+  await startWhatsApp({
+    phone,
+    purpose: "link",
+    accountType: "seller",
+    password: "synthetic-password",
+  });
+  expect((await finishWhatsApp("123456")).state).toBe("linked");
+  mocks.current = null;
+  mocks.session.mockReset();
+  centralId = randomUUID();
+  await startWhatsApp({ phone, purpose: "login", accountType: "seller" });
+  expect(await finishWhatsApp("123456")).toEqual({
+    state: "signed_in",
+    redirectTo: "/admin",
+  });
+  await prisma.user.update({
+    where: { id: u.id },
+    data: { sellerContactPhone: "" },
+  });
+  mocks.session.mockReset();
+  centralId = randomUUID();
+  await startWhatsApp({ phone, purpose: "login", accountType: "seller" });
+  expect((await finishWhatsApp("123456")).state).toBe("seller_link_required");
+  expect(mocks.session).not.toHaveBeenCalled();
+});
+it("seller contact on customer entry offers account linking without registration or admin session", async () => {
+  const u = await user(true);
+  await prisma.user.update({
+    where: { id: u.id },
+    data: { phone: null, sellerContactPhone: phone },
+  });
+  await start();
+  expect((await finishWhatsApp("123456")).state).toBe("account_link_required");
+  expect(mocks.session).not.toHaveBeenCalled();
+  expect(
+    (await prisma.whatsAppChallenge.findUniqueOrThrow({ where: { centralId } }))
+      .state,
+  ).toBe("failed");
 });

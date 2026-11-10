@@ -94,7 +94,11 @@ export function WhatsAppAuth({
         setPassword("");
         setState("waiting");
       } else if (
-        ["profile_required", "seller_link_required"].includes(result.state)
+        [
+          "profile_required",
+          "seller_link_required",
+          "account_link_required",
+        ].includes(result.state)
       ) {
         setState(result.state);
         setConfirmation(null);
@@ -139,7 +143,11 @@ export function WhatsAppAuth({
   return (
     <div className="auth-content wa-auth">
       <div className="wa-symbol" aria-hidden="true">
-        {state === "profile_required" ? (
+        {[
+          "profile_required",
+          "account_link_required",
+          "seller_link_required",
+        ].includes(state) ? (
           <Check />
         ) : confirmation ? (
           <ShieldCheck />
@@ -149,37 +157,48 @@ export function WhatsAppAuth({
       </div>
       <div className="auth-heading">
         <h1>
-          {state === "profile_required"
-            ? "Nomor terverifikasi"
-            : confirmation
-              ? "Satu langkah lagi"
-              : challenge
-                ? "Lanjut di WhatsApp"
-                : link
-                  ? "Tautkan WhatsApp"
-                  : accountType === "seller"
-                    ? "Masuk dashboard"
-                    : "Masuk atau daftar"}
+          {["account_link_required", "seller_link_required"].includes(state)
+            ? "Tautkan akun Anda"
+            : state === "profile_required"
+              ? "Nomor terverifikasi"
+              : confirmation
+                ? "Satu langkah lagi"
+                : challenge
+                  ? "Lanjut di WhatsApp"
+                  : link
+                    ? "Tautkan WhatsApp"
+                    : accountType === "seller"
+                      ? "Masuk dashboard"
+                      : "Masuk atau daftar"}
         </h1>
         <p>
-          {state === "profile_required"
-            ? "Lengkapi akun Anda untuk melanjutkan."
-            : confirmation
-              ? "Konfirmasi permintaan yang Anda mulai."
-              : challenge
-                ? "Kirim pesan, lalu buka tautan balasannya."
-                : "Gunakan nomor WhatsApp Anda."}
+          {["account_link_required", "seller_link_required"].includes(state)
+            ? "Nomor terverifikasi. Masuk sekali dengan email untuk menautkannya."
+            : state === "profile_required"
+              ? "Lengkapi akun Anda untuk melanjutkan."
+              : confirmation
+                ? "Konfirmasi permintaan yang Anda mulai."
+                : challenge
+                  ? "Kirim pesan, lalu buka tautan balasannya."
+                  : "Gunakan nomor WhatsApp Anda."}
         </p>
       </div>
-      {state === "seller_link_required" ? (
+      {["seller_link_required", "account_link_required"].includes(state) ? (
         <div className="auth-form">
           <p className="wa-caption">
-            Masuk dengan email, lalu tautkan nomor di Pengaturan → Keamanan
-            Akun.
+            Buka Keamanan Akun setelah masuk, lalu pilih Tautkan WhatsApp.
           </p>
           <Link className="wa-primary" href="/login?redirectTo=%2Fadmin">
-            Masuk dengan email
+            Masuk dashboard seller
           </Link>
+          {state === "account_link_required" && (
+            <Link
+              className="wa-text-button"
+              href="/login?redirectTo=%2Faccount%2Fsecurity"
+            >
+              Masuk akun customer
+            </Link>
+          )}
         </div>
       ) : state === "profile_required" ? (
         <div className="auth-form">
@@ -350,6 +369,18 @@ export function WhatsAppAuth({
       >
         Masuk dengan email
       </Link>
+      {!link &&
+        !challenge &&
+        !confirmation &&
+        !state &&
+        accountType === "customer" && (
+          <Link
+            className="wa-text-button"
+            href="/whatsapp?account=seller&redirectTo=%2Fadmin"
+          >
+            Masuk dashboard seller dengan WhatsApp
+          </Link>
+        )}
     </div>
   );
 }

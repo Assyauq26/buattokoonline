@@ -15,7 +15,11 @@ vi.mock("@/modules/audit/audit.service", () => ({ writeAudit: m.audit }));
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     $transaction: async (f: any) =>
-      f({ $queryRaw: m.lock, user: { findFirst: m.find, update: m.update } }),
+      f({
+        whatsAppIdentity: { findUnique: async () => null },
+        $queryRaw: m.lock,
+        user: { findFirst: m.find, update: m.update },
+      }),
   },
 }));
 import { saveSellerName } from "@/modules/admin/seller-profile.actions";

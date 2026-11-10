@@ -54,7 +54,7 @@ try{
  results.push('Pairing double-click guarded; QR removed after connected; pending preference truthful; unknown never marked delivered');
  await page.goto(origin+'/admin/settings/security');
  await expect(page.getByRole('link',{name:'Tautkan WhatsApp',exact:true})).toHaveAttribute('href',/account=seller&mode=link/);
- const guest=await browser.newContext(),login=await guest.newPage();let confirmations=0;
+ const guest=await browser.newContext(),login=await guest.newPage();let confirmations=0; let confirmationState="profile_required";
  await login.goto(origin+'/register');
  await expect(login.getByRole('link',{name:'Lanjut dengan WhatsApp'})).toHaveAttribute('href',/account=customer/);
  await login.goto(origin+'/login?redirectTo=%2Fadmin');
@@ -64,7 +64,7 @@ try{
  results.push('Customer registration entry and seller login entry available; seller linking in account security');
  await login.route('**/api/v1/auth/whatsapp',route=>{
   const action=route.request().postDataJSON().action; if(action==='confirm')confirmations++;
-  return route.fulfill({json:{success:true,data:action==='start'?{phone:'+6281575652263',whatsappUrl:'https://wa.me/6282211700060?text=synthetic',expiresAt:new Date(Date.now()+180000).toISOString()}:{state:action==='confirm'?'profile_required':'waiting'}}});
+  return route.fulfill({json:{success:true,data:action==='start'?{phone:'+6281575652263',whatsappUrl:'https://wa.me/6282211700060?text=synthetic',expiresAt:new Date(Date.now()+180000).toISOString()}:{state:action==='confirm'?confirmationState:'waiting'}}});
  });
  for(const width of [360,390,430,1440]){
   await login.setViewportSize({width,height:950});await login.goto(origin+'/whatsapp');
@@ -92,6 +92,20 @@ try{
  await expect(login.getByRole('heading',{name:'Nomor terverifikasi'})).toBeVisible();
  assert.equal(confirmations,1);
  results.push('Fragment removed; navigation does not consume link; explicit confirmation; monochrome CTA; profile required');
+ confirmationState='account_link_required';
+ for(const width of [390,1440]){
+  await login.setViewportSize({width,height:950});
+  await login.goto(origin+'/whatsapp#confirm=12345678-1234-1234-1234-123456789abc.'+'b'.repeat(64));
+  await login.getByRole('button',{name:'Konfirmasi & Lanjutkan'}).click();
+  await expect(login.getByRole('heading',{name:'Tautkan akun Anda'})).toBeVisible();
+  await expect(login.getByRole('link',{name:'Lengkapi pendaftaran'})).toHaveCount(0);
+  await expect(login.getByRole('link',{name:'Masuk dashboard seller',exact:true})).toHaveAttribute('href','/login?redirectTo=%2Fadmin');
+  await expect(login.getByRole('link',{name:'Masuk akun customer'})).toBeVisible();
+  assert(await login.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
+  await login.screenshot({path:resolve(out,'existing-account-'+width+'.png'),fullPage:true});
+ }
+ results.push('Existing verified contact offers account linking, never registration, on mobile and desktop');
+
  assert.deepEqual(errors,[]);results.push('360/390/430/1440 layouts; phone challenge alone never finishes browser flow');
  writeFileSync(resolve(out,'results.json'),JSON.stringify({passed:results,evidence:'Local production build; mocked relay; no WhatsApp sent'},null,2));console.log(JSON.stringify(results));
 }finally{

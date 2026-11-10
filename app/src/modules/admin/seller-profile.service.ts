@@ -35,11 +35,19 @@ export async function saveSellerContact(actorId: string, value: unknown) {
       throw new HttpError("Akses profil seller tidak tersedia.", 403);
     if (current.updatedAt.toISOString() !== input.data.revision)
       throw new HttpError("Profil berubah. Muat ulang sebelum menyimpan.", 409);
+    const identity = await tx.whatsAppIdentity.findUnique({
+      where: { userId: actorId },
+    });
+    const unlink =
+      identity?.accountType === "seller" && identity.phone !== phone;
+    if (unlink)
+      await tx.whatsAppIdentity.delete({ where: { userId: actorId } });
     const saved = await tx.user.update({
       where: { id: actorId },
       data: {
         name: input.data.name,
         sellerContactPhone: phone,
+        ...(unlink ? { sessionVersion: { increment: 1 } } : {}),
         updatedAt: new Date(
           Math.max(Date.now(), current.updatedAt.getTime() + 1),
         ),

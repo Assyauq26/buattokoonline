@@ -97,3 +97,26 @@ it("denies customer and target identity injection", async () => {
     }),
   ).rejects.toMatchObject({ status: 422 });
 });
+it("changing a linked seller contact revokes WhatsApp identity and old sessions", async () => {
+  const current = await prisma.user.findUniqueOrThrow({ where: { id } });
+  const phone = "+628" + Date.now().toString().slice(-10);
+  await prisma.whatsAppIdentity.create({
+    data: {
+      userId: id,
+      phone,
+      accountType: "seller",
+      sessionVersion: current.sessionVersion,
+    },
+  });
+  await saveSellerContact(id, {
+    name: current.name,
+    phone: "081234567890",
+    revision: current.updatedAt.toISOString(),
+  });
+  expect(
+    await prisma.whatsAppIdentity.findUnique({ where: { userId: id } }),
+  ).toBeNull();
+  expect(
+    (await prisma.user.findUniqueOrThrow({ where: { id } })).sessionVersion,
+  ).toBe(current.sessionVersion + 1);
+});
