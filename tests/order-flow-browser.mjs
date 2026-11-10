@@ -361,271 +361,326 @@ try {
     assert.equal(r.status(), 200, await r.text());
     return (await r.json()).data;
   };
-  const c = await api(admin, paid.id, "request", {
-    requestId: randomUUID(),
-    kind: "CANCEL",
-    reason: "Stok salah sebelum pengiriman",
-  });
-  for (const width of process.env.ORDER_FLOW_DEBUG || process.env.V151_FAST
-    ? [390]
-    : [360, 390, 430, 768, 1440]) {
-    await page.setViewportSize({ width, height: 900 });
-    for (const [path, name] of [
-      ["/admin/orders?q=DEMO-" + run.slice(0, 8), "orders"],
-      [`/admin/orders/${shipping.id}`, "detail"],
-      [`/admin/orders/${waiting.id}/payment`, "payment"],
-      [`/admin/orders/${paid.id}/resolution?case=${c.id}`, "cancellation"],
-    ]) {
-      assert.equal((await page.goto(origin + path)).status(), 200);
-      await page.waitForLoadState("networkidle");
-      if (name === "detail") {
-        const box = await page
-          .getByRole("button", { name: "Salin nomor pesanan", exact: true })
-          .boundingBox();
-        assert(
-          box && box.width >= 44 && box.height >= 44,
-          "Copy action has a 44px touch target",
-        );
-      }
-      if (name === "orders" && !process.env.SIMPLIFIED_ORDER_BROWSER)
-        assert.equal(
-          await page
-            .getByTestId("admin-order-" + waiting.orderNumber)
-            .locator(".seller-order-product > strong")
-            .innerText(),
-          "Rp 58.000",
-          "Product line excludes shipping; grand total remains separate",
-        );
-      assert.equal(
-        await page.evaluate(
-          () => document.documentElement.scrollWidth > innerWidth + 1,
-        ),
-        false,
-        `${name} overflow ${width}`,
-      );
-      await page.screenshot({
-        path: resolve(out, `${name}-${width}.png`),
-        fullPage: false,
-        caret: "initial",
-      });
-      checks.push(`${name} ${width}: HTTP 200 / no overflow`);
-    }
-  }
-  if (process.env.ORDER_FLOW_DEBUG) {
-    console.log(JSON.stringify({ errors }));
-    process.exitCode = errors.length ? 1 : 0;
-  }
-  await (
-    await import(
-      process.env.SIMPLIFIED_ORDER_BROWSER
-        ? "./v160-browser-checks.mjs"
-        : process.env.JNT_CANCEL_BROWSER
-          ? "./v156-browser-checks.mjs"
-          : process.env.PRODUCT_SETTINGS_BROWSER
-            ? "./v152-browser-checks.mjs"
-            : "./v151-browser-checks.mjs"
-    )
-  ).verify({
-    db,
-    origin,
-    admin,
-    customer,
-    foreign,
-    page,
-    buyerPage,
-    buyer,
-    variant,
-    shipping,
-    waiting,
-    paid,
-    checks,
-    out,
-    run,
-  });
-  // Cancel a paid transaction through the actual staged UI (no carrier request / no money transfer).
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto(origin + `/admin/orders/${paid.id}/resolution?case=${c.id}`);
-  await page
-    .getByRole("button", { name: "Batalkan dan lanjut ke refund", exact: true })
-    .click();
-  assert.equal(
-    (await db.order.findUnique({ where: { id: paid.id } })).status,
-    "PACKED",
-  );
-  await page
-    .getByRole("dialog")
-    .getByRole("button", { name: "Batalkan dan lanjutkan", exact: true })
-    .click();
-  await page
-    .getByRole("heading", { name: "Rekening tujuan pengembalian", exact: true })
-    .waitFor();
-  assert.equal(
-    (await db.order.findUnique({ where: { id: paid.id } })).status,
-    "CANCELLED",
-  );
-  checks.push(
-    "UI cancellation creates unpaid refund obligation, not automatic transfer",
-  );
-  await buyerPage.setViewportSize({ width: 390, height: 844 });
-  await buyerPage.goto(origin + `/orders/${paid.id}/resolution?case=${c.id}`);
-  await buyerPage.getByLabel("Nama bank", { exact: true }).fill("Bank Demo");
-  await buyerPage
-    .getByLabel("Nama pemilik rekening", { exact: true })
-    .fill("Pembeli Demo");
-  await buyerPage
-    .getByLabel("Nomor rekening", { exact: true })
-    .fill("001234567890");
-  await buyerPage
-    .getByRole("button", { name: "Simpan rekening tujuan", exact: true })
-    .click();
-  await buyerPage.getByText("Perubahan tersimpan.", { exact: true }).waitFor();
-  checks.push("Buyer bank form through scoped real HTTP / encrypted database");
-  await buyerPage.screenshot({
-    path: resolve(out, "buyer-bank-390.png"),
-    fullPage: false,
-    caret: "initial",
-  });
-  await page.reload();
-  await page
-    .getByRole("button", {
-      name: "Rekening dan nominal sudah benar",
-      exact: true,
-    })
-    .click();
-  await page
-    .getByRole("dialog")
-    .getByRole("button", { name: "Lanjutkan transfer manual", exact: true })
-    .click();
-  await page
-    .getByRole("heading", { name: "Catat transfer refund", exact: true })
-    .waitFor();
-  await page.screenshot({
-    path: resolve(out, "refund-ready-390.png"),
-    fullPage: false,
-    caret: "initial",
-  });
-  await page
-    .getByLabel("Bukti transfer · JPG, PNG, WebP, PDF · maks. 4 MB")
-    .setInputFiles({
-      name: "synthetic.pdf",
-      mimeType: "application/pdf",
-      buffer: Buffer.from("%PDF-1.7\n Synthetic proof, no real bank transfer"),
+  if (process.env.CUSTOMER_REFUND_BROWSER) {
+    await (
+      await import("./customer-refund-browser-checks.mjs")
+    ).verify({
+      db,
+      origin,
+      admin,
+      customer,
+      foreign,
+      page,
+      buyerPage,
+      buyer,
+      variant,
+      shipping,
+      waiting,
+      paid,
+      checks,
+      out,
+      run,
+      create,
+      api,
     });
-  await page
-    .getByLabel("Referensi transaksi", { exact: true })
-    .fill("E2E-" + run);
-  await page
-    .getByLabel("Waktu dana ditransfer", { exact: true })
-    .fill(
-      new Date(Date.now() + 60000 - new Date().getTimezoneOffset() * 60000)
-        .toISOString()
-        .slice(0, 16),
-    );
-  await page
-    .getByText("Dana sudah ditransfer ke rekening tujuan di atas.", {
-      exact: false,
-    })
-    .locator("input")
-    .check();
-  await page
-    .getByRole("button", { name: "Konfirmasi dana dikembalikan", exact: true })
-    .click();
-  await page
-    .getByRole("dialog")
-    .getByRole("button", { name: "Konfirmasi dana dikembalikan", exact: true })
-    .click();
-  await page
-    .getByRole("heading", { name: "Transfer dicatat seller", exact: true })
-    .waitFor();
-  assert.equal(
-    (await db.payment.findUnique({ where: { id: paid.payment.id } })).status,
-    "PAID",
-  );
-  checks.push(
-    "Manual refund evidence upload records claim without automatic bank verification",
-  );
-  await buyerPage.reload();
-  await buyerPage
-    .getByLabel("Dana belum diterima / kendala")
-    .fill("Pengujian kendala dana belum diterima");
-  await buyerPage
-    .getByRole("button", { name: "Laporkan kendala refund", exact: true })
-    .click();
-  await buyerPage
-    .getByText("Refund perlu tindak lanjut", { exact: true })
-    .waitFor();
-  await buyerPage
-    .getByRole("button", { name: "Saya telah menerima dana", exact: true })
-    .click();
-  await buyerPage.getByText("Dana diterima pembeli", { exact: true }).waitFor();
-  assert.equal(
-    (await db.payment.findUnique({ where: { id: paid.payment.id } })).status,
-    "REFUNDED",
-  );
-  checks.push(
-    "Buyer dispute and receipt stay separate from seller refund claim",
-  );
-  const transfer = await db.resolutionTransfer.findUniqueOrThrow({
-    where: { resolutionId: c.id },
-  });
-  assert.equal(
-    (
-      await foreign.request.get(
-        origin +
-          `/api/v1/order-resolutions/proof?kind=transfer&id=${transfer.id}`,
+  } else {
+    const c = await api(admin, paid.id, "request", {
+      requestId: randomUUID(),
+      kind: "CANCEL",
+      reason: "Stok salah sebelum pengiriman",
+    });
+    for (const width of process.env.ORDER_FLOW_DEBUG || process.env.V151_FAST
+      ? [390]
+      : [360, 390, 430, 768, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      for (const [path, name] of [
+        ["/admin/orders?q=DEMO-" + run.slice(0, 8), "orders"],
+        [`/admin/orders/${shipping.id}`, "detail"],
+        [`/admin/orders/${waiting.id}/payment`, "payment"],
+        [`/admin/orders/${paid.id}/resolution?case=${c.id}`, "cancellation"],
+      ]) {
+        assert.equal((await page.goto(origin + path)).status(), 200);
+        await page.waitForLoadState("networkidle");
+        if (name === "detail") {
+          const box = await page
+            .getByRole("button", { name: "Salin nomor pesanan", exact: true })
+            .boundingBox();
+          assert(
+            box && box.width >= 44 && box.height >= 44,
+            "Copy action has a 44px touch target",
+          );
+        }
+        if (name === "orders" && !process.env.SIMPLIFIED_ORDER_BROWSER)
+          assert.equal(
+            await page
+              .getByTestId("admin-order-" + waiting.orderNumber)
+              .locator(".seller-order-product > strong")
+              .innerText(),
+            "Rp 58.000",
+            "Product line excludes shipping; grand total remains separate",
+          );
+        assert.equal(
+          await page.evaluate(
+            () => document.documentElement.scrollWidth > innerWidth + 1,
+          ),
+          false,
+          `${name} overflow ${width}`,
+        );
+        await page.screenshot({
+          path: resolve(out, `${name}-${width}.png`),
+          fullPage: false,
+          caret: "initial",
+        });
+        checks.push(`${name} ${width}: HTTP 200 / no overflow`);
+      }
+    }
+    if (process.env.ORDER_FLOW_DEBUG) {
+      console.log(JSON.stringify({ errors }));
+      process.exitCode = errors.length ? 1 : 0;
+    }
+    await (
+      await import(
+        process.env.SIMPLIFIED_ORDER_BROWSER
+          ? "./v160-browser-checks.mjs"
+          : process.env.JNT_CANCEL_BROWSER
+            ? "./v156-browser-checks.mjs"
+            : process.env.PRODUCT_SETTINGS_BROWSER
+              ? "./v152-browser-checks.mjs"
+              : "./v151-browser-checks.mjs"
       )
-    ).status(),
-    404,
-  );
-  const proof = await customer.request.get(
-    origin + `/api/v1/order-resolutions/proof?kind=transfer&id=${transfer.id}`,
-  );
-  assert.equal(proof.status(), 200);
-  assert.match(proof.headers()["cache-control"], /no-store/);
-  checks.push("Private refund proof rejects unrelated buyer and never caches");
-  const csrf = await admin.request.post(origin + "/api/v1/order-resolutions", {
-    headers: { Origin: "https://untrusted.example" },
-    data: { id: paid.id, operation: "request", data: {} },
-  });
-  assert.equal(csrf.status(), 403);
-  checks.push("Cross-origin mutation rejected");
-  await page.goto(origin + `/admin/orders/${waiting.id}/payment`);
-  await page.getByText("Minta perbaikan", { exact: true }).click();
-  await page
-    .getByLabel("Alasan perbaikan (wajib)", { exact: false })
-    .fill("Tolong unggah ulang bukti yang lebih jelas");
-  await page
-    .getByRole("button", { name: "Kirim permintaan perbaikan", exact: true })
-    .click();
-  const rejected = page.waitForResponse(
-    (r) =>
-      r.url().endsWith(`/api/v1/admin/payments/${waiting.payment.id}/reject`) &&
-      r.request().method() === "POST",
-  );
-  await page
-    .getByRole("dialog")
-    .getByRole("button", { name: "Kirim permintaan perbaikan", exact: true })
-    .click();
-  assert.equal((await rejected).status(), 200);
-  assert.equal(
-    (await db.payment.findUnique({ where: { id: waiting.payment.id } })).status,
-    "REJECTED",
-  );
-  await page.getByText("Bukti Perlu Perbaikan", { exact: true }).waitFor();
-  await page.waitForLoadState("networkidle");
-  checks.push("Payment correction through UI requires a reason");
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto(origin + `/admin/orders/${shipping.id}`);
-  const extras = page.getByText("Tindakan lainnya", { exact: true });
-  if (await extras.count()) await extras.click();
-  await page
-    .getByRole("button", { name: "Batalkan resi J&T", exact: true })
-    .click();
-  await page.getByRole("dialog").waitFor();
-  await page.screenshot({ path: resolve(out, "cancel-awb-sheet-390.png") });
-  await page.keyboard.press("Escape");
-  await page.getByRole("dialog").waitFor({ state: "hidden" });
-  checks.push("Cancel AWB reason sheet focus / Escape; no carrier dispatch");
+    ).verify({
+      db,
+      origin,
+      admin,
+      customer,
+      foreign,
+      page,
+      buyerPage,
+      buyer,
+      variant,
+      shipping,
+      waiting,
+      paid,
+      checks,
+      out,
+      run,
+    });
+    // Cancel a paid transaction through the actual staged UI (no carrier request / no money transfer).
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(
+      origin + `/admin/orders/${paid.id}/resolution?case=${c.id}`,
+    );
+    await page
+      .getByRole("button", {
+        name: "Batalkan dan lanjut ke refund",
+        exact: true,
+      })
+      .click();
+    assert.equal(
+      (await db.order.findUnique({ where: { id: paid.id } })).status,
+      "PACKED",
+    );
+    await page
+      .getByRole("dialog")
+      .getByRole("button", { name: "Batalkan dan lanjutkan", exact: true })
+      .click();
+    await page
+      .getByRole("heading", {
+        name: "Rekening tujuan pengembalian",
+        exact: true,
+      })
+      .waitFor();
+    assert.equal(
+      (await db.order.findUnique({ where: { id: paid.id } })).status,
+      "CANCELLED",
+    );
+    checks.push(
+      "UI cancellation creates unpaid refund obligation, not automatic transfer",
+    );
+    await buyerPage.setViewportSize({ width: 390, height: 844 });
+    await buyerPage.goto(origin + `/orders/${paid.id}/resolution?case=${c.id}`);
+    await buyerPage.getByLabel("Bank", { exact: true }).fill("Bank Demo");
+    await buyerPage
+      .getByLabel("Nama pemilik rekening", { exact: true })
+      .fill("Pembeli Demo");
+    await buyerPage
+      .getByLabel("Nomor rekening", { exact: true })
+      .fill("001234567890");
+    await buyerPage
+      .getByRole("button", { name: "Simpan rekening", exact: true })
+      .click();
+    await buyerPage
+      .getByText("Rekening berhasil disimpan", { exact: true })
+      .waitFor();
+    checks.push(
+      "Buyer bank form through scoped real HTTP / encrypted database",
+    );
+    await buyerPage.screenshot({
+      path: resolve(out, "buyer-bank-390.png"),
+      fullPage: false,
+      caret: "initial",
+    });
+    await page.reload();
+    await page
+      .getByRole("button", {
+        name: "Rekening dan nominal sudah benar",
+        exact: true,
+      })
+      .click();
+    await page
+      .getByRole("dialog")
+      .getByRole("button", { name: "Lanjutkan transfer manual", exact: true })
+      .click();
+    await page
+      .getByRole("heading", { name: "Catat transfer refund", exact: true })
+      .waitFor();
+    await page.screenshot({
+      path: resolve(out, "refund-ready-390.png"),
+      fullPage: false,
+      caret: "initial",
+    });
+    await page
+      .getByLabel("Bukti transfer · JPG, PNG, WebP, PDF · maks. 4 MB")
+      .setInputFiles({
+        name: "synthetic.pdf",
+        mimeType: "application/pdf",
+        buffer: Buffer.from(
+          "%PDF-1.7\n Synthetic proof, no real bank transfer",
+        ),
+      });
+    await page
+      .getByLabel("Referensi transaksi", { exact: true })
+      .fill("E2E-" + run);
+    await page
+      .getByLabel("Waktu dana ditransfer", { exact: true })
+      .fill(
+        new Date(Date.now() + 60000 - new Date().getTimezoneOffset() * 60000)
+          .toISOString()
+          .slice(0, 16),
+      );
+    await page
+      .getByText("Dana sudah ditransfer ke rekening tujuan di atas.", {
+        exact: false,
+      })
+      .locator("input")
+      .check();
+    await page
+      .getByRole("button", {
+        name: "Konfirmasi dana dikembalikan",
+        exact: true,
+      })
+      .click();
+    await page
+      .getByRole("dialog")
+      .getByRole("button", {
+        name: "Konfirmasi dana dikembalikan",
+        exact: true,
+      })
+      .click();
+    await page
+      .getByRole("heading", { name: "Transfer dicatat seller", exact: true })
+      .waitFor();
+    assert.equal(
+      (await db.payment.findUnique({ where: { id: paid.payment.id } })).status,
+      "PAID",
+    );
+    checks.push(
+      "Manual refund evidence upload records claim without automatic bank verification",
+    );
+    await buyerPage.reload();
+    await buyerPage
+      .getByLabel("Dana belum diterima / kendala")
+      .fill("Pengujian kendala dana belum diterima");
+    await buyerPage
+      .getByRole("button", { name: "Laporkan kendala refund", exact: true })
+      .click();
+    await buyerPage
+      .getByText("Refund perlu tindak lanjut", { exact: true })
+      .waitFor();
+    await buyerPage
+      .getByRole("button", { name: "Saya telah menerima dana", exact: true })
+      .click();
+    await buyerPage
+      .getByText("Dana diterima pembeli", { exact: true })
+      .waitFor();
+    assert.equal(
+      (await db.payment.findUnique({ where: { id: paid.payment.id } })).status,
+      "REFUNDED",
+    );
+    checks.push(
+      "Buyer dispute and receipt stay separate from seller refund claim",
+    );
+    const transfer = await db.resolutionTransfer.findUniqueOrThrow({
+      where: { resolutionId: c.id },
+    });
+    assert.equal(
+      (
+        await foreign.request.get(
+          origin +
+            `/api/v1/order-resolutions/proof?kind=transfer&id=${transfer.id}`,
+        )
+      ).status(),
+      404,
+    );
+    const proof = await customer.request.get(
+      origin +
+        `/api/v1/order-resolutions/proof?kind=transfer&id=${transfer.id}`,
+    );
+    assert.equal(proof.status(), 200);
+    assert.match(proof.headers()["cache-control"], /no-store/);
+    checks.push(
+      "Private refund proof rejects unrelated buyer and never caches",
+    );
+    const csrf = await admin.request.post(
+      origin + "/api/v1/order-resolutions",
+      {
+        headers: { Origin: "https://untrusted.example" },
+        data: { id: paid.id, operation: "request", data: {} },
+      },
+    );
+    assert.equal(csrf.status(), 403);
+    checks.push("Cross-origin mutation rejected");
+    await page.goto(origin + `/admin/orders/${waiting.id}/payment`);
+    await page.getByText("Minta perbaikan", { exact: true }).click();
+    await page
+      .getByLabel("Alasan perbaikan (wajib)", { exact: false })
+      .fill("Tolong unggah ulang bukti yang lebih jelas");
+    await page
+      .getByRole("button", { name: "Kirim permintaan perbaikan", exact: true })
+      .click();
+    const rejected = page.waitForResponse(
+      (r) =>
+        r
+          .url()
+          .endsWith(`/api/v1/admin/payments/${waiting.payment.id}/reject`) &&
+        r.request().method() === "POST",
+    );
+    await page
+      .getByRole("dialog")
+      .getByRole("button", { name: "Kirim permintaan perbaikan", exact: true })
+      .click();
+    assert.equal((await rejected).status(), 200);
+    assert.equal(
+      (await db.payment.findUnique({ where: { id: waiting.payment.id } }))
+        .status,
+      "REJECTED",
+    );
+    await page.getByText("Bukti Perlu Perbaikan", { exact: true }).waitFor();
+    await page.waitForLoadState("networkidle");
+    checks.push("Payment correction through UI requires a reason");
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(origin + `/admin/orders/${shipping.id}`);
+    const extras = page.getByText("Tindakan lainnya", { exact: true });
+    if (await extras.count()) await extras.click();
+    await page
+      .getByRole("button", { name: "Batalkan resi J&T", exact: true })
+      .click();
+    await page.getByRole("dialog").waitFor();
+    await page.screenshot({ path: resolve(out, "cancel-awb-sheet-390.png") });
+    await page.keyboard.press("Escape");
+    await page.getByRole("dialog").waitFor({ state: "hidden" });
+    checks.push("Cancel AWB reason sheet focus / Escape; no carrier dispatch");
+  }
   assert.deepEqual(errors, [], "No browser runtime errors");
   writeFileSync(
     resolve(out, "results.json"),

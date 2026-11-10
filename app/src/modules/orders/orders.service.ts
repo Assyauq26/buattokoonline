@@ -116,7 +116,6 @@ export async function listCustomerOrderPage(
           resolutions: {
             select: { state: true, refundAmount: true },
             orderBy: { createdAt: "desc" },
-            take: 1,
           },
         },
         orderBy: [{ createdAt: "desc" }, { id: "desc" }],

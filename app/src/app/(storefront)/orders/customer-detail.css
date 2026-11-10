@@ -1,0 +1,369 @@
+.customer-order-detail {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 16px 0 calc(100px + env(safe-area-inset-bottom));
+  color: var(--store-text, #171717);
+  font-size: 14px;
+  line-height: 1.5;
+  display: grid;
+  gap: 16px;
+}
+.customer-order-detail h1 {
+  font-size: clamp(22px, 3vw, 28px);
+  font-weight: 800;
+  line-height: 1.2;
+  margin: 0;
+}
+.customer-order-detail h2 {
+  font-size: 18px;
+  font-weight: 750;
+  line-height: 1.35;
+  margin: 0 0 8px;
+}
+.customer-order-detail h3 {
+  font-size: 16px;
+  font-weight: 700;
+}
+.customer-order-detail p {
+  margin: 4px 0;
+}
+.customer-back {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  width: fit-content;
+}
+.customer-panel {
+  border: 1px solid var(--store-decorative-border, #dedee2);
+  border-radius: 12px;
+  padding: 16px;
+  min-width: 0;
+  background: var(--store-card, #fff);
+}
+.customer-order-state {
+  background: var(--store-surface, #f7f7f8);
+}
+.customer-refund-notice {
+  border-top: 1px solid var(--store-decorative-border, #dedee2);
+  margin-top: 12px;
+  padding-top: 12px;
+}
+.refund-amount {
+  display: block;
+  font-size: 26px;
+  line-height: 1.3;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  margin: 8px 0;
+}
+.refund-badge {
+  display: inline-block;
+  border-radius: 6px;
+  padding: 4px 10px;
+  background: #fff0c7;
+  color: #704800;
+  font-weight: 650;
+  max-width: 100%;
+}
+.refund-badge[data-received="true"] {
+  background: #e0f4df;
+  color: #225926;
+}
+.customer-primary,
+.customer-secondary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 44px;
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-weight: 650;
+  text-align: center;
+  transition: opacity 160ms;
+  margin-top: 12px;
+  line-height: 1.4;
+}
+.customer-primary {
+  background: var(--store-primary, #111);
+  color: var(--store-primaryText, #fff);
+  border: 1px solid var(--store-primary, #111);
+}
+.customer-secondary {
+  background: transparent;
+  color: inherit;
+  border: 1px solid currentColor;
+}
+.customer-primary:disabled,
+.customer-secondary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.customer-order-detail :is(a, button, input, textarea):focus-visible {
+  outline: 2px solid var(--store-primary, #111);
+  outline-offset: 3px;
+}
+.customer-order-detail label {
+  display: block;
+  font-weight: 650;
+  margin-top: 14px;
+}
+.customer-order-detail input:not([type="checkbox"]),
+.customer-order-detail textarea {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid var(--store-decorative-border, #bfc0c5);
+  border-radius: 7px;
+  padding: 10px 12px;
+  margin-top: 4px;
+  background: var(--store-card, #fff);
+  color: inherit;
+  font: inherit;
+  font-weight: 400;
+  box-sizing: border-box;
+}
+.customer-order-detail input[aria-invalid="true"] {
+  border-color: #b42318;
+}
+.customer-order-detail .customer-checkbox {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  min-height: 44px;
+  font-weight: 400;
+}
+.customer-helper {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  font-size: 13px;
+  color: var(--store-secondaryText, #555);
+  padding-top: 8px;
+}
+.customer-helper svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.customer-error {
+  display: block;
+  color: #a2241b;
+  margin-top: 8px;
+  font-weight: 500;
+}
+.customer-totals {
+  border-top: 1px solid var(--store-decorative-border, #dedee2);
+  margin-top: 12px;
+  padding-top: 8px;
+}
+.customer-totals > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 3px 0;
+}
+.customer-totals > div:last-child {
+  border-top: 1px solid var(--store-decorative-border, #dedee2);
+  padding-top: 8px;
+  margin-top: 5px;
+  font-weight: 750;
+}
+.customer-totals dd {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.customer-refund-history {
+  display: grid;
+  gap: 16px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.customer-refund-history li {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+.customer-refund-history svg {
+  flex-shrink: 0;
+  margin-top: 5px;
+}
+.customer-order-detail small {
+  font-size: 12px;
+  color: var(--store-secondaryText, #666);
+}
+.customer-order-detail summary {
+  cursor: pointer;
+  min-height: 44px;
+  align-content: center;
+  font-weight: 650;
+}
+.customer-accordion {
+  padding: 0 14px;
+}
+.customer-accordion summary svg {
+  display: inline;
+  vertical-align: middle;
+  margin-right: 10px;
+}
+.customer-accordion summary small {
+  display: block;
+  font-weight: 400;
+}
+.customer-accordion[open] {
+  padding-bottom: 14px;
+}
+.customer-accordion li {
+  padding: 8px 0;
+  border-top: 1px solid var(--store-decorative-border, #eee);
+}
+.customer-products-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.customer-products-heading span {
+  font-size: 12px;
+  color: var(--store-secondaryText, #666);
+}
+.customer-status-toast {
+  width: max-content;
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 60;
+  background: var(--store-card, #fff);
+  color: var(--store-text, #111);
+  border: 1px solid var(--store-decorative-border, #ddd);
+  border-radius: 10px;
+  box-shadow: 0 4px 18px #0002;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 10px 16px;
+  font-size: 14px;
+  max-width: calc(100vw - 24px);
+  pointer-events: none;
+  animation: customer-toast-enter 160ms ease-out;
+}
+.customer-status-toast svg {
+  flex-shrink: 0;
+}
+.storefront-root:has(.customer-order-detail) > footer {
+  display: none;
+}
+@keyframes customer-toast-enter {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -4px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+@media (min-width: 768px) {
+  .customer-order-detail {
+    padding-top: 24px;
+    gap: 20px;
+  }
+  .customer-panel {
+    padding: 20px;
+  }
+  .customer-accordion {
+    padding: 0 20px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .customer-status-toast {
+    animation: none;
+  }
+  .customer-order-detail .animate-spin {
+    animation: none;
+  }
+  .customer-primary,
+  .customer-secondary {
+    transition: none;
+  }
+}
+
+.storefront-root .customer-order-detail .customer-primary {
+  background: var(--store-primary, #111);
+  color: var(--store-primaryText, #fff);
+  border-color: var(--store-primary, #111);
+}
+.storefront-root
+  .customer-order-detail
+  :is(.customer-primary, .customer-secondary) {
+  border-radius: 8px;
+}
+.customer-order-detail input:not([type="checkbox"]),
+.customer-order-detail textarea {
+  border-color: var(--store-border, #767676);
+}
+
+.customer-icon-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.customer-icon-heading svg {
+  flex-shrink: 0;
+}
+.customer-detail-accordions {
+  display: grid;
+  gap: 0;
+  border: 1px solid var(--store-decorative-border, #ddd);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.customer-detail-accordions .customer-panel {
+  border: 0;
+  border-radius: 0;
+}
+.customer-detail-accordions .customer-panel + .customer-panel {
+  border-top: 1px solid var(--store-decorative-border, #ddd);
+}
+.customer-detail-heading .copy-button {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  width: 44px;
+  height: 44px;
+  vertical-align: middle;
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  border: 0;
+}
+.customer-order-detail summary {
+  list-style: none;
+  position: relative;
+  padding-right: 24px;
+}
+.customer-order-detail summary::-webkit-details-marker {
+  display: none;
+}
+.customer-order-detail summary::after {
+  content: "";
+  position: absolute;
+  right: 3px;
+  top: 18px;
+  width: 7px;
+  height: 7px;
+  transform: rotate(45deg);
+  border-bottom: 1.5px solid currentColor;
+  border-right: 1.5px solid currentColor;
+}
+.customer-order-detail details[open] > summary::after {
+  transform: rotate(225deg);
+  top: 22px;
+}
+.customer-order-detail :is(a, button, input, textarea, summary) {
+  scroll-margin-top: 110px;
+  scroll-margin-bottom: 110px;
+}

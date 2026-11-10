@@ -314,6 +314,66 @@ it("encrypts bank data with case binding and never projects ciphertext or source
   expect(JSON.stringify(v)).not.toContain("bankCipher");
   expect(v.cases[0]).not.toHaveProperty("sourceAccountId");
 });
+it("bank acknowledgement contains committed state while leaving stock, payment and shipment untouched", async () => {
+  const o = await fixture(),
+    c = await request(o.id);
+  await command(c.id, o.id, "confirm-cancel");
+  const before = await prisma.order.findUniqueOrThrow({
+    where: { id: o.id },
+    include: { payment: true, shipment: true },
+  });
+  const inventory = await prisma.inventory.findUnique({
+    where: { variantId: o.items[0].variantId },
+  });
+  const revision = (await view(o.id)).cases[0].revision;
+  const destination = {
+    bank: "Bank Demo",
+    holder: "Nama Demo",
+    number: "000001234567890123456789012345",
+  };
+  const result = await commandResolution(c.id, buyer, {
+    action: "bank",
+    revision,
+    bank: destination,
+  });
+  expect(result).toMatchObject({
+    id: c.id,
+    state: "READY",
+    revision: revision + 1,
+    hasBank: true,
+  });
+  expect((await view(o.id)).cases[0].bank).toEqual(destination);
+  expect((await resolutionView(o.id, buyer)).cases[0].bank).toEqual(
+    destination,
+  );
+  const after = await prisma.order.findUniqueOrThrow({
+    where: { id: o.id },
+    include: { payment: true, shipment: true },
+  });
+  expect(after.status).toBe(before.status);
+  expect(after.payment).toEqual(before.payment);
+  expect(after.shipment).toEqual(before.shipment);
+  expect(
+    await prisma.inventory.findUnique({
+      where: { variantId: o.items[0].variantId },
+    }),
+  ).toEqual(inventory);
+  await expect(
+    commandResolution(c.id, buyer, {
+      action: "bank",
+      revision,
+      bank: destination,
+    }),
+  ).rejects.toMatchObject({ status: 409 });
+  await command(c.id, o.id, "prepare-transfer", { attested: true });
+  await expect(
+    commandResolution(c.id, buyer, {
+      action: "bank",
+      revision: (await view(o.id)).cases[0].revision,
+      bank: destination,
+    }),
+  ).rejects.toMatchObject({ status: 409 });
+});
 it("records one manual refund, preserves seller claim vs buyer receipt and closes full payment only on receipt", async () => {
   const o = await fixture(),
     c = await request(o.id);

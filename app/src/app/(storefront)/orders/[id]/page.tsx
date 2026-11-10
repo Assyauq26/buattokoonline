@@ -6,14 +6,29 @@ import Link from "next/link";
 import Image from "next/image";
 import { HttpError } from "@/lib/response";
 import { notFound, redirect } from "next/navigation";
-import { MapPin, Truck, CreditCard, ChevronLeft } from "lucide-react";
+import {
+  MapPin,
+  Truck,
+  CreditCard,
+  ChevronLeft,
+  PackageX,
+  Clock,
+  MessageSquare,
+  ClipboardList,
+} from "lucide-react";
 import { getCurrentUser } from "@/lib/auth/session";
 import { getOrderForUser } from "@/modules/orders/orders.service";
 import { formatIDR } from "@/lib/money";
 import { formatAddressLocality } from "@/lib/address-format";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { orderBadgeVariant, paymentDisplayStatus } from "@/lib/order-status";
+import { paymentDisplayStatus } from "@/lib/order-status";
+import { CopyValue } from "@/components/admin/copy-value";
+import { resolutionView } from "@/modules/orders/resolution.service";
+import { customerRefundView } from "@/lib/customer-refund-view";
+import { getPublishedAppearance } from "@/modules/appearance/published";
+import { normalizeWhatsApp } from "@/lib/store-contact";
+import "../customer-detail.css";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Detail Pesanan", robots: { index: false } };
@@ -47,71 +62,82 @@ export default async function OrderDetailPage({
     requestState: order.jntShipmentRequest?.state,
     shipment: order.shipment,
   });
+  const refunds = (await resolutionView(id, { id: user.id, staff: false }))
+    .cases;
+  const { config } = await getPublishedAppearance();
+  const phone = config.identity.showWhatsApp
+    ? normalizeWhatsApp(config.identity.whatsapp)
+    : null;
+  const cancelled = ["CANCELLED", "REFUNDED", "EXPIRED"].includes(order.status);
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
-      <Link
-        href="/orders"
-        className="flex items-center gap-1 text-sm font-semibold text-ink-soft hover:text-ink"
-      >
+    <div className="customer-order-detail mx-auto max-w-3xl">
+      <Link href="/orders" className="customer-back">
         <ChevronLeft size={18} /> Kembali ke pesanan
       </Link>
 
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="font-display text-2xl font-black text-ink">
-            {order.orderNumber}
-          </h1>
-          <p className="text-sm text-ink-muted">
-            {new Date(order.createdAt).toLocaleString("id-ID")}
-          </p>
-        </div>
-        <Badge variant={orderBadgeVariant(order.status)}>
-          {orderFlow(order).label}
-        </Badge>
-      </div>
-
-      {order.status === "CANCELLED" && (
-        <section className="rounded-xl border p-4">
-          <h2 className="font-semibold">Pembatalan pesanan</h2>
-          <p>
-            {[...order.history]
-              .reverse()
-              .find((h) => h.toStatus === "CANCELLED")?.note ||
-              order.resolutions.find((c) => c.kind === "CANCEL")?.reason ||
-              "Pesanan dibatalkan oleh toko."}
-          </p>
-          <p>
-            {[...order.history]
-              .reverse()
-              .find((h) => h.toStatus === "CANCELLED")
-              ?.createdAt.toLocaleString("id-ID", { timeZone: "Asia/Jakarta" })}
-          </p>
-          {order.paymentStatus === "PAID" && (
-            <p>
-              Pengembalian dana masih perlu ditangani. Lihat status kasus di
-              bawah.
-            </p>
-          )}
-        </section>
-      )}
+      <header className="customer-detail-heading">
+        <h1>Detail pesanan</h1>
+        <p>
+          {order.orderNumber}
+          <CopyValue
+            value={order.orderNumber}
+            label="Salin nomor pesanan"
+          /> ·{" "}
+          {new Date(order.createdAt).toLocaleString("id-ID", {
+            timeZone: "Asia/Jakarta",
+          })}{" "}
+          WIB
+        </p>
+      </header>
+      <section className="customer-panel customer-order-state">
+        <h2 className="customer-icon-heading">
+          {cancelled && <PackageX size={24} />}{" "}
+          {cancelled
+            ? order.status === "EXPIRED"
+              ? "Pesanan kedaluwarsa"
+              : "Pesanan dibatalkan"
+            : orderFlow(order).label}
+        </h2>
+        <p>
+          {cancelled
+            ? refunds.find((c) => c.kind === "CANCEL")?.reason
+              ? `Penjual membatalkan karena ${refunds.find((c) => c.kind === "CANCEL")!.reason}.`
+              : "Pesanan tidak dilanjutkan."
+            : orderFlow(order).description}
+        </p>
+        {refunds
+          .filter((c) => c.state !== "CANCELLED_NO_REFUND")
+          .map((c) => {
+            const ui = customerRefundView(c);
+            return (
+              <div className="customer-refund-notice" key={c.id}>
+                <h3 className="customer-icon-heading">
+                  <Clock size={20} />
+                  {ui.needsBank ? "Penjual akan mengembalikan dana" : ui.label}
+                </h3>
+                {ui.approved && (
+                  <strong className="refund-amount">
+                    {formatIDR(c.refundAmount)}
+                  </strong>
+                )}
+                <p>{ui.description}</p>
+                <Link
+                  className="customer-secondary"
+                  href={`/orders/${id}/resolution?case=${c.id}`}
+                >
+                  {ui.needsBank
+                    ? "Isi rekening pengembalian"
+                    : ui.approved
+                      ? "Lihat pengembalian dana"
+                      : "Lihat permintaan"}
+                </Link>
+              </div>
+            );
+          })}
+      </section>
       {order.status === "DELIVERED" && !activeCase && (
         <CompleteOrderButton orderId={id} />
-      )}
-      {order.resolutions.length > 0 && (
-        <section className="rounded-xl border p-4">
-          <h2 className="font-semibold">Pembatalan, retur &amp; refund</h2>
-          {order.resolutions.map((c) => (
-            <Link
-              className="block min-h-11 py-3 underline"
-              key={c.id}
-              href={`/orders/${id}/resolution?case=${c.id}`}
-            >
-              {c.kind === "CANCEL" ? "Pembatalan" : "Retur / refund"} · Lihat
-              status, rekening &amp; tindak lanjut
-            </Link>
-          ))}
-        </section>
       )}
       {order.paymentStatus === "PAID" && leftWarehouse && !activeCase && (
         <Link
@@ -144,13 +170,18 @@ export default async function OrderDetailPage({
             Alasan perbaikan: {order.payment.confirmations[0].rejectionReason}
           </p>
         )}
-      <p>{orderFlow(order).description}</p>
       {orderFlow(order).operation && (
         <p role="status">{orderFlow(order).operation}</p>
       )}
       {/* Items */}
-      <section className="rounded-2xl border border-line p-4">
-        <h2 className="mb-3 font-display font-bold text-ink">Produk</h2>
+      <section className="customer-panel">
+        <div className="customer-products-heading">
+          <h2>Produk pesanan</h2>
+          <span>
+            {order.items.length} produk ·{" "}
+            {order.items.reduce((n, i) => n + i.quantity, 0)} pcs
+          </span>
+        </div>
         <div className="space-y-3">
           {order.items.map((it) => (
             <div key={it.id} className="flex min-w-0 gap-3">
@@ -174,7 +205,9 @@ export default async function OrderDetailPage({
                     {it.productName}
                   </p>
                   <p className="text-xs text-ink-muted">
-                    {it.variantLabel} · {it.quantity}x
+                    {it.variantLabel}
+                    <br />
+                    {it.quantity} × {formatIDR(it.unitPrice)}
                   </p>
                   {reviewItems.get(it.id)?.reviewed ? (
                     <p className="mt-2 text-xs font-semibold">Sudah Diulas</p>
@@ -214,23 +247,13 @@ export default async function OrderDetailPage({
             </div>
           )}
           <div className="flex justify-between border-t border-line pt-2 font-display text-base font-black">
-            <span>Total</span>
+            <span>Total pembayaran</span>
             <span>{formatIDR(order.total)}</span>
           </div>
         </div>
       </section>
 
       {/* Shipping tracking */}
-      {order.shipment?.cancelledAt && (
-        <section id="tracking" className="rounded-2xl border border-line p-4">
-          <h2 className="font-bold">Pengiriman dibatalkan</h2>
-          <p className="text-sm text-ink-soft">
-            {order.status === "CANCELLED" || order.paymentStatus === "REFUNDED"
-              ? "Resi tidak aktif. Lihat status pembatalan dan pengembalian dana pada ringkasan pesanan."
-              : "Resi ini telah dibatalkan. Hubungi toko mengenai kelanjutan pesanan; pembayaran tetap mengikuti status yang tertera."}
-          </p>
-        </section>
-      )}
       {order.shipment && !order.shipment.cancelledAt && (
         <section id="tracking" className="rounded-2xl border border-line p-4">
           <h2 className="mb-3 flex items-center gap-2 font-display font-bold text-ink">
@@ -270,28 +293,13 @@ export default async function OrderDetailPage({
       )}
 
       {/* Address + payment */}
-      <div className="grid gap-4 md:grid-cols-2">
-        {order.address && (
-          <section className="rounded-2xl border border-line p-4">
-            <h2 className="mb-2 flex items-center gap-2 font-display font-bold text-ink">
-              <MapPin size={18} /> Alamat
-            </h2>
-            <p className="text-sm font-semibold text-ink">
-              {order.address.recipientName}
-            </p>
-            <p className="text-sm text-ink-soft">{order.address.phone}</p>
-            <p className="text-sm text-ink-soft">
-              {order.address.line}, {locality && `${locality}, `}
-              {order.address.city}, {order.address.province}{" "}
-              {order.address.postalCode}
-            </p>
-          </section>
-        )}
+      <div className="customer-detail-accordions">
         {order.payment && (
-          <section className="rounded-2xl border border-line p-4">
-            <h2 className="mb-2 flex items-center gap-2 font-display font-bold text-ink">
-              <CreditCard size={18} /> Pembayaran
-            </h2>
+          <details className="customer-panel customer-accordion">
+            <summary>
+              <CreditCard size={18} />
+              Pembayaran &amp; bukti transfer
+            </summary>
             <p className="text-sm text-ink-soft">Transfer Bank Manual</p>
             <p className="text-sm">
               Status:{" "}
@@ -303,9 +311,77 @@ export default async function OrderDetailPage({
                 {paymentDisplayStatus(order.payment.status)}
               </Badge>
             </p>
-          </section>
+            {order.payment.confirmations.map((proof) => (
+              <a
+                key={proof.id}
+                className="customer-secondary"
+                href={`/api/v1/payments/proof?id=${proof.id}`}
+                target="_blank"
+                rel="noreferrer"
+              >
+                Lihat bukti pembayaran
+              </a>
+            ))}
+          </details>
+        )}
+        {order.address && (
+          <details className="customer-panel customer-accordion">
+            <summary>
+              <MapPin size={18} />
+              Alamat penerima
+            </summary>
+            <p className="text-sm font-semibold text-ink">
+              {order.address.recipientName}
+            </p>
+            <p className="text-sm text-ink-soft">{order.address.phone}</p>
+            <p className="text-sm text-ink-soft">
+              {order.address.line}, {locality && `${locality}, `}
+              {order.address.city}, {order.address.province}{" "}
+              {order.address.postalCode}
+            </p>
+          </details>
         )}
       </div>
+      <details className="customer-panel customer-accordion">
+        <summary>
+          <ClipboardList size={18} /> Riwayat pesanan
+          {order.shipment?.cancelledAt && (
+            <small>Pengiriman dibatalkan · Resi tidak aktif</small>
+          )}
+        </summary>
+        <ol>
+          {order.history.map((h) => (
+            <li key={h.id}>
+              <p>
+                {h.note
+                  ?.replace(/seller/gi, "penjual")
+                  .replace(/kasus/gi, "permintaan") ||
+                  orderFlow({
+                    status: h.toStatus,
+                    paymentStatus: order.paymentStatus,
+                  }).label}
+              </p>
+              <small>
+                {new Date(h.createdAt).toLocaleString("id-ID", {
+                  timeZone: "Asia/Jakarta",
+                })}{" "}
+                WIB
+              </small>
+            </li>
+          ))}
+        </ol>
+      </details>
+      {phone && (
+        <a
+          className="customer-secondary"
+          href={`https://wa.me/${phone}?text=${encodeURIComponent(`Halo, saya ingin menanyakan pesanan ${order.orderNumber}.`)}`}
+          target="_blank"
+          rel="noreferrer"
+        >
+          <MessageSquare size={18} />
+          Hubungi toko
+        </a>
+      )}
     </div>
   );
 }

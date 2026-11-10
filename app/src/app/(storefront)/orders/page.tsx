@@ -1,3 +1,4 @@
+import { customerRefundView } from "@/lib/customer-refund-view";
 import Link from "next/link";
 import { PayOrderLink } from "@/components/storefront/pay-order-link";
 import { Package, ArrowLeft, Search, Clock, Truck, Info } from "lucide-react";
@@ -61,11 +62,14 @@ export default async function OrdersPage({
               o.paymentStatus === "WAITING_VERIFICATION",
             unpaid = customerCanPay(o),
             shipped = o.status === "SHIPPED";
+          const refunds = o.resolutions
+            .map(customerRefundView)
+            .filter((r) => r.approved);
           return (
             <article key={o.id} data-testid={`order-row-${o.orderNumber}`}>
               <div className="customer-order-top">
                 <strong>{o.orderNumber}</strong>
-                <span>{orderFlow(o).label}</span>
+                <span data-tone={orderFlow(o).tone}>{orderFlow(o).label}</span>
               </div>
               <div className="customer-order-product">
                 <div className="customer-order-image">
@@ -90,39 +94,24 @@ export default async function OrdersPage({
                   <strong>{formatIDR(o.total)}</strong>
                 </div>
               </div>
-              {o.resolutions[0] &&
-                o.resolutions[0].refundAmount > 0 &&
-                !["REJECTED", "CANCELLED_NO_REFUND"].includes(
-                  o.resolutions[0].state,
-                ) && (
-                  <p role="status">
-                    {o.resolutions[0].state === "RECEIVED"
-                      ? "Refund diterima"
-                      : o.resolutions[0].state === "TRANSFER_RECORDED"
-                        ? "Refund dicatat seller · konfirmasi penerimaan"
-                        : o.resolutions[0].state === "DISPUTED"
-                          ? "Refund perlu tindak lanjut"
-                          : "Refund perlu diproses"}
-                  </p>
-                )}
-              <p className="customer-order-note">
-                {unpaid ? (
-                  <Clock size={18} />
-                ) : shipped ? (
-                  <Truck size={18} />
-                ) : (
+              {refunds.length > 0 && (
+                <p className="customer-order-note">
                   <Info size={18} />
-                )}{" "}
-                {verify
-                  ? "Bukti pembayaran sudah diterima"
-                  : unpaid
-                    ? o.expiresAt
-                      ? `Bayar sebelum ${o.expiresAt.toLocaleString("id-ID", { timeZone: "Asia/Jakarta" })}`
-                      : "Selesaikan pembayaran untuk melanjutkan."
-                    : shipped
-                      ? `${o.shippingCourier} · Dalam perjalanan`
-                      : orderFlow(o).label}
-              </p>
+                  {[...new Set(refunds.map((r) => r.label))].join(" · ")}
+                </p>
+              )}
+              {(verify || unpaid || shipped) && (
+                <p className="customer-order-note">
+                  {shipped ? <Truck size={18} /> : <Clock size={18} />}{" "}
+                  {verify
+                    ? "Bukti pembayaran sedang diperiksa"
+                    : unpaid
+                      ? o.expiresAt
+                        ? `Bayar sebelum ${o.expiresAt.toLocaleString("id-ID", { timeZone: "Asia/Jakarta" })}`
+                        : "Selesaikan pembayaran untuk melanjutkan."
+                      : `${o.shippingCourier} · Dalam perjalanan`}
+                </p>
+              )}
               <div className="customer-order-actions">
                 <Link href={`/orders/${o.id}`}>
                   {verify ? "Lihat detail" : "Detail"}
