@@ -104,5 +104,29 @@ running, with existing health checks healthy.
 
 An Ed25519 signing key was created under root-only `/etc/btos-release-signing/`.
 Only its public key is bundled in `deploy/updater-trust.json`. No private key was
-downloaded, printed, mounted in apps or put in Git. No catalog has been published
-and no updater application deployment has been performed at this record point.
+downloaded, printed, mounted in apps or put in Git.
+
+The c9b9db8 application candidate and independent worker were bootstrapped on
+Hubify. Cutover backup `/var/backups/single-store/20261110-094914-40842d30`
+passed a scratch restore (4 products, 2 users, 47 media files). The 26 migration
+checksums and business table counts were unchanged. Existing DB, proxy, email
+relay and unrelated platform containers were preserved during this cutover.
+
+The catalog-only platform commit ea945b4 is active. Initial activation correctly
+rolled back when umask made the public catalog directory unreadable to the
+unprivileged app. Explicit public-directory permissions corrected that issue;
+private signing material remains in a separate root-only directory.
+
+Live HTTPS checks passed: anonymous command rejected, anonymous status rejected,
+authenticated status/check returned 200, and revoking the temporary operator
+session immediately invalidated its status capability. No existing seller
+password/session was changed. A real version update is still pending.
+
+## v1.7.0 pilot artifact
+
+This is a GitHub prerelease and signed **pilot** catalog entry, not a stable/fleet
+release or a merge into main. Compatibility is bounded to v1.6.3, DB contract 1,
+PostgreSQL 16, worker 2. The source changes introduce no database migration;
+reviewed historical newline-only SQL differences are preserved explicitly.
+The policy allows code rollback, never automatic database rollback. WhatsApp
+is not enabled by this artifact. Fresh-VPS bootstrap remains unverified live.
