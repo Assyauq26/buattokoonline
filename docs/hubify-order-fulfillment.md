@@ -1,11 +1,15 @@
-# Hubify order fulfillment
+# Hubify order fulfillment — v1.6.0
 
-Manual transfer proof is approved/rejected through the existing payment service. Approved payment opens `PAID → PROCESSING → PACKED`. J&T creation is available only for eligible paid, packed orders and retains the existing durable request/idempotency controls.
+Seller cukup **verifikasi pembayaran → siapkan paket → buat resi**. Penyiapan paket satu kali dan tidak mengulang commit stok/penjualan. Bukti pembayaran dapat diminta perbaikan dengan alasan wajib, tanpa otomatis meminta transfer ulang.
 
-Creating or printing an AWB does not mark a parcel shipped. Operator handover or official tracking advances shipping. Latest dated J&T code 100 means in transit; 200 means delivered. Delivery appears in the Selesai tab without changing payment balances. Active refunds hold automatic order transitions. Failed tracking preserves the last status.
+AWB aktif yang belum diterima kurir ditampilkan Menunggu pickup. Cetak AWB hanya mencetak; bukan tahap status atau konfirmasi pickup. UI J&T tidak mensyaratkan pernyataan penyerahan manual. Endpoint handover lama tetap kompatibel dan hanya menyimpan pernyataan seller lama, bukan fakta pickup.
 
-The existing local maintenance timer invokes authenticated `/api/internal/cron/jnt-tracking`. Each run processes one oldest due shipment, at most once per 24 hours per shipment. The one-minute timer supports up to 1,440 due shipments daily; larger stores need a larger bounded batch or dedicated worker. Manual refresh is available on order details. Tracking events are deduplicated under the order lock.
+Tracking resmi: 100 pickup/perjalanan, 200 delivered, 401/402 retur, 150–152 kendala. Dokumentasi primer: https://developer.jet.co.id/documentation . Delivered disimpan di shipment/history; completion dicatat terpisah jika tidak ada hold finansial. Kasus aktif, pembayaran, refund, stok dan audit tidak dihapus atau diselesaikan otomatis oleh tracking.
 
-`/admin/orders/[id]/awb` requires shipping-read permission and a confirmed matching J&T AWB. It generates Code 128 and QR locally, uses historical warehouse/mapping configuration, and prints on 100 × 150 mm paper. Transfer orders are NON COD. No carrier route code or estimated delivery date is fabricated. Verify printed barcode readability with the carrier before operational rollout.
+Timer lokal terautentikasi memproses satu shipment jatuh tempo per menit, minimal satu hari antar pemeriksaan. Kapasitas teoritis maksimum 1.440 shipment per hari (dapat lebih rendah jika ada keterlambatan operasional). Shipment selesai dipantau 30 hari sejak pencatatan delivered atau selama kasus aktif; refresh manual tetap tersedia sesudahnya. Tidak ada webhook provider yang dikonfigurasi. Tidak menambah kemampuan pickup/webhook yang tidak terverifikasi.
 
-No database migration is required. Deployment is limited to the Hubify development candidate; template release remains separate.
+Event memakai waktu kejadian provider dan audit penerimaan baru. Respons lama/pengganti, duplikat dan hasil tidak pasti ditangani secara konservatif. Create/cancel tetap berizin, terikat snapshot carrier historis, intent durable dan identitas order asli. Timeout tidak boleh diulang sebagai create baru.
+
+AWB lokal mendukung 100 × 150 dan 75 × 150 mm, Code 128 dan QR, routing code respons J&T dan NON COD untuk transfer. Cetak ulang tidak mengirim Create Order. Pembatalan resi dan transaksi/refund tetap terpisah.
+
+Tidak ada SQL atau perubahan dependency. Kompatibilitas/mapping lama, batas worker, pengujian dan rollback dijelaskan pada [laporan v1.6.0](v1.6.0-release.md).

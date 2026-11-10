@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   refund: vi.fn(),
   tx: {
     order: { findUniqueOrThrow: vi.fn(), update: vi.fn() },
+    notification: { create: vi.fn() },
     shipment: { update: vi.fn(), updateMany: vi.fn() },
     shipmentEvent: { findFirst: vi.fn(), create: vi.fn() },
     orderStatusHistory: { create: vi.fn() },
@@ -87,7 +88,11 @@ describe("authoritative J&T tracking", () => {
       data: { status: "DELIVERED" },
     });
     expect(mocks.tx.shipmentEvent.create).toHaveBeenCalledTimes(1);
-    expect(mocks.tx.orderStatusHistory.create).toHaveBeenCalledTimes(1);
+    expect(mocks.tx.orderStatusHistory.create).toHaveBeenCalledTimes(2);
+    expect(mocks.tx.order.update).toHaveBeenCalledWith({
+      where: { id: "order" },
+      data: { status: "COMPLETED" },
+    });
   });
   it("preserves order status on carrier failure and stamps the attempt for daily scheduling", async () => {
     mocks.track.mockRejectedValue(new Error("private response"));
@@ -104,7 +109,7 @@ describe("authoritative J&T tracking", () => {
       where: { id: "order" },
       data: { status: "DELIVERED" },
     });
-    expect(mocks.refund).not.toHaveBeenCalled();
+    expect(mocks.refund).toHaveBeenCalled();
     expect(
       mocks.tx.order.update.mock.calls.map(([x]) => x.data.status),
     ).not.toContain("COMPLETED");
@@ -181,3 +186,45 @@ it("does not hold a database transaction open across provider network I/O", asyn
   await syncJntTracking("order");
   expect(started).toBe(true);
 });
+
+it.each(["PAID", "PROCESSING"])(
+  "reconciles a legacy %s order from authenticated pickup without inventing a packing timestamp",
+  async (status) => {
+    const o = await mocks.tx.order.findUniqueOrThrow();
+    o.status = status;
+    o.shipment.status = "PENDING";
+    mocks.track.mockResolvedValue({
+      awb: "JO12345678",
+      events: [event("100")],
+    });
+    await syncJntTracking("order");
+    expect(mocks.tx.order.update).toHaveBeenCalledWith({
+      where: { id: "order" },
+      data: { status: "SHIPPED" },
+    });
+    expect(
+      mocks.tx.orderStatusHistory.create.mock.calls.some(
+        ([v]) => v.data.toStatus === "PACKED",
+      ),
+    ).toBe(false);
+  },
+);
+it.each(["RETURNING", "RETURNED"])(
+  "never erases %s on a subsequent ordinary station scan",
+  async (condition) => {
+    const o = await mocks.tx.order.findUniqueOrThrow();
+    o.status = "COMPLETED";
+    o.shipment.status = "DELIVERED";
+    o.shipment.carrierCondition = condition;
+    o.shipment.carrierEventAt = new Date("2026-01-01T00:00:00Z");
+    mocks.track.mockResolvedValue({
+      awb: "JO12345678",
+      events: [event("100", "2026-01-02 10:00:00")],
+    });
+    await syncJntTracking("order");
+    expect(
+      mocks.tx.shipment.update.mock.calls[0][0].data.carrierCondition,
+    ).toBe(condition);
+    expect(mocks.tx.order.update).not.toHaveBeenCalled();
+  },
+);

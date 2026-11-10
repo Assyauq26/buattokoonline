@@ -32,6 +32,7 @@ import {
   trackJntOrder,
   officialJntSignature,
   JntCancellationRejected,
+  JntCreationRejected,
 } from "@/infrastructure/shipping/jnt/official-transport";
 
 afterEach(() => {
@@ -237,6 +238,37 @@ describe("official J&T API transport (network mocked)", () => {
       receiver_zip: "00000",
       receiver_addr: "Jalan contoh 1, Ujong Baroh, Johan Pahlawan",
     });
+  });
+  it("permits retries only for exact identity-matched deterministic create rejections", async () => {
+    const mock = vi.fn().mockResolvedValue(
+      respond({
+        success: true,
+        detail: [
+          {
+            orderid: "GHV-TEST-001",
+            status: "Error",
+            reason: "Origin_code salah",
+          },
+        ],
+      }),
+    );
+    vi.stubGlobal("fetch", mock);
+    await expect(createJntOrder(createPayload)).rejects.toBeInstanceOf(
+      JntCreationRejected,
+    );
+    for (const detail of [
+      { orderid: "OTHER", status: "Error", reason: "Origin_code salah" },
+      {
+        orderid: "GHV-TEST-001",
+        status: "Error",
+        reason: "Orderid tidak boleh sama",
+      },
+    ]) {
+      mock.mockResolvedValueOnce(respond({ success: true, detail: [detail] }));
+      await expect(createJntOrder(createPayload)).rejects.toThrow(
+        /tidak mengonfirmasi/,
+      );
+    }
   });
   it("does not mistake HTTP 200 and success true for accepted cancellation", async () => {
     const mock = vi.fn().mockResolvedValue(

@@ -3,7 +3,13 @@ import { useEffect, useRef, useState } from "react";
 import { Printer } from "lucide-react";
 import { ActionDialog } from "@/components/ui/action-dialog";
 import type { AwbSize } from "@/modules/shipping/awb-pdf";
-export function AwbPrintButton({ orderId }: { orderId?: string }) {
+export function AwbPrintButton({
+  orderId,
+  primary = false,
+}: {
+  orderId?: string;
+  primary?: boolean;
+}) {
   const root = useRef<HTMLDivElement>(null),
     [open, setOpen] = useState(false),
     [size, setSize] = useState<AwbSize>("100x150"),
@@ -56,7 +62,7 @@ export function AwbPrintButton({ orderId }: { orderId?: string }) {
     <div ref={root}>
       <button
         type="button"
-        className="flow-secondary"
+        className={primary ? "flow-primary" : "flow-secondary"}
         onClick={() => (orderId ? setOpen(true) : window.print())}
       >
         <Printer size={18} />

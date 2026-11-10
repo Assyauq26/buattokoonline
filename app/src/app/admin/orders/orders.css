@@ -1,3 +1,4 @@
+@import "./simple.css";
 .orders-page {
   display: grid;
   gap: 22px;
@@ -1063,3 +1064,21 @@
 
 .order-workflow .flow-danger { background:var(--store-primary,#111);border-color:var(--store-primary,#111);color:var(--store-primaryText,#fff) }
 .order-workflow .flow-danger:hover {background:var(--store-primaryHover,#242424)}
+
+/* Compact order surfaces override generic operation forms without changing other admin workflows. */
+.order-workflow.simple-orders form.simple-search,
+.order-workflow.simple-orders form.simple-sort {display:flex;align-items:center;gap:8px}
+.order-workflow.simple-orders form.simple-search>fieldset,
+.order-workflow.simple-orders form.simple-sort>fieldset {display:flex;align-items:center;gap:8px;min-width:0;width:100%}
+.order-workflow.simple-orders .simple-search input:not([type=hidden]) {border:0;border-radius:0;box-shadow:none;background:transparent;width:100%;padding:10px 0}
+.order-workflow.simple-orders .simple-search:focus-within {outline:2px solid var(--flow-primary);outline-offset:2px}
+.order-workflow.simple-orders .simple-sort select {width:auto;min-width:100px}
+.order-workflow.simple-orders .simple-sort button {font-size:12px}
+.order-workflow.simple-orders .order-list-summary {align-items:center;min-height:44px}
+.order-workflow.simple-orders .flow-status[data-tone=pending] {background:#fff0ca;color:#805000}
+.order-workflow.simple-orders .flow-status[data-tone=success] {background:#e5f5e1;color:#1f5925}
+.order-workflow.simple-orders .flow-status[data-tone=muted] {background:#ececf0;color:#404047}
+.order-workflow.simple-orders .compact-action .flow-primary,
+.order-workflow.simple-orders .compact-action .flow-secondary {margin-top:0}
+
+.order-workflow.simple-orders {gap:12px}

@@ -38,7 +38,10 @@ vi.mock("@/infrastructure/shipping/jnt/verified-mapping", () => ({
     receiverArea: "BGG001",
   }),
 }));
-import { JntCancellationRejected } from "@/infrastructure/shipping/jnt/official-transport";
+import {
+  JntCancellationRejected,
+  JntCreationRejected,
+} from "@/infrastructure/shipping/jnt/official-transport";
 import { prisma } from "@/lib/prisma";
 import {
   cancelJntAwb,
@@ -49,7 +52,12 @@ import {
   getJntTracking,
 } from "@/modules/shipping/jnt-fulfillment.service";
 import { PERMISSIONS } from "@/lib/auth/permissions";
-import { syncJntTracking } from "@/modules/shipping/jnt-tracking.service";
+import {
+  syncJntTracking,
+  syncDailyJntTracking,
+} from "@/modules/shipping/jnt-tracking.service";
+import { transitionOrder } from "@/modules/orders/orders.service";
+import { orderFlow, flowWhere } from "@/modules/orders/flow-state";
 import { commandResolution } from "@/modules/orders/resolution.service";
 
 const url = new URL(process.env.DATABASE_URL || "http://invalid");
@@ -70,6 +78,7 @@ beforeAll(async () => {
   });
   for (const key of [
     PERMISSIONS.SHIPPING_READ,
+    PERMISSIONS.ORDER_UPDATE,
     PERMISSIONS.SHIPPING_CREATE,
     PERMISSIONS.SHIPPING_UPDATE,
   ]) {
@@ -773,4 +782,226 @@ it("create timeout remains durable and only official-evidence reconciliation rec
       where: { entityId: o.id, action: "jnt.creation.reconciled" },
     }),
   ).toBe(1);
+});
+
+it("prepares once from PAID without a second packing action or inventory mutation", async () => {
+  const o = await fixture();
+  await prisma.jntShipmentRequest.delete({ where: { orderId: o.id } });
+  await prisma.shipment.delete({ where: { orderId: o.id } });
+  await prisma.order.update({ where: { id: o.id }, data: { status: "PAID" } });
+  const item = await prisma.orderItem.findFirstOrThrow({
+    where: { orderId: o.id },
+  });
+  const stock = await prisma.inventory.findUnique({
+    where: { variantId: item.variantId },
+  });
+  await Promise.all([
+    transitionOrder(o.id, "PACKED", staff),
+    transitionOrder(o.id, "PACKED", staff),
+  ]);
+  expect(
+    (await prisma.order.findUniqueOrThrow({ where: { id: o.id } })).status,
+  ).toBe("PACKED");
+  expect(
+    await prisma.orderStatusHistory.count({
+      where: { orderId: o.id, toStatus: "PACKED" },
+    }),
+  ).toBe(1);
+  expect(
+    await prisma.inventory.findUnique({ where: { variantId: item.variantId } }),
+  ).toEqual(stock);
+  expect(
+    await prisma.inventoryMovement.count({
+      where: { variantId: item.variantId },
+    }),
+  ).toBe(0);
+  expect(
+    await prisma.order.count({
+      where: { AND: [{ id: o.id }, flowWhere("packing")] },
+    }),
+  ).toBe(1);
+});
+it("follows create, pickup, completion and return via the server without financial or restock effects", async () => {
+  const o = await fixture();
+  await prisma.jntShipmentRequest.delete({ where: { orderId: o.id } });
+  await prisma.shipment.delete({ where: { orderId: o.id } });
+  // Carrier response identity always matches the durable request; no actual provider dispatch.
+  carrier.create.mockImplementation(async (v) => ({
+    orderId: v.orderid,
+    awb: "TEST12345678",
+    routingCode: null,
+  }));
+  await createJntAwb(o.id, staff);
+  let current = await prisma.order.findUniqueOrThrow({
+    where: { id: o.id },
+    include: { shipment: true, jntShipmentRequest: true },
+  });
+  expect(orderFlow(current).key).toBe("pickup");
+  expect(
+    await prisma.order.count({
+      where: { AND: [{ id: o.id }, flowWhere("pickup")] },
+    }),
+  ).toBe(1);
+  carrier.track.mockResolvedValue({
+    awb: "TEST12345678",
+    events: [
+      { ...cancellationEvent, code: "100", status: "Paket diterima kurir" },
+    ],
+  });
+  await syncJntTracking(o.id);
+  expect(
+    (await prisma.order.findUniqueOrThrow({ where: { id: o.id } })).status,
+  ).toBe("SHIPPED");
+  carrier.track.mockResolvedValue({
+    awb: "TEST12345678",
+    events: [
+      {
+        ...cancellationEvent,
+        code: "200",
+        status: "Paket diterima",
+        time: "2026-01-03 10:00:00",
+      },
+    ],
+  });
+  await syncJntTracking(o.id);
+  await syncJntTracking(o.id);
+  current = await prisma.order.findUniqueOrThrow({
+    where: { id: o.id },
+    include: { shipment: true, jntShipmentRequest: true },
+  });
+  expect(current.status).toBe("COMPLETED");
+  expect(current.shipment?.status).toBe("DELIVERED");
+  expect(
+    await prisma.orderStatusHistory.count({
+      where: { orderId: o.id, toStatus: "COMPLETED" },
+    }),
+  ).toBe(1);
+  carrier.track.mockResolvedValue({
+    awb: "TEST12345678",
+    events: [
+      {
+        ...cancellationEvent,
+        code: "401",
+        status: "Paket akan diretur",
+        time: "2026-01-04 10:00:00",
+      },
+    ],
+  });
+  await syncJntTracking(o.id);
+  expect(
+    orderFlow(
+      await prisma.order.findUniqueOrThrow({
+        where: { id: o.id },
+        include: { shipment: true },
+      }),
+    ).key,
+  ).toBe("return");
+  carrier.track.mockResolvedValue({
+    awb: "TEST12345678",
+    events: [
+      {
+        ...cancellationEvent,
+        code: "402",
+        status: "Package returned to seller",
+        time: "2026-01-05 10:00:00",
+      },
+    ],
+  });
+  await syncJntTracking(o.id);
+  expect(
+    (await prisma.shipment.findUniqueOrThrow({ where: { orderId: o.id } }))
+      .carrierCondition,
+  ).toBe("RETURNED");
+  expect(
+    await prisma.inventoryMovement.count({
+      where: { reference: o.orderNumber },
+    }),
+  ).toBe(0);
+  expect(
+    (await prisma.payment.findUniqueOrThrow({ where: { orderId: o.id } }))
+      .status,
+  ).toBe("PAID");
+  expect(await prisma.orderResolution.count({ where: { orderId: o.id } })).toBe(
+    1,
+  );
+  expect(
+    await prisma.orderResolution.findFirstOrThrow({ where: { orderId: o.id } }),
+  ).toMatchObject({
+    kind: "RETURN",
+    state: "REVIEW",
+    refundAmount: 0,
+    stockRestored: false,
+  });
+  await syncJntTracking(o.id);
+  expect(await prisma.orderResolution.count({ where: { orderId: o.id } })).toBe(
+    1,
+  );
+  expect(
+    await prisma.resolutionTransfer.count({
+      where: { resolution: { orderId: o.id } },
+    }),
+  ).toBe(0);
+});
+
+it("retries an authenticated deterministic rejection with the same durable carrier ID, never a timeout", async () => {
+  const o = await fixture();
+  await prisma.jntShipmentRequest.delete({ where: { orderId: o.id } });
+  await prisma.shipment.delete({ where: { orderId: o.id } });
+  await prisma.order.update({
+    where: { id: o.id },
+    data: { status: "PROCESSING" },
+  });
+  carrier.create.mockRejectedValueOnce(new JntCreationRejected());
+  await expect(createJntAwb(o.id, staff)).rejects.toMatchObject({
+    status: 422,
+  });
+  const rejected = await prisma.jntShipmentRequest.findUniqueOrThrow({
+    where: { orderId: o.id },
+  });
+  expect(rejected).toMatchObject({
+    state: "PREPARED",
+    errorCode: "CREATION_REJECTED",
+  });
+  const results = await Promise.allSettled([
+    createJntAwb(o.id, staff),
+    createJntAwb(o.id, staff),
+  ]);
+  expect(results.some((r) => r.status === "fulfilled")).toBe(true);
+  const current = await prisma.jntShipmentRequest.findUniqueOrThrow({
+    where: { orderId: o.id },
+  });
+  expect(current.externalOrderId).toBe(rejected.externalOrderId);
+  expect(current.state).toBe("SUCCEEDED");
+  expect(carrier.create).toHaveBeenCalledTimes(2);
+});
+it("the daily worker advances a due shipment with no page request and records receipt time independently", async () => {
+  const o = await fixture();
+  await prisma.shipment.update({
+    where: { orderId: o.id },
+    data: { updatedAt: new Date("0001-01-01T00:00:00Z") },
+  });
+  carrier.track.mockResolvedValue({
+    awb: "TEST12345678",
+    events: [
+      { ...cancellationEvent, code: "100", status: "Paket diterima kurir" },
+    ],
+  });
+  expect(await syncDailyJntTracking()).toMatchObject({ updated: 1, batch: 1 });
+  expect(
+    (await prisma.order.findUniqueOrThrow({ where: { id: o.id } })).status,
+  ).toBe("SHIPPED");
+  const event = await prisma.auditLog.findFirstOrThrow({
+    where: {
+      entity: "Shipment",
+      entityId: (
+        await prisma.shipment.findUniqueOrThrow({ where: { orderId: o.id } })
+      ).id,
+      action: "jnt.tracking.event-received",
+    },
+  });
+  expect(event.meta).toMatchObject({
+    code: "100",
+    occurredAt: "2026-01-02T03:00:00.000Z",
+  });
+  expect(event.createdAt.getFullYear()).toBeGreaterThanOrEqual(2026);
 });

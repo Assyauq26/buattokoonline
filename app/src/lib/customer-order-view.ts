@@ -1,23 +1,19 @@
-import type { OrderStatus, PaymentStatus } from "@prisma/client";
+import { orderFlow, type FlowOrder } from "@/modules/orders/flow-state";
 export const customerTabs = [
   { key: "all", label: "Semua" },
   { key: "unpaid", label: "Belum bayar" },
   { key: "process", label: "Diproses" },
   { key: "shipped", label: "Dikirim" },
   { key: "done", label: "Selesai" },
+  { key: "return", label: "Retur" },
   { key: "cancelled", label: "Dibatalkan" },
 ] as const;
-export function customerOrderGroup(o: {
-  status: OrderStatus;
-  paymentStatus: PaymentStatus;
-}) {
-  if (o.status === "PENDING_PAYMENT")
+export function customerOrderGroup(o: FlowOrder) {
+  const flow = orderFlow(o);
+  if (flow.key === "payment")
     return o.paymentStatus === "WAITING_VERIFICATION" ? "process" : "unpaid";
-  if (["PAID", "PROCESSING", "PACKED"].includes(o.status)) return "process";
-  if (o.status === "SHIPPED") return "shipped";
-  if (["DELIVERED", "COMPLETED"].includes(o.status)) return "done";
-  if (["CANCELLED", "REFUNDED"].includes(o.status)) return "cancelled";
-  return "other";
+  if (["ready", "packing", "pickup"].includes(flow.key)) return "process";
+  return flow.key;
 }
 export function customerCanPay(
   o: {

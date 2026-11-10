@@ -1,4 +1,3 @@
-import { orderWorkflowStyle } from "@/modules/orders/order-workflow-theme";
 import "../orders.css";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -6,228 +5,204 @@ import {
   ArrowLeft,
   Package,
   Truck,
-  MapPin,
-  Phone,
   UserRound,
   Clock,
-  ClipboardList,
+  CreditCard,
+  Info,
+  CheckCircle2,
+  RotateCcw,
 } from "lucide-react";
 import { requireBackofficeUser } from "@/modules/admin/backoffice-access";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { getOrderById } from "@/modules/orders/orders.service";
-import { formatIDR } from "@/lib/money";
-import {
-  orderDisplayStatus,
-  paymentDisplayStatus,
-  ORDER_STATUS_LABEL,
-} from "@/lib/order-status";
-import {
-  fulfillmentLabel,
-  terminalResolutionStates,
-} from "@/modules/orders/resolution-policy";
+import { orderFlow } from "@/modules/orders/flow-state";
+import { orderWorkflowStyle } from "@/modules/orders/order-workflow-theme";
 import { resolutionView } from "@/modules/orders/resolution.service";
-import { JntOrderPanel } from "@/components/admin/jnt-order-panel";
-import { CopyValue } from "@/components/admin/copy-value";
-import { OperationForm } from "@/components/admin/operation-form";
-import { ShipmentForm } from "@/components/admin/shipment-form";
-import { manualShipmentOptions } from "@/modules/shipping/shipping-policy";
 import { activeRefund } from "@/modules/payments/refund-state";
 import { prisma } from "@/lib/prisma";
+import { formatIDR } from "@/lib/money";
+import { paymentDisplayStatus, ORDER_STATUS_LABEL } from "@/lib/order-status";
+import { CopyValue } from "@/components/admin/copy-value";
+import { OrderMainAction } from "@/components/admin/order-main-action";
+import { JntOrderPanel } from "@/components/admin/jnt-order-panel";
+import { PaymentVerify } from "@/components/admin/payment-verify";
+import { ShipmentForm } from "@/components/admin/shipment-form";
+import { manualShipmentOptions } from "@/modules/shipping/shipping-policy";
 export const dynamic = "force-dynamic";
-const when = (d: Date) =>
-  d.toLocaleString("id-ID", { timeZone: "Asia/Jakarta" }) + " WIB";
+const when = (v: Date) =>
+  v.toLocaleString("id-ID", { timeZone: "Asia/Jakarta" }) + " WIB";
 export default async function Page({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ returnTo?: string }>;
 }) {
   const a = await requireBackofficeUser(PERMISSIONS.ORDER_READ),
     { id } = await params,
     o = await getOrderById(id);
   if (!o) notFound();
+  const sp = await searchParams,
+    back = sp.returnTo?.startsWith("/admin/orders?")
+      ? sp.returnTo
+      : "/admin/orders";
   const has = (p: string) => a.permissions.includes(p),
     p = o.payment,
     s = o.shipment,
-    r = o.jntShipmentRequest;
+    r = o.jntShipmentRequest,
+    c = p?.confirmations[0],
+    f = orderFlow(o);
   const view = await resolutionView(id, { id: a.id, staff: true }),
-    active = view.cases.find(
-      (c) => !terminalResolutionStates.includes(c.state),
-    ),
     legacy = p ? await activeRefund(prisma, p.id) : null,
-    hold = !!active || !!legacy,
-    refunded = o.paymentStatus === "REFUNDED" && p?.status === "REFUNDED";
-  const next =
-    !refunded && o.status === "PAID"
-      ? "PROCESSING"
-      : !refunded && o.status === "PROCESSING"
-        ? "PACKED"
-        : null;
-  const phase =
-    refunded && ["PAID", "PROCESSING", "PACKED"].includes(o.status)
-      ? -1
-      : ["PAID", "PROCESSING", "PACKED"].includes(o.status)
-        ? 1
-        : ["SHIPPED", "DELIVERED"].includes(o.status)
-          ? 2
-          : o.status === "COMPLETED"
-            ? 3
-            : -1;
-  const shipping = fulfillmentLabel({
-    requestState: r?.state,
-    errorCode: r?.errorCode,
-    cancelledAt: s?.cancelledAt,
-    sellerHandoverAt: s?.sellerHandoverAt,
-    shipmentStatus: s?.status,
-    carrierEventAt: s?.carrierEventAt,
-  });
-  const cancelable =
-    !view.leftWarehouse &&
-    !["CANCELLED", "EXPIRED", "REFUNDED"].includes(o.status);
+    hold = !!f.activeCaseId || !!legacy,
+    official = o.shippingMode === "official" || s?.provider === "jnt";
+  const Icon =
+    f.key === "return"
+      ? RotateCcw
+      : f.key === "done" || f.key === "ready"
+        ? CheckCircle2
+        : f.key === "shipped"
+          ? Truck
+          : Clock;
+  const phone = o.address?.phone?.replace(/\D/g, "") || "",
+    whatsapp = phone.startsWith("0") ? "62" + phone.slice(1) : phone;
   return (
     <div
-      className="order-workflow order-detail"
+      className="order-workflow order-detail simple-detail"
       style={await orderWorkflowStyle()}
     >
-      <Link className="flow-back" href="/admin/orders">
-        <ArrowLeft size={20} /> Kembali ke pesanan
+      <Link href={back} className="flow-back">
+        <ArrowLeft size={18} /> Pesanan
       </Link>
-      <header className="order-detail-header">
+      <header className="simple-detail-header">
         <h1>Detail pesanan</h1>
-        <div className="flow-button-row">
+        <div>
           <strong>{o.orderNumber}</strong>
           <CopyValue value={o.orderNumber} label="Salin nomor pesanan" />
+          <time>{when(o.createdAt)}</time>
         </div>
-        <p>{when(o.createdAt)}</p>
       </header>
-      <div className="order-detail-badges">
-        <span className="flow-status">
-          {hold
-            ? "Kasus perlu diselesaikan"
-            : refunded && ["PAID", "PROCESSING", "PACKED"].includes(o.status)
-              ? "Refund selesai · Periksa pengiriman"
-              : ["PACKED", "SHIPPED"].includes(o.status)
-                ? shipping
-                : orderDisplayStatus(o.status, o.paymentStatus)}
-        </span>
-        <span>{paymentDisplayStatus(o.paymentStatus)}</span>
-      </div>
-      {phase >= 0 && (
-        <ol className="order-progress" aria-label="Progres pesanan">
-          {["Dibayar", "Diproses", "Dikirim", "Selesai"].map((l, i) => (
-            <li key={l} data-active={i <= phase}>
-              <span />
-              {l}
-            </li>
-          ))}
-        </ol>
-      )}
-      <div className="flow-columns">
-        <div>
-          <section className="order-panel order-next">
-            <Package size={28} />
+      <div className="simple-detail-columns">
+        <div className="simple-detail-main">
+          <section className="simple-state" data-tone={f.tone}>
+            <Icon size={24} />
             <div>
-              <h2>Langkah berikutnya</h2>
-              {active ? (
-                <>
-                  <p>
-                    Pembatalan, retur, atau refund aktif. Pemenuhan ditunda;
-                    informasi tracking tetap dicatat.
-                  </p>
-                  <Link
-                    className="flow-primary"
-                    href={`/admin/orders/${id}/resolution?case=${active.id}`}
-                  >
-                    Lanjutkan penanganan kasus
-                  </Link>
-                </>
-              ) : legacy ? (
-                <Link
-                  className="flow-secondary"
-                  href={`/admin/orders/${id}/legacy-refund`}
-                >
-                  Lanjutkan ledger refund sebelumnya
-                </Link>
-              ) : (
-                <>
-                  <p>
-                    {o.status === "CANCELLED" && refunded
-                      ? "Pesanan dibatalkan dan dana telah dikembalikan. Tidak ada pengiriman yang perlu disiapkan."
-                      : refunded
-                        ? "Dana sudah dikembalikan. Periksa tracking untuk memastikan pembatalan atau kondisi paket; jangan siapkan pengiriman baru."
-                        : p?.status === "WAITING_VERIFICATION"
-                          ? "Periksa bukti dan dana masuk sebelum menyetujui pembayaran."
-                          : next
-                            ? "Periksa produk dan alamat, lalu siapkan paket."
-                            : o.status === "PACKED"
-                              ? "Periksa data pengiriman, buat resi, dan cetak AWB sebelum menyerahkan paket."
-                              : o.status === "SHIPPED"
-                                ? "Pantau perjalanan paket. Tracking diperiksa setiap hari."
-                                : o.status === "DELIVERED"
-                                  ? "Paket terkirim. Penyelesaian mengikuti konfirmasi pembeli atau tindakan eksplisit yang tersedia."
-                                  : "Lihat pembayaran dan aktivitas pesanan."}
-                  </p>
-                  {next && has(PERMISSIONS.ORDER_UPDATE) && (
-                    <OperationForm
-                      url={`/api/v1/admin/orders/${id}/status`}
-                      label={
-                        next === "PROCESSING"
-                          ? "Mulai proses"
-                          : "Paket selesai disiapkan"
-                      }
-                      confirmation="Produk dan kondisi pesanan sudah diperiksa?"
-                      fields={[
-                        {
-                          name: "status",
-                          label: "Status",
-                          type: "hidden",
-                          value: next,
-                        },
-                      ]}
-                    />
-                  )}{" "}
-                  {p?.status === "WAITING_VERIFICATION" &&
-                    has(PERMISSIONS.PAYMENT_READ) && (
-                      <Link
-                        className="flow-primary"
-                        href={`/admin/orders/${id}/payment`}
-                      >
-                        Verifikasi pembayaran
-                      </Link>
-                    )}
-                  {o.status === "PACKED" && !refunded && (
-                    <a className="flow-primary" href="#order-shipping">
-                      Siapkan pengiriman
-                    </a>
-                  )}
-                </>
+              <h2>{f.label}</h2>
+              <p>{f.description}</p>
+              {f.key === "payment" &&
+                p?.status === "PENDING_PAYMENT" &&
+                o.expiresAt && (
+                  <small>Batas pembayaran: {when(o.expiresAt)}</small>
+                )}
+              {c?.rejectionReason && p?.status === "REJECTED" && (
+                <p>{c.rejectionReason}</p>
               )}
+              {f.financial && <strong>{f.financial}</strong>}
+              {f.operation && <p role="status">{f.operation}</p>}
             </div>
           </section>
-          <section id="order-shipping" className="order-panel">
-            <h2>
-              <Truck size={21} /> Pengiriman
-            </h2>
-            <p className="flow-muted">
-              Berat paket:{" "}
-              {o.shippingWeightGram
-                ? `${o.shippingWeightGram} gram`
-                : "Periksa berat produk sebelum membuat resi"}{" "}
-              · Layanan: {o.shippingService || "Belum dipilih"}
-            </p>
-            {has(PERMISSIONS.SHIPPING_READ) ? (
-              <>
+          {f.action === "verify" && p && has(PERMISSIONS.PAYMENT_READ) && (
+            <section className="order-panel simple-proof" id="order-payment">
+              <h2>Bukti dari pembeli</h2>
+              {c && (
+                <div className="simple-proof-row">
+                  <a
+                    target="_blank"
+                    rel="noreferrer"
+                    href={`/api/v1/admin/payments/proof?id=${c.id}`}
+                  >
+                    {c.proofMime.startsWith("image/") ? (
+                      <img
+                        alt="Perbesar bukti transfer"
+                        src={`/api/v1/admin/payments/proof?id=${c.id}`}
+                      />
+                    ) : (
+                      "Buka bukti PDF"
+                    )}
+                  </a>
+                  <dl className="flow-totals">
+                    <div>
+                      <dt>Total tagihan</dt>
+                      <dd>{formatIDR(o.total)}</dd>
+                    </div>
+                    <div>
+                      <dt>Klaim transfer</dt>
+                      <dd>{formatIDR(c.amount)}</dd>
+                    </div>
+                  </dl>
+                </div>
+              )}
+              <p className="simple-note">
+                <Info size={16} /> Periksa mutasi sebelum menyetujui. Bukti
+                unggah bukan konfirmasi bank.
+              </p>
+              {has(PERMISSIONS.PAYMENT_VERIFY) && (
+                <PaymentVerify paymentId={p.id} amount={o.total} />
+              )}
+            </section>
+          )}
+          {["ready", "packing"].includes(f.key) &&
+            ["prepare", "create"].includes(f.action) &&
+            !hold &&
+            o.paymentStatus === "PAID" && (
+              <section className="order-panel simple-next">
+                <Package size={28} />
+                <div>
+                  <h2>
+                    {f.key === "ready"
+                      ? "Paket belum disiapkan"
+                      : "Periksa barang sebelum membuat resi"}
+                  </h2>
+                  <p>
+                    {f.key === "ready"
+                      ? "Lanjut siapkan paket untuk dikirim."
+                      : "Penerima, alamat, layanan dan berat akan ditinjau sekali."}
+                  </p>
+                  <OrderMainAction
+                    orderId={id}
+                    action={f.action}
+                    label={f.cta}
+                    permissions={a.permissions}
+                    official={official}
+                  />
+                </div>
+              </section>
+            )}
+          {hold && f.key !== "return" && (
+            <section className="order-panel">
+              <h2>Kasus perlu ditangani</h2>
+              <p>Pemenuhan ditahan. Tracking tetap diperbarui.</p>
+              <Link
+                className="flow-primary"
+                href={
+                  legacy
+                    ? `/admin/orders/${id}/legacy-refund`
+                    : `/admin/orders/${id}/resolution?case=${f.activeCaseId}`
+                }
+              >
+                Lanjutkan penanganan kasus
+              </Link>
+            </section>
+          )}
+          {["pickup", "shipped", "return", "done"].includes(f.key) && (
+            <section
+              id="order-shipping"
+              className="order-panel simple-shipping"
+            >
+              <h2>
+                <Truck size={20} /> Pengiriman
+              </h2>
+              {official ? (
                 <JntOrderPanel
                   orderId={id}
-                  isOfficial={
-                    o.shippingMode === "official" || s?.provider === "jnt"
-                  }
+                  isOfficial
                   service={o.shippingService}
                   status={o.status}
                   hasPaid={o.paymentStatus === "PAID" && p?.status === "PAID"}
-                  canCreate={!hold && has(PERMISSIONS.SHIPPING_CREATE)}
-                  fulfillmentHeld={hold || refunded}
+                  canCreate={false}
                   canUpdate={has(PERMISSIONS.SHIPPING_UPDATE)}
-                  canRead
+                  fulfillmentHeld={hold}
+                  canRead={has(PERMISSIONS.SHIPPING_READ)}
                   requestState={r?.state || null}
                   errorCode={r?.errorCode}
                   externalOrderId={r?.externalOrderId}
@@ -235,80 +210,39 @@ export default async function Page({
                   shipmentStatus={s?.status || null}
                   carrierCondition={s?.carrierCondition}
                   sellerHandoverAt={!!s?.sellerHandoverAt}
+                  compact
                 />
-                {!s?.cancelledAt &&
-                  s?.carrierCondition !== "NONE" &&
-                  s?.carrierCondition && (
-                    <p className="flow-warning">
-                      {s.carrierCondition === "RETURNING"
-                        ? "Paket dalam proses retur oleh kurir"
-                        : s.carrierCondition === "RETURNED"
-                          ? "Kurir mencatat paket dikembalikan. Gudang tetap perlu memeriksa barang."
-                          : "Ada kendala pengiriman. Periksa detail tracking."}
-                    </p>
-                  )}
-                {o.shippingMode !== "official" && s?.provider !== "jnt" && (
-                  <>
-                    <p>
-                      {o.shippingCourier} · {o.shippingService} ·{" "}
-                      {s?.trackingNumber || "Resi belum tersedia"}
-                    </p>
-                    {has(PERMISSIONS.SHIPPING_UPDATE) && (
-                      <ShipmentForm
-                        orderId={id}
-                        orderStatus={o.status}
-                        initial={s}
-                        allowed={
-                          hold
-                            ? []
-                            : manualShipmentOptions({
-                                status: o.status,
-                                paymentStatus: o.paymentStatus,
-                                paymentStatusActual: p?.status,
-                                shipmentStatus: s?.status || null,
-                              })
-                        }
-                      />
-                    )}
-                  </>
-                )}
-                {s?.events.length ? (
-                  <details>
-                    <summary>Riwayat tracking</summary>
-                    <ol className="flow-history">
-                      {s.events.map((e) => (
-                        <li key={e.id}>
-                          <p>
-                            {e.description.replace(/^J&T\s+\d+\s*·\s*/, "")}
-                          </p>
-                          <time>{when(e.occurredAt)}</time>
-                        </li>
-                      ))}
-                    </ol>
-                  </details>
-                ) : null}
-                {!!o.jntShipmentAttempts.length && (
-                  <details>
-                    <summary>
-                      Resi sebelumnya ({o.jntShipmentAttempts.length})
-                    </summary>
-                    {o.jntShipmentAttempts.map((at) => (
-                      <p key={at.id}>
-                        {at.awb} · dibatalkan · {when(at.archivedAt)}
-                      </p>
-                    ))}
-                  </details>
-                )}
-              </>
-            ) : (
-              <p>Izin pengiriman diperlukan.</p>
-            )}
-          </section>
-          <section className="order-panel">
-            <h2>
-              <Package size={21} /> Produk pesanan
-            </h2>
-            <ul className="order-products">
+              ) : (
+                <p>
+                  {o.shippingCourier} · {s?.trackingNumber}
+                </p>
+              )}
+              {s && <small>Terakhir diperiksa: {when(s.updatedAt)}</small>}
+              <details open={["shipped", "return", "done"].includes(f.key)}>
+                <summary>
+                  {f.key === "return"
+                    ? "Lacak retur"
+                    : f.key === "done"
+                      ? "Lihat riwayat pengiriman"
+                      : "Riwayat tracking"}
+                </summary>
+                <ol className="flow-history">
+                  {s?.events.map((e) => (
+                    <li key={e.id}>
+                      <p>{e.description}</p>
+                      <time>{when(e.occurredAt)}</time>
+                    </li>
+                  ))}
+                </ol>
+              </details>
+              <p className="simple-note">
+                <Info size={16} /> Pembuatan resi tidak otomatis memesan pickup.
+              </p>
+            </section>
+          )}
+          <section className="order-panel simple-products">
+            <h2 className="sr-only">Produk pesanan</h2>
+            <ul>
               {o.items.map((i) => (
                 <li key={i.id}>
                   <div className="order-thumb">
@@ -320,58 +254,56 @@ export default async function Page({
                   </div>
                   <div>
                     <strong>{i.productName}</strong>
-                    <p>
-                      {i.variantLabel} · {i.quantity} pcs
-                    </p>
+                    <p>{i.variantLabel.replace(/\s*\/\s*/g, " • ")}</p>
+                    <small>
+                      {i.quantity} × {formatIDR(i.unitPrice)}
+                    </small>
                   </div>
                   <strong>{formatIDR(i.lineTotal)}</strong>
                 </li>
               ))}
             </ul>
-          </section>
-          <details className="order-panel" open>
-            <summary>
-              <ClipboardList size={20} /> Total pesanan{" "}
-              <strong>{formatIDR(o.total)}</strong>
-            </summary>
             <dl className="flow-totals">
-              {[
-                ["Subtotal", o.subtotal],
-                ["Diskon", o.discount],
-                ["Ongkir", o.shippingCost],
-                ["Total", o.total],
-              ].map(([k, v]) => (
-                <div key={k}>
-                  <dt>{k}</dt>
-                  <dd>{formatIDR(Number(v))}</dd>
+              <div>
+                <dt>Subtotal</dt>
+                <dd>{formatIDR(o.subtotal)}</dd>
+              </div>
+              {o.discount > 0 && (
+                <div>
+                  <dt>Diskon</dt>
+                  <dd>−{formatIDR(o.discount)}</dd>
                 </div>
-              ))}
+              )}
+              <div>
+                <dt>Ongkir</dt>
+                <dd>{formatIDR(o.shippingCost)}</dd>
+              </div>
+              <div className="simple-total">
+                <dt>Total</dt>
+                <dd>{formatIDR(o.total)}</dd>
+              </div>
             </dl>
-            {p && has(PERMISSIONS.PAYMENT_READ) && (
-              <Link
-                href={`/admin/orders/${id}/payment`}
-                className="flow-secondary"
-              >
-                Lihat pembayaran &amp; bukti transfer
-              </Link>
-            )}
-          </details>
+          </section>
+          {f.key === "payment" && whatsapp && (
+            <a
+              target="_blank"
+              rel="noreferrer"
+              className="flow-secondary"
+              href={"https://wa.me/" + whatsapp}
+            >
+              Hubungi pembeli
+            </a>
+          )}
         </div>
         <aside>
-          <section className="order-panel">
-            <h2>Penerima</h2>
+          <details className="order-panel">
+            <summary>
+              <UserRound size={19} /> Penerima: {o.address?.recipientName}
+            </summary>
             {o.address && (
               <address className="not-italic">
-                <strong>
-                  <UserRound size={17} />
-                  {o.address.recipientName}
-                </strong>
+                <p>{o.address.phone}</p>
                 <p>
-                  <Phone size={17} />
-                  {o.address.phone}
-                </p>
-                <p>
-                  <MapPin size={17} />
                   {[
                     o.address.line,
                     o.address.village,
@@ -385,9 +317,76 @@ export default async function Page({
               </address>
             )}
             {o.note && <p>Catatan: {o.note}</p>}
-          </section>
-          <section className="order-panel">
-            <h2>Pembatalan, retur &amp; refund</h2>
+          </details>
+          <details className="order-panel">
+            <summary>
+              <CreditCard size={19} /> Pembayaran:{" "}
+              {paymentDisplayStatus(o.paymentStatus)}
+            </summary>
+            <p>
+              {p?.provider === "manual" ? "Transfer bank manual" : p?.provider}
+            </p>
+            {p && has(PERMISSIONS.PAYMENT_READ) && (
+              <Link href={`/admin/orders/${id}/payment`}>
+                Lihat bukti dan riwayat pembayaran
+              </Link>
+            )}
+          </details>
+          {!["pickup", "shipped", "return", "done"].includes(f.key) && (
+            <details
+              id="order-shipping"
+              className="order-panel"
+              open={!!f.operation}
+            >
+              <summary>
+                <Truck size={19} /> Pengiriman: {o.shippingCourier} ·{" "}
+                {o.shippingService}
+              </summary>
+              <p>Berat {o.shippingWeightGram || 0} gram</p>
+              {official ? (
+                <JntOrderPanel
+                  orderId={id}
+                  isOfficial
+                  service={o.shippingService}
+                  status={o.status}
+                  hasPaid={o.paymentStatus === "PAID" && p?.status === "PAID"}
+                  canCreate={false}
+                  canUpdate={has(PERMISSIONS.SHIPPING_UPDATE)}
+                  fulfillmentHeld={hold || o.paymentStatus === "REFUNDED"}
+                  canRead={has(PERMISSIONS.SHIPPING_READ)}
+                  requestState={r?.state || null}
+                  errorCode={r?.errorCode}
+                  externalOrderId={r?.externalOrderId}
+                  awb={r?.awb || null}
+                  shipmentStatus={s?.status || null}
+                  carrierCondition={s?.carrierCondition}
+                  compact
+                />
+              ) : (
+                has(PERMISSIONS.SHIPPING_UPDATE) && (
+                  <ShipmentForm
+                    orderId={id}
+                    orderStatus={o.status}
+                    initial={s}
+                    allowed={
+                      hold
+                        ? []
+                        : manualShipmentOptions({
+                            status: o.status,
+                            paymentStatus: o.paymentStatus,
+                            paymentStatusActual: p?.status,
+                            shipmentStatus: s?.status || null,
+                          })
+                    }
+                  />
+                )
+              )}
+            </details>
+          )}
+          <details className="order-panel">
+            <summary>
+              <RotateCcw size={19} /> Pembatalan, retur &amp; refund
+            </summary>
             {view.cases.map((c) => (
               <Link
                 className="flow-secondary"
@@ -395,47 +394,34 @@ export default async function Page({
                 href={`/admin/orders/${id}/resolution?case=${c.id}`}
               >
                 {c.kind === "CANCEL" ? "Pembatalan" : "Retur / refund"} ·{" "}
-                {c.refundAmount > 0 ? formatIDR(c.refundAmount) : c.reason} →
+                {formatIDR(c.refundAmount)} →
               </Link>
             ))}
-            {!hold && cancelable && has(PERMISSIONS.ORDER_CANCEL) && (
-              <Link
-                className="flow-secondary"
-                href={`/admin/orders/${id}/resolution?mode=CANCEL`}
-              >
-                Batalkan pesanan
-              </Link>
-            )}
             {!hold &&
-              !cancelable &&
-              !refunded &&
-              s?.provider === "jnt" &&
-              s.status === "PENDING" &&
-              r?.state === "SUCCEEDED" &&
-              has(PERMISSIONS.SHIPPING_UPDATE) && (
-                <a className="flow-secondary" href="#order-shipping">
-                  Batalkan resi sebelum membatalkan pesanan
-                </a>
-              )}
-            {!hold &&
-              view.paid &&
-              view.leftWarehouse &&
-              has(PERMISSIONS.PAYMENT_VERIFY) && (
+              !["CANCELLED", "EXPIRED", "REFUNDED"].includes(o.status) &&
+              (!view.leftWarehouse && has(PERMISSIONS.ORDER_CANCEL) ? (
+                <Link
+                  className="flow-secondary"
+                  href={`/admin/orders/${id}/resolution?mode=CANCEL`}
+                >
+                  Batalkan pesanan
+                </Link>
+              ) : view.paid && has(PERMISSIONS.PAYMENT_VERIFY) ? (
                 <Link
                   className="flow-secondary"
                   href={`/admin/orders/${id}/resolution`}
                 >
                   Buat kasus retur / refund
                 </Link>
-              )}
-            <p className="flow-muted">
-              Pembatalan resi tersedia di bagian Pengiriman pada halaman ini.
-              Pembatalan transaksi tidak otomatis mengembalikan uang.
+              ) : null)}
+            <p>
+              Pembatalan resi tidak otomatis membatalkan transaksi atau
+              mengembalikan uang.
             </p>
-          </section>
+          </details>
           <details className="order-panel">
             <summary>
-              <Clock size={20} /> Aktivitas pesanan
+              <Clock size={19} /> Aktivitas pesanan
             </summary>
             <ol className="flow-history">
               {o.history.map((h) => (
@@ -447,12 +433,23 @@ export default async function Page({
               ))}
             </ol>
           </details>
+          {!!o.jntShipmentAttempts.length && (
+            <details className="order-panel">
+              <summary>
+                Resi sebelumnya ({o.jntShipmentAttempts.length})
+              </summary>
+              {o.jntShipmentAttempts.map((at) => (
+                <p key={at.id}>
+                  {at.awb} · dibatalkan · {when(at.archivedAt)}
+                </p>
+              ))}
+            </details>
+          )}
           <details className="order-panel">
             <summary>Bantuan</summary>
             <p>
-              Verifikasi dana, siapkan paket, buat resi, lalu catat penyerahan.
-              Status kurir mengikuti tracking. Dana refund dicatat setelah
-              transfer manual; pembeli mengonfirmasi penerimaannya.
+              Verifikasi pembayaran, siapkan paket, buat resi. Pengiriman
+              mengikuti tracking J&amp;T. Retur dan refund ditangani terpisah.
             </p>
           </details>
         </aside>
