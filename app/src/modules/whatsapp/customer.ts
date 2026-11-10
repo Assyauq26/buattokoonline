@@ -29,6 +29,12 @@ const customer = {
     none: { role: { name: { in: ADMIN_ROLES } } },
   },
 };
+const seller = {
+  isActive: true,
+  deletedAt: null,
+  emailVerifiedAt: { not: null },
+  roles: { some: { role: { name: { in: ADMIN_ROLES } } } },
+};
 function gate() {
   if (!whatsappEnabled())
     throw new HttpError("Login WhatsApp belum tersedia. Gunakan email.", 503);
@@ -52,15 +58,26 @@ export async function startWhatsApp(input: {
   phone: string;
   purpose: "login" | "link";
   password?: string;
+  accountType?: "customer" | "seller";
 }) {
   gate();
+  const accountType = input.accountType ?? "customer";
+  const isSeller = accountType === "seller";
   const phone = normalizeRegistrationPhone(input.phone);
   await enforceAuthRateLimit("login", "wa:" + phone);
   let userId: string | undefined, sessionVersion: number | undefined;
   if (input.purpose === "link") {
     const current = await getCurrentUser(false);
-    if (!current || current.isAdmin || !current.roles.includes("Customer"))
-      throw new HttpError("Masuk sebagai customer untuk menautkan nomor.", 403);
+    if (
+      !current ||
+      (isSeller
+        ? !current.isAdmin
+        : current.isAdmin || !current.roles.includes("Customer"))
+    )
+      throw new HttpError(
+        "Masuk ke akun yang sesuai untuk menautkan nomor.",
+        403,
+      );
     const user = await authenticate(current.email, input.password || "");
     if (user.id !== current.id || !user.emailVerifiedAt || user.deletedAt)
       throw denied();
@@ -90,6 +107,7 @@ export async function startWhatsApp(input: {
     throw denied();
   const row = await prisma.whatsAppChallenge.create({
     data: {
+      accountType,
       centralId: challenge.id,
       phone,
       browserHash: hash(proof),
@@ -134,8 +152,13 @@ export async function whatsAppStatus() {
       }),
     );
 }
-export async function finishWhatsApp(code: string) {
+export async function finishWhatsApp(
+  code?: string,
+  confirmation?: { id: string; token: string },
+) {
   const { row, proof } = await cookieChallenge();
+  // Foreign request links must not lock or consume the current browser challenge.
+  if (confirmation && confirmation.id !== row.centralId) throw denied();
   await enforceAuthRateLimit("registerConfirm", "wa:" + row.id);
   // Lock local completion before external exchange; a timeout is not retried blindly.
   const claimed = await prisma.whatsAppChallenge.updateMany({
@@ -151,7 +174,9 @@ export async function finishWhatsApp(code: string) {
         await whatsappRelay("auth/finish", {
           id: row.centralId,
           browserProof: proof,
-          code,
+          ...(confirmation
+            ? { confirmationToken: confirmation.token }
+            : { code }),
         }),
       );
     verified = z
@@ -193,6 +218,8 @@ export async function finishWhatsApp(code: string) {
     });
     throw denied();
   }
+  const isSeller = row.accountType === "seller";
+  const account = isSeller ? seller : customer;
   const current = row.purpose === "link" ? await getCurrentUser(false) : null;
   const result = await prisma.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM "WhatsAppChallenge" WHERE id=${row.id} FOR UPDATE`;
@@ -202,14 +229,14 @@ export async function finishWhatsApp(code: string) {
     if (state?.state !== "exchanging" || state.expiresAt <= new Date())
       throw denied();
     if (row.purpose === "link") {
-      if (!current || current.id !== row.userId || current.isAdmin)
+      if (!current || current.id !== row.userId || current.isAdmin !== isSeller)
         throw denied();
       await tx.$queryRaw`SELECT id FROM "User" WHERE id=${current.id} FOR UPDATE`;
       const user = await tx.user.findFirst({
         where: {
           id: current.id,
           sessionVersion: row.sessionVersion!,
-          ...customer,
+          ...account,
         },
       });
       if (
@@ -236,11 +263,13 @@ export async function finishWhatsApp(code: string) {
       await tx.whatsAppIdentity.upsert({
         where: { userId: user.id },
         create: {
+          accountType: row.accountType,
           userId: user.id,
           phone: row.phone,
           sessionVersion: next.sessionVersion,
         },
         update: {
+          accountType: row.accountType,
           phone: row.phone,
           sessionVersion: next.sessionVersion,
           verifiedAt: new Date(),
@@ -256,13 +285,13 @@ export async function finishWhatsApp(code: string) {
     const identity = await tx.whatsAppIdentity.findUnique({
       where: { phone: row.phone },
     });
-    if (identity) {
+    if (identity && identity.accountType === row.accountType) {
       await tx.$queryRaw`SELECT id FROM "User" WHERE id=${identity.userId} FOR UPDATE`;
       const user = await tx.user.findFirst({
         where: {
           id: identity.userId,
           sessionVersion: identity.sessionVersion,
-          ...customer,
+          ...account,
         },
       });
       // Password reset, changed phone, inactivity or role changes require account
@@ -284,6 +313,13 @@ export async function finishWhatsApp(code: string) {
         return { user, state: "signed_in" };
       }
     }
+    if (isSeller) {
+      await tx.whatsAppChallenge.update({
+        where: { id: row.id },
+        data: { state: "failed" },
+      });
+      return { user: null, state: "seller_link_required" };
+    }
     // Verified phone is only a pending proof. Existing accounts still need their
     // password; new accounts still complete the existing mandatory email OTP flow.
     await tx.whatsAppChallenge.update({
@@ -298,13 +334,19 @@ export async function finishWhatsApp(code: string) {
       result.user.email,
       result.user.sessionVersion,
     );
-  return { state: result.state };
+  return {
+    state: result.state,
+    ...(result.user && isSeller ? { redirectTo: "/admin" } : {}),
+  };
 }
-export async function unlinkWhatsApp(password: string) {
+export async function unlinkWhatsApp(
+  password: string,
+  accountType: "customer" | "seller" = "customer",
+) {
   gate();
   const current = await getCurrentUser(false);
-  if (!current || current.isAdmin)
-    throw new HttpError("Masuk sebagai customer.", 403);
+  if (!current || current.isAdmin !== (accountType === "seller"))
+    throw new HttpError("Masuk ke akun yang sesuai.", 403);
   const verified = await authenticate(current.email, password);
   if (verified.id !== current.id) throw denied();
   const user = await prisma.$transaction(async (tx) => {

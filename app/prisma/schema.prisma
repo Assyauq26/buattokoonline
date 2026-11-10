@@ -110,6 +110,7 @@ model User {
 
 // Separate from legacy, unverified contact phone. Never infer ownership from User.phone.
 model WhatsAppIdentity {
+  accountType String @default("customer")
   userId String @id
   phone String @unique
   sessionVersion Int
@@ -119,6 +120,7 @@ model WhatsAppIdentity {
 }
 
 model WhatsAppChallenge {
+  accountType String @default("customer")
   id String @id @default(uuid())
   centralId String @unique
   browserHash String

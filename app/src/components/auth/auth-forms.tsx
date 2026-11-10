@@ -146,7 +146,7 @@ function SocialButtons({whatsapp=false,redirectTo="/account"}:{whatsapp?:boolean
         >
           Lanjut dengan Google
         </Button>
-        {whatsapp?<Link className="auth-wa-link" href={"/whatsapp?redirectTo="+encodeURIComponent(redirectTo)}>Lanjut dengan WhatsApp</Link>:<Button
+        {whatsapp?<Link className="auth-wa-link" href={"/whatsapp?account="+(/^\/admin(?:[/?]|$)/.test(redirectTo)?"seller":"customer")+"&redirectTo="+encodeURIComponent(redirectTo)}>Lanjut dengan WhatsApp</Link>:<Button
           type="button"
           variant="outline"
           disabled
@@ -219,7 +219,7 @@ export function LoginForm({ redirectTo, passwordReset, whatsapp=false }: { redir
         <Feedback error={state?.error} id="login-error" />
         <Submit label="Masuk" />
       </form>
-      <SocialButtons whatsapp={whatsapp&&!/^\/admin(?:[/?]|$)/.test(redirectTo??"")} redirectTo={redirectTo}/>
+      <SocialButtons whatsapp={whatsapp} redirectTo={redirectTo}/>
       <p className="auth-switch">
         Belum punya akun? <Link href="/register">Daftar</Link>
       </p>
@@ -227,7 +227,7 @@ export function LoginForm({ redirectTo, passwordReset, whatsapp=false }: { redir
     </div>
   );
 }
-export function RegisterForm() {
+export function RegisterForm({ whatsapp = false }: { whatsapp?: boolean }) {
   const [attempt, setAttempt] = useState(0);
   const [restartReason, setRestartReason] = useState<string>();
   const [restartCode, setRestartCode] = useState<RegistrationFailure>();
@@ -243,6 +243,7 @@ export function RegisterForm() {
   return (
     <RegistrationForm
       key={attempt}
+      whatsapp={whatsapp}
       onRestart={onRestart}
       restartReason={restartReason}
       restartCode={restartCode}
@@ -250,10 +251,12 @@ export function RegisterForm() {
   );
 }
 function RegistrationForm({
+  whatsapp = false,
   onRestart,
   restartReason,
   restartCode,
 }: {
+  whatsapp?: boolean;
   onRestart: (reason?: string, code?: RegistrationFailure) => void;
   restartReason?: string;
   restartCode?: RegistrationFailure;
@@ -482,7 +485,7 @@ function RegistrationForm({
         )}
         <Submit label="Daftar" />
       </form>
-      <SocialButtons />
+      <SocialButtons whatsapp={whatsapp} />
       <p className="auth-switch">
         Sudah punya akun? <Link href="/login">Masuk</Link>
       </p>

@@ -52,18 +52,46 @@ try{
  status='ready';await page.getByRole('button',{name:'Periksa status'}).click();await expect(page.getByAltText('Kode QR privat untuk menghubungkan WhatsApp toko')).toHaveCount(0);
  await page.getByRole('button',{name:'Simpan preferensi'}).click();await expect(page.getByText(/Menunggu sinkronisasi/)).toBeVisible();
  results.push('Pairing double-click guarded; QR removed after connected; pending preference truthful; unknown never marked delivered');
- const guest=await browser.newContext(),login=await guest.newPage();
+ await page.goto(origin+'/admin/settings/security');
+ await expect(page.getByRole('link',{name:'Tautkan WhatsApp',exact:true})).toHaveAttribute('href',/account=seller&mode=link/);
+ const guest=await browser.newContext(),login=await guest.newPage();let confirmations=0;
+ await login.goto(origin+'/register');
+ await expect(login.getByRole('link',{name:'Lanjut dengan WhatsApp'})).toHaveAttribute('href',/account=customer/);
+ await login.goto(origin+'/login?redirectTo=%2Fadmin');
+ await expect(login.getByRole('link',{name:'Lanjut dengan WhatsApp'})).toHaveAttribute('href',/account=seller/);
+ await login.getByRole('link',{name:'Lanjut dengan WhatsApp'}).click();
+ await expect(login.getByRole('heading',{name:'Masuk dashboard'})).toBeVisible();
+ results.push('Customer registration entry and seller login entry available; seller linking in account security');
  await login.route('**/api/v1/auth/whatsapp',route=>{
-  const action=route.request().postDataJSON().action;
-  return route.fulfill({json:{success:true,data:action==='start'?{phone:'+6281575652263',whatsappUrl:'https://wa.me/6282211700060?text=synthetic',expiresAt:new Date(Date.now()+180000).toISOString()}:{state:'waiting'}}});
+  const action=route.request().postDataJSON().action; if(action==='confirm')confirmations++;
+  return route.fulfill({json:{success:true,data:action==='start'?{phone:'+6281575652263',whatsappUrl:'https://wa.me/6282211700060?text=synthetic',expiresAt:new Date(Date.now()+180000).toISOString()}:{state:action==='confirm'?'profile_required':'waiting'}}});
  });
  for(const width of [360,390,430,1440]){
   await login.setViewportSize({width,height:950});await login.goto(origin+'/whatsapp');
   await login.getByLabel('Nomor WhatsApp',{exact:true}).fill('081575652263');await login.getByRole('button',{name:'Lanjutkan',exact:true}).click();
-  await expect(login.getByLabel('Kode verifikasi')).toBeVisible();await expect(login.getByRole('button',{name:'Verifikasi dan lanjutkan'})).toBeDisabled();
+  await expect(login.getByRole('link',{name:'Buka WhatsApp'})).toBeVisible();
+  await expect(login.getByLabel('Kode dari WhatsApp')).toHaveCount(0);
+  await login.getByRole('button',{name:'Gunakan kode cadangan'}).click();
+  await expect(login.getByLabel('Kode dari WhatsApp')).toBeVisible();
+  await expect(login.getByRole('button',{name:'Konfirmasi & Lanjutkan'})).toBeDisabled();
   assert(await login.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'login overflow '+width);
   await login.screenshot({path:resolve(out,'login-'+width+'.png'),fullPage:true});
  }
+ for(const width of [360,390,430,1440]){
+  await login.setViewportSize({width,height:950});
+  await login.goto(origin+'/whatsapp#confirm=12345678-1234-1234-1234-123456789abc.'+'a'.repeat(64));
+  await expect(login.getByRole('button',{name:'Konfirmasi & Lanjutkan'})).toBeVisible();
+  assert.equal(await login.evaluate(()=>location.hash),'');
+  assert.equal(confirmations,0,'link navigation must not consume credentials');
+  assert(await login.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
+  const color=await login.getByRole('button',{name:'Konfirmasi & Lanjutkan'}).evaluate(el=>getComputedStyle(el).backgroundColor);
+  assert.equal(color,'rgb(17, 17, 17)');
+  await login.screenshot({path:resolve(out,'confirm-'+width+'.png'),fullPage:true});
+ }
+ await login.getByRole('button',{name:'Konfirmasi & Lanjutkan'}).click();
+ await expect(login.getByRole('heading',{name:'Nomor terverifikasi'})).toBeVisible();
+ assert.equal(confirmations,1);
+ results.push('Fragment removed; navigation does not consume link; explicit confirmation; monochrome CTA; profile required');
  assert.deepEqual(errors,[]);results.push('360/390/430/1440 layouts; phone challenge alone never finishes browser flow');
  writeFileSync(resolve(out,'results.json'),JSON.stringify({passed:results,evidence:'Local production build; mocked relay; no WhatsApp sent'},null,2));console.log(JSON.stringify(results));
 }finally{

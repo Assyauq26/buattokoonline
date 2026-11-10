@@ -617,3 +617,25 @@
 .auth-wa-link:focus-visible { outline: 2px solid var(--auth-primary); outline-offset: 3px; }
 .auth-wa-link:active { transform: scale(.98); }
 @media (prefers-reduced-motion: no-preference) { .auth-wa-link { transition: transform 120ms cubic-bezier(.23,1,.32,1); } }
+
+/* WhatsApp verification is a focused monochrome flow, independent of brand accent. */
+.auth-ui .wa-auth { max-width: 420px; margin-inline: auto; width: 100%; color: #18181b; }
+.wa-auth .wa-symbol { display: grid; place-items: center; width: 56px; height: 56px; margin: 0 auto 24px; border: 1px solid #e4e4e7; border-radius: 16px; background: #fafafa; }
+.auth-ui .wa-auth .auth-heading h1 { font-size: clamp(24px, 5vw, 30px); letter-spacing: -.035em; line-height: 1.2; }
+.auth-ui .wa-auth .auth-heading p { color: #71717a; font-size: 15px; line-height: 1.6; margin-top: 10px; }
+.wa-auth .auth-form { gap: 16px; }
+.wa-auth .wa-field,.wa-auth .wa-fallback { display: grid; gap: 8px; }
+.auth-ui .wa-auth input { min-height: 50px; border-radius: 12px; font-size: 16px; background: #fff; color: #18181b; }
+.auth-ui .wa-auth .wa-primary { display: flex; width: 100%; min-height: 50px; align-items: center; justify-content: center; gap: 10px; padding: 12px 18px; background: #111; border: 1px solid #111; border-radius: 12px; color: #fff; font-size: 15px; font-weight: 600; text-decoration: none; box-shadow: none; transition: transform 140ms cubic-bezier(.23,1,.32,1); }
+.auth-ui .wa-auth .wa-primary:disabled { opacity: .5; cursor: not-allowed; }
+.wa-auth .wa-primary:active:not(:disabled) { transform: scale(.98); }
+.wa-auth .wa-primary .ui-button__content { display: inline-flex; align-items: center; justify-content: center; gap: 10px; }
+.wa-auth :is(a,button):focus-visible { outline: 2px solid #18181b; outline-offset: 4px; }
+.wa-auth .wa-caption { font-size: 13px; line-height: 1.6; text-align: center; color: #71717a; }
+.wa-auth .wa-destination { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 16px; border: 1px solid #e4e4e7; border-radius: 12px; }
+.wa-auth .wa-text-button { min-height: 44px; background: transparent; border: 0; color: #52525b; font-size: 14px; text-decoration: underline; text-underline-offset: 4px; }
+.wa-auth .wa-divider { display: flex; align-items: center; gap: 12px; color: #a1a1aa; font-size: 13px; margin: 12px 0; }
+.wa-auth .wa-divider::before,.wa-auth .wa-divider::after { content: ""; height: 1px; flex: 1; background: #e4e4e7; }
+.wa-auth .wa-email { display: flex; justify-content: center; align-items: center; min-height: 44px; color: #18181b; font-size: 14px; }
+@media(hover:hover) and (pointer:fine) { .auth-ui .wa-auth .wa-primary:hover:not(:disabled) { background: #27272a; border-color: #27272a; } }
+@media(prefers-reduced-motion:reduce) { .wa-auth .wa-primary { transition: none !important; transform: none !important; } }

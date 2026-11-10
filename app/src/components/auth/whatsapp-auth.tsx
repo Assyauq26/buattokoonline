@@ -1,12 +1,15 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { ArrowRight, Check, MessageCircle, ShieldCheck } from "lucide-react";
 import { Button, Input, Label } from "./lumen";
 export function WhatsAppAuth({
   link = false,
+  accountType = "customer",
   redirectTo = "/account",
 }: {
   link?: boolean;
+  accountType?: "customer" | "seller";
   redirectTo?: string;
 }) {
   const [phone, setPhone] = useState(""),
@@ -21,13 +24,39 @@ export function WhatsAppAuth({
     } | null>(null),
     [state, setState] = useState("");
   const guard = useRef(false);
+  const [confirmation, setConfirmation] = useState<{
+    id: string;
+    token: string;
+  } | null>(null);
+  const [fallback, setFallback] = useState(false);
+  useEffect(() => {
+    const capture = () => {
+      const match = /^#confirm=([a-f0-9-]{36})\.([a-f0-9]{64})$/.exec(
+        window.location.hash,
+      );
+      if (match) {
+        setConfirmation({ id: match[1], token: match[2] });
+        // Fragment is never sent to the server; remove it from visible history.
+        window.history.replaceState(
+          null,
+          "",
+          window.location.pathname + window.location.search,
+        );
+      }
+    };
+    capture();
+    window.addEventListener("hashchange", capture);
+    return () => window.removeEventListener("hashchange", capture);
+  }, []);
   const target =
     redirectTo.startsWith("/") &&
     !redirectTo.startsWith("//") &&
     !/[\\\u0000-\u001f]/.test(redirectTo) &&
-    !redirectTo.startsWith("/admin")
+    (accountType === "seller" || !redirectTo.startsWith("/admin"))
       ? redirectTo
-      : "/account";
+      : accountType === "seller"
+        ? "/admin"
+        : "/account";
   async function api(action: string, fields = {}) {
     const r = await fetch("/api/v1/auth/whatsapp", {
       method: "POST",
@@ -39,7 +68,7 @@ export function WhatsAppAuth({
     if (!r.ok) throw Error(data.error?.message || "Verifikasi belum berhasil.");
     return data.data;
   }
-  async function run(action: "start" | "finish" | "unlink") {
+  async function run(action: "start" | "finish" | "unlink" | "confirm") {
     if (guard.current) return;
     guard.current = true;
     setBusy(true);
@@ -50,22 +79,30 @@ export function WhatsAppAuth({
         action === "start"
           ? {
               phone,
+              accountType,
               purpose: link ? "link" : "login",
               ...(link ? { password } : {}),
             }
-          : action === "finish"
-            ? { code }
-            : { password },
+          : action === "confirm"
+            ? confirmation || {}
+            : action === "finish"
+              ? { code }
+              : { password, accountType },
       );
       if (action === "start") {
         setChallenge(result);
         setPassword("");
         setState("waiting");
-      } else if (result.state === "profile_required") {
+      } else if (
+        ["profile_required", "seller_link_required"].includes(result.state)
+      ) {
         setState(result.state);
+        setConfirmation(null);
         setChallenge(null);
       } else {
-        window.location.assign(target);
+        window.location.assign(
+          result.redirectTo === "/admin" ? "/admin" : target,
+        );
       }
     } catch (e) {
       setMessage(e instanceof Error ? e.message : "WhatsApp belum tersedia.");
@@ -98,27 +135,74 @@ export function WhatsAppAuth({
       clearInterval(timer);
     };
   }, [challenge]);
+  const ended = ["expired", "locked", "failed"].includes(state);
   return (
-    <div className="auth-content">
+    <div className="auth-content wa-auth">
+      <div className="wa-symbol" aria-hidden="true">
+        {state === "profile_required" ? (
+          <Check />
+        ) : confirmation ? (
+          <ShieldCheck />
+        ) : (
+          <MessageCircle />
+        )}
+      </div>
       <div className="auth-heading">
-        <h1>{link ? "Tautkan WhatsApp" : "Masuk dengan WhatsApp"}</h1>
+        <h1>
+          {state === "profile_required"
+            ? "Nomor terverifikasi"
+            : confirmation
+              ? "Satu langkah lagi"
+              : challenge
+                ? "Lanjut di WhatsApp"
+                : link
+                  ? "Tautkan WhatsApp"
+                  : accountType === "seller"
+                    ? "Masuk dashboard"
+                    : "Masuk atau daftar"}
+        </h1>
         <p>
-          {link
-            ? "Konfirmasi akun Anda dan kepemilikan nomor."
-            : "Verifikasi nomor melalui WhatsApp pusat Buattokosendiri."}
+          {state === "profile_required"
+            ? "Lengkapi akun Anda untuk melanjutkan."
+            : confirmation
+              ? "Konfirmasi permintaan yang Anda mulai."
+              : challenge
+                ? "Kirim pesan, lalu buka tautan balasannya."
+                : "Gunakan nomor WhatsApp Anda."}
         </p>
       </div>
-      {state === "profile_required" ? (
+      {state === "seller_link_required" ? (
         <div className="auth-form">
-          <p>
-            Nomor berhasil diverifikasi. Untuk akun baru, lengkapi profil dan
-            verifikasi email. Jika sudah punya akun, masuk dengan email lalu
-            tautkan WhatsApp di keamanan akun.
+          <p className="wa-caption">
+            Masuk dengan email, lalu tautkan nomor di Pengaturan → Keamanan
+            Akun.
           </p>
-          <Link className="auth-wa-link" href="/register">
-            Lengkapi pendaftaran
+          <Link className="wa-primary" href="/login?redirectTo=%2Fadmin">
+            Masuk dengan email
           </Link>
-          <Link href="/login">Masuk dengan email</Link>
+        </div>
+      ) : state === "profile_required" ? (
+        <div className="auth-form">
+          <Link className="wa-primary" href="/register">
+            Lengkapi pendaftaran <ArrowRight size={18} />
+          </Link>
+          <p className="wa-caption">
+            Sudah punya akun? Masuk dengan email untuk menautkan nomor.
+          </p>
+        </div>
+      ) : confirmation ? (
+        <div className="auth-form">
+          <Button
+            className="wa-primary"
+            disabled={busy}
+            onClick={() => void run("confirm")}
+          >
+            Konfirmasi &amp; Lanjutkan <ArrowRight size={18} />
+          </Button>
+          <p className="wa-caption">
+            Gunakan browser tempat Anda memulai. Jika berbeda, kembali ke
+            halaman awal dan gunakan kode cadangan.
+          </p>
         </div>
       ) : !challenge ? (
         <form
@@ -128,21 +212,23 @@ export function WhatsAppAuth({
             void run("start");
           }}
         >
-          <Label htmlFor="wa-phone">Nomor WhatsApp</Label>
-          <Input
-            id="wa-phone"
-            name="phone"
-            inputMode="tel"
-            autoComplete="tel"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            required
-            maxLength={24}
-            placeholder="081234567890"
-          />
+          <div className="wa-field">
+            <Label htmlFor="wa-phone">Nomor WhatsApp</Label>
+            <Input
+              id="wa-phone"
+              name="phone"
+              type="tel"
+              autoComplete="tel"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              required
+              maxLength={24}
+              placeholder="0812 3456 7890"
+            />
+          </div>
           {link && (
-            <>
-              <Label htmlFor="wa-password">Password akun saat ini</Label>
+            <div className="wa-field">
+              <Label htmlFor="wa-password">Password akun</Label>
               <Input
                 id="wa-password"
                 type="password"
@@ -152,10 +238,10 @@ export function WhatsAppAuth({
                 required
                 maxLength={256}
               />
-            </>
+            </div>
           )}
-          <Button type="submit" disabled={busy}>
-            Lanjutkan
+          <Button className="wa-primary" type="submit" disabled={busy}>
+            Lanjutkan <ArrowRight size={18} />
           </Button>
           {link && (
             <Button
@@ -167,86 +253,103 @@ export function WhatsAppAuth({
                   void run("unlink");
               }}
             >
-              Lepaskan nomor dari akun
+              Lepaskan nomor
             </Button>
           )}
         </form>
       ) : (
-        <form
-          className="auth-form"
-          onSubmit={(e) => {
-            e.preventDefault();
-            void run("finish");
-          }}
-        >
-          <p>
-            Kirim pesan yang sudah disiapkan dari nomor {challenge.phone}.
-            Masukkan kode rahasia yang dibalas ke WhatsApp Anda.
+        <div className="auth-form">
+          <div className="wa-destination">
+            <MessageCircle size={20} />
+            <span>
+              WhatsApp <strong>{challenge.phone}</strong>
+            </span>
+          </div>
+          {!ended && (
+            <a
+              className="wa-primary"
+              href={challenge.whatsappUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Buka WhatsApp <ArrowRight size={18} />
+            </a>
+          )}
+          <p className="wa-caption" role="status">
+            {ended
+              ? "Permintaan berakhir. Silakan mulai kembali."
+              : state === "reply_sent"
+                ? "Tautan konfirmasi sudah dikirim."
+                : "Menunggu konfirmasi Anda."}
           </p>
-          <a
-            className="auth-wa-link"
-            href={challenge.whatsappUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Buka WhatsApp
-          </a>
-          <p className="auth-otp-note">
-            Hanya masukkan kode di halaman yang Anda buka sendiri. Jangan
-            bagikan kode kepada siapa pun.
-          </p>
-          <Label htmlFor="wa-code">Kode verifikasi</Label>
-          <Input
-            id="wa-code"
-            inputMode="numeric"
-            autoComplete="one-time-code"
-            maxLength={6}
-            pattern="[0-9]{6}"
-            value={code}
-            onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
-            required
-          />
-          <p className="text-sm">
-            {state === "reply_sent"
-              ? "Balasan kode telah dikirim ke WhatsApp."
-              : state === "expired"
-                ? "Kode kedaluwarsa. Mulai kembali."
-                : state === "locked"
-                  ? "Batas percobaan tercapai. Mulai kembali."
-                  : "Menunggu verifikasi WhatsApp."}
-          </p>
-          <Button
-            type="submit"
-            disabled={
-              busy ||
-              code.length !== 6 ||
-              ["expired", "locked", "failed"].includes(state)
-            }
-          >
-            Verifikasi dan lanjutkan
-          </Button>
-          <Button
-            variant="outline"
+          {!ended && (
+            <>
+              <button
+                className="wa-text-button"
+                type="button"
+                aria-expanded={fallback}
+                onClick={() => setFallback(!fallback)}
+              >
+                Gunakan kode cadangan
+              </button>
+              {fallback && (
+                <form
+                  className="wa-fallback"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    void run("finish");
+                  }}
+                >
+                  <Label htmlFor="wa-code">Kode dari WhatsApp</Label>
+                  <Input
+                    id="wa-code"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    maxLength={6}
+                    pattern="[0-9]{6}"
+                    value={code}
+                    onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+                    required
+                  />
+                  <Button
+                    className="wa-primary"
+                    type="submit"
+                    disabled={busy || code.length !== 6}
+                  >
+                    Konfirmasi &amp; Lanjutkan
+                  </Button>
+                </form>
+              )}
+            </>
+          )}
+          <button
+            className="wa-text-button"
             type="button"
             disabled={busy}
             onClick={() => {
               setChallenge(null);
               setCode("");
               setState("");
+              setFallback(false);
             }}
           >
-            Mulai kembali
-          </Button>
-        </form>
+            {" "}
+            {ended ? "Mulai kembali" : "Ganti nomor"}
+          </button>
+        </div>
       )}
       <p role="status" aria-live="polite" className="auth-feedback">
         {busy ? "Memproses…" : message}
       </p>
-      <p className="auth-switch">
-        <Link href={"/login?redirectTo=" + encodeURIComponent(target)}>
-          Gunakan email dan password
-        </Link>
-      </p>
+      <div className="wa-divider">
+        <span>atau</span>
+      </div>
+      <Link
+        className="wa-email"
+        href={"/login?redirectTo=" + encodeURIComponent(target)}
+      >
+        Masuk dengan email
+      </Link>
     </div>
   );
 }

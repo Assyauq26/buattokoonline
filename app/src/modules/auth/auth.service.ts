@@ -397,7 +397,7 @@ export async function verifyRegistrationOtp(
       if (whatsappProof && role && process.env.STORE_WHATSAPP_AUTH_ENABLED === "1") {
         const linked = await tx.whatsAppChallenge.updateMany({
           where: { id: whatsappProof.id, browserHash: whatsappProof.hash, phone: pending.phone,
-            purpose: "login", state: "verified", userId: null, expiresAt: { gt: new Date() } },
+            purpose: "login", accountType: "customer", state: "verified", userId: null, expiresAt: { gt: new Date() } },
           data: { state: "consumed", userId: user.id },
         });
         if (linked.count === 1) await tx.whatsAppIdentity.create({data:{userId:user.id,phone:pending.phone,sessionVersion:user.sessionVersion}});
