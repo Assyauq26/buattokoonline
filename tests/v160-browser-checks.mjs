@@ -125,7 +125,9 @@ export async function verify({
     sale,
   );
   await page.getByRole("button", { name: "Buat resi", exact: true }).click();
-  await page.getByRole("dialog").getByText("Blouse Kamila").waitFor();
+  if (process.env.SHIPPING_REVIEW_BROWSER) await (await import("./v161-browser-checks.mjs")).verifyReview({page,origin,orderId:o.id,checks,out});
+  await page.getByRole("dialog").getByText("Lihat rincian barang").click();
+  await page.getByRole("dialog").getByText("Blouse Kamila", {exact:true}).waitFor();
   await page.screenshot({ path: resolve(out, "shipping-review-390.png") });
   await page.keyboard.press("Escape");
   assert.equal(
@@ -419,6 +421,11 @@ export async function verify({
     await page.setViewportSize({ width, height: 900 });
     await page.goto(origin + "/admin/orders?q=" + prefix);
     await page.waitForLoadState("networkidle");
+    if(process.env.SHIPPING_REVIEW_BROWSER === "yes") {
+      assert.equal(await page.locator('.simple-tabs').evaluate(e=>getComputedStyle(e).scrollbarWidth), 'none');
+      for(const badge of await page.locator('.compact-status .flow-status').all())
+        assert.equal(await badge.evaluate(e=>getComputedStyle(e).borderRadius),'6px');
+    }
     const color = await page
       .locator(".compact-action .flow-primary")
       .first()

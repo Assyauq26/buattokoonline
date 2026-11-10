@@ -28,6 +28,7 @@ const input = z.discriminatedUnion("action", [
   z
     .object({
       action: z.literal("create"),
+      reviewFingerprint: z.string().regex(/^[a-f0-9]{64}$/).optional(),
     })
     .strict(),
   z.object({ action: z.literal("handover") }).strict(),
@@ -77,7 +78,7 @@ export async function POST(
       body.action === "reconcile-creation"
         ? await reconcileJntCreation(id, actor.id, body)
         : body.action === "create"
-          ? await createJntAwb(id, actor.id)
+          ? await createJntAwb(id, actor.id, body.reviewFingerprint)
           : body.action === "reconcile-cancellation"
             ? await reconcileJntCancellation(id, actor.id, body)
             : body.action === "deliver"
