@@ -51,4 +51,4 @@ Customer pages use published branding and theme tokens. Store contact links use 
 
 Primary changes: customer order list/detail/resolution routes and scoped styles; storefront header; `customer-refund.tsx`; `status-toast.tsx`; `customer-refund-view.ts`; resolution acknowledgement/eligibility and operation invalidation; regression/browser tests.
 
-No schema migration or new package is required. This branch retains VERSION 1.6.1 and is prepared for review, not published as a new release. Deployment and production smoke testing remain outside this request.
+No schema migration or new package is required. Implementation was verified before release authorization. On 2026-11-10 the owner explicitly authorized release and Hubify deployment. VERSION is now 1.6.2. Deployment must preserve the unchanged migration ledger, runtime configuration and other services; verify a backup before activation and retain the previous application image for rollback. Production results are recorded separately after activation.
