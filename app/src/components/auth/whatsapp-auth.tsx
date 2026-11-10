@@ -35,6 +35,9 @@ export function WhatsAppAuth({
         window.location.hash,
       );
       if (match) {
+        setState("");
+        setChallenge(null);
+        setMessage("");
         setConfirmation({ id: match[1], token: match[2] });
         // Fragment is never sent to the server; remove it from visible history.
         window.history.replaceState(
