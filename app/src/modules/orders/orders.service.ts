@@ -1,3 +1,4 @@
+import { flowWhere } from "./flow-state";
 import { prisma } from "@/lib/prisma";
 import { OrderStatus, Prisma } from "@prisma/client";
 import { HttpError } from "@/lib/response";
@@ -76,18 +77,23 @@ export async function listCustomerOrderPage(
   const groups: Record<string, Prisma.OrderWhereInput> = {
     all: {},
     unpaid: {
-      status: "PENDING_PAYMENT",
-      paymentStatus: { not: "WAITING_VERIFICATION" },
+      OR: [
+        flowWhere("payment", "PENDING_PAYMENT"),
+        flowWhere("payment", "REJECTED"),
+      ],
     },
     process: {
       OR: [
-        { status: "PENDING_PAYMENT", paymentStatus: "WAITING_VERIFICATION" },
-        { status: { in: ["PAID", "PROCESSING", "PACKED"] } },
+        flowWhere("payment", "WAITING_VERIFICATION"),
+        flowWhere("ready"),
+        flowWhere("packing"),
+        flowWhere("pickup"),
       ],
     },
-    shipped: { status: "SHIPPED" },
-    done: { status: { in: ["DELIVERED", "COMPLETED"] } },
-    cancelled: { status: { in: ["CANCELLED", "REFUNDED"] } },
+    shipped: flowWhere("shipped"),
+    done: flowWhere("done"),
+    return: flowWhere("return"),
+    cancelled: flowWhere("cancelled"),
   };
   return prisma.$transaction(
     async (tx) => {
@@ -104,6 +110,9 @@ export async function listCustomerOrderPage(
           items: true,
           payment: true,
           shipment: true,
+          jntShipmentRequest: {
+            select: { state: true, errorCode: true, awb: true },
+          },
           resolutions: {
             select: { state: true, refundAmount: true },
             orderBy: { createdAt: "desc" },
@@ -281,6 +290,15 @@ export async function transitionOrderInTransaction(
     }
   }
 
+  if (to === "PACKED" && ["PAID", "PROCESSING"].includes(order.status))
+    await tx.notification.create({
+      data: {
+        userId: order.userId,
+        type: "order",
+        title: "Paket sedang dikemas",
+        body: `Pesanan ${order.orderNumber} sedang disiapkan.`,
+      },
+    });
   const updated = await tx.order.update({
     where: { id: orderId },
     data: {

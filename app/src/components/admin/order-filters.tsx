@@ -40,6 +40,11 @@ export function OrderFilters({
             </Dialog.Close>
           </header>
           <form action="/admin/orders" method="get">
+            <input
+              type="hidden"
+              name="paymentState"
+              value={params.paymentState || ""}
+            />
             <input type="hidden" name="q" value={params.q || ""} />
             <input type="hidden" name="tab" value={params.tab || "all"} />
             <label>

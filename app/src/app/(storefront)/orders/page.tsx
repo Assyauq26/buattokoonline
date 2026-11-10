@@ -6,7 +6,7 @@ import { CustomerOrderTabs } from "@/components/storefront/customer-order-tabs";
 import { listCustomerOrderPage } from "@/modules/orders/orders.service";
 import { customerTabs, customerCanPay } from "@/lib/customer-order-view";
 import { formatIDR } from "@/lib/money";
-import { orderDisplayStatus } from "@/lib/order-status";
+import { orderFlow } from "@/modules/orders/flow-state";
 import "./orders.css";
 export const dynamic = "force-dynamic";
 export default async function OrdersPage({
@@ -65,7 +65,7 @@ export default async function OrdersPage({
             <article key={o.id} data-testid={`order-row-${o.orderNumber}`}>
               <div className="customer-order-top">
                 <strong>{o.orderNumber}</strong>
-                <span>{orderDisplayStatus(o.status, o.paymentStatus)}</span>
+                <span>{orderFlow(o).label}</span>
               </div>
               <div className="customer-order-product">
                 <div className="customer-order-image">
@@ -90,17 +90,21 @@ export default async function OrdersPage({
                   <strong>{formatIDR(o.total)}</strong>
                 </div>
               </div>
-              {o.resolutions[0] && o.resolutions[0].refundAmount > 0 && (
-                <p role="status">
-                  {o.resolutions[0].state === "RECEIVED"
-                    ? "Refund diterima"
-                    : o.resolutions[0].state === "TRANSFER_RECORDED"
-                      ? "Refund dicatat seller · konfirmasi penerimaan"
-                      : o.resolutions[0].state === "DISPUTED"
-                        ? "Refund perlu tindak lanjut"
-                        : "Refund perlu diproses"}
-                </p>
-              )}
+              {o.resolutions[0] &&
+                o.resolutions[0].refundAmount > 0 &&
+                !["REJECTED", "CANCELLED_NO_REFUND"].includes(
+                  o.resolutions[0].state,
+                ) && (
+                  <p role="status">
+                    {o.resolutions[0].state === "RECEIVED"
+                      ? "Refund diterima"
+                      : o.resolutions[0].state === "TRANSFER_RECORDED"
+                        ? "Refund dicatat seller · konfirmasi penerimaan"
+                        : o.resolutions[0].state === "DISPUTED"
+                          ? "Refund perlu tindak lanjut"
+                          : "Refund perlu diproses"}
+                  </p>
+                )}
               <p className="customer-order-note">
                 {unpaid ? (
                   <Clock size={18} />
@@ -117,7 +121,7 @@ export default async function OrdersPage({
                       : "Selesaikan pembayaran untuk melanjutkan."
                     : shipped
                       ? `${o.shippingCourier} · Dalam perjalanan`
-                      : orderDisplayStatus(o.status, o.paymentStatus)}
+                      : orderFlow(o).label}
               </p>
               <div className="customer-order-actions">
                 <Link href={`/orders/${o.id}`}>

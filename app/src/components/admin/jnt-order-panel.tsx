@@ -8,8 +8,10 @@ import { OperationForm } from "./operation-form";
 import { fulfillmentLabel } from "@/modules/orders/resolution-policy";
 import { canRequestJntCancellation } from "@/modules/shipping/jnt-cancellation-policy";
 import { CopyValue } from "./copy-value";
+import { CreateAwbButton } from "./create-awb-button";
 export function JntOrderPanel(p: {
   orderId: string;
+  compact?: boolean;
   isOfficial: boolean;
   service: string | null;
   status: string;
@@ -107,19 +109,21 @@ export function JntOrderPanel(p: {
           <CopyValue value={p.externalOrderId} label="Salin ID order J&T" />
         </div>
       )}
-      <p className="flow-info">
-        {fulfillmentLabel({
-          requestState: p.requestState,
-          errorCode: p.errorCode,
-          sellerHandoverAt: p.sellerHandoverAt,
-          shipmentStatus: p.shipmentStatus,
-        })}
-        {p.requestState === "SUCCEEDED" &&
-        !p.sellerHandoverAt &&
-        p.shipmentStatus === "PENDING"
-          ? ". Paket belum dikonfirmasi diterima kurir."
-          : ""}
-      </p>
+      {!p.compact && (
+        <p className="flow-info">
+          {fulfillmentLabel({
+            requestState: p.requestState,
+            errorCode: p.errorCode,
+            sellerHandoverAt: p.sellerHandoverAt,
+            shipmentStatus: p.shipmentStatus,
+          })}
+          {p.requestState === "SUCCEEDED" &&
+          !p.sellerHandoverAt &&
+          p.shipmentStatus === "PENDING"
+            ? ". Paket belum dikonfirmasi diterima kurir."
+            : ""}
+        </p>
+      )}
       {p.errorCode === "CANCELLATION_REJECTED" && (
         <p className="flow-error" role="alert">
           J&amp;T menolak pembatalan. Resi tetap aktif. Periksa kondisi paket
@@ -137,15 +141,11 @@ export function JntOrderPanel(p: {
         </p>
       )}
       {issue && (
-        <OperationForm
-          url={url}
+        <CreateAwbButton
+          orderId={p.orderId}
           label={
             p.requestState === "CANCELLED" ? "Buat resi baru" : "Buat resi"
           }
-          confirmation="Periksa produk, alamat, berat dan layanan. Ajukan satu kali; jika hasil belum pasti, lakukan rekonsiliasi sebelum membuat resi lain."
-          fields={[
-            { name: "action", label: "Aksi", type: "hidden", value: "create" },
-          ]}
         />
       )}
       {p.requestState === "UNKNOWN" && (
@@ -240,85 +240,82 @@ export function JntOrderPanel(p: {
         p.awb && (
           <div className="flow-button-row">
             {p.requestState === "SUCCEEDED" && (
-              <AwbPrintButton orderId={p.orderId} />
+              <AwbPrintButton
+                orderId={p.orderId}
+                primary={p.compact && p.shipmentStatus === "PENDING"}
+              />
             )}
             <button
-              className="flow-secondary"
+              className={
+                p.compact &&
+                ["IN_TRANSIT", "SHIPPED"].includes(p.shipmentStatus || "")
+                  ? "flow-primary"
+                  : "flow-secondary"
+              }
               disabled={busy}
               onClick={() => run("track")}
             >
               <RefreshCw size={18} />
-              {busy ? "Memeriksa…" : "Perbarui tracking"}
+              {busy
+                ? "Memeriksa…"
+                : ["RETURNING", "RETURNED"].includes(p.carrierCondition || "")
+                  ? "Lacak retur"
+                  : p.compact &&
+                      ["IN_TRANSIT", "SHIPPED"].includes(p.shipmentStatus || "")
+                    ? "Lacak pengiriman"
+                    : "Perbarui tracking"}
             </button>
           </div>
         )}
-      {p.canUpdate &&
-        !p.fulfillmentHeld &&
-        p.hasPaid &&
-        p.requestState === "SUCCEEDED" &&
-        p.shipmentStatus === "PENDING" &&
-        p.status === "PACKED" &&
-        !p.sellerHandoverAt && (
-          <OperationForm
-            url={url}
-            label="Catat penyerahan ke kurir"
-            confirmation="Saya telah menyerahkan paket. Ini hanya mencatat pernyataan seller; status diterima kurir mengikuti tracking J&T."
-            fields={[
-              {
-                name: "action",
-                label: "Aksi",
-                type: "hidden",
-                value: "handover",
-              },
-            ]}
-          />
-        )}
       {canCancel && (
-        <div>
-          {p.sellerHandoverAt && (
-            <p className="flow-warning">
-              Penyerahan dicatat seller. J&amp;T akan menentukan apakah paket
-              masih dapat dibatalkan. Batalkan pesanan dan tangani refund secara
-              terpisah.
-            </p>
-          )}
-          <button
-            className="flow-secondary"
-            onClick={() => {
-              setError("");
-              setOpen(true);
-            }}
-          >
-            Batalkan resi J&amp;T
-          </button>
-          <ActionDialog
-            sourceRef={root}
-            open={open}
-            onClose={() => setOpen(false)}
-            title="Batalkan resi J&T"
-            description={`Resi ${p.awb} · ID J&T ${p.externalOrderId}. Ini membatalkan resi, bukan mengirim refund. Stok tidak berubah. Jika refund penuh sudah diakui pembeli dan tidak ada penerimaan kurir, pesanan akan ditutup.`}
-            primary="Batalkan resi"
-            busy={busy}
-            error={error}
-            confirmDisabled={!reason}
-            onConfirm={() => void run("cancel")}
-          >
-            <label>
-              Alasan wajib
-              <select
-                required
-                value={reason}
-                disabled={busy}
-                onChange={(e) => setReason(e.target.value)}
-              >
-                <option value="">Pilih alasan</option>
-                <option>Salah data pengiriman</option>
-                <option>Perubahan layanan</option>
-                <option>Pesanan dibatalkan</option>
-              </select>
-            </label>
-          </ActionDialog>
-        </div>
+        <details open={!p.compact}>
+          <summary>Tindakan lainnya</summary>
+          <div>
+            {p.sellerHandoverAt && (
+              <p className="flow-warning">
+                Penyerahan dicatat seller. J&amp;T akan menentukan apakah paket
+                masih dapat dibatalkan. Batalkan pesanan dan tangani refund
+                secara terpisah.
+              </p>
+            )}
+            <button
+              className="flow-secondary"
+              onClick={() => {
+                setError("");
+                setOpen(true);
+              }}
+            >
+              Batalkan resi J&amp;T
+            </button>
+            <ActionDialog
+              sourceRef={root}
+              open={open}
+              onClose={() => setOpen(false)}
+              title="Batalkan resi J&T"
+              description={`Resi ${p.awb} · ID J&T ${p.externalOrderId}. Ini membatalkan resi, bukan mengirim refund. Stok tidak berubah. Jika refund penuh sudah diakui pembeli dan tidak ada penerimaan kurir, pesanan akan ditutup.`}
+              primary="Batalkan resi"
+              busy={busy}
+              error={error}
+              confirmDisabled={!reason}
+              onConfirm={() => void run("cancel")}
+            >
+              <label>
+                Alasan wajib
+                <select
+                  required
+                  value={reason}
+                  disabled={busy}
+                  onChange={(e) => setReason(e.target.value)}
+                >
+                  <option value="">Pilih alasan</option>
+                  <option>Salah data pengiriman</option>
+                  <option>Perubahan layanan</option>
+                  <option>Pesanan dibatalkan</option>
+                </select>
+              </label>
+            </ActionDialog>
+          </div>
+        </details>
       )}
       {p.canUpdate && p.requestState === "SUCCEEDED" && !canCancel && (
         <p className="flow-muted">

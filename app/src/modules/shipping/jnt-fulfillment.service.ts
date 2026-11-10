@@ -1,4 +1,7 @@
-import { JntCancellationRejected } from "@/infrastructure/shipping/jnt/official-transport";
+import {
+  JntCancellationRejected,
+  JntCreationRejected,
+} from "@/infrastructure/shipping/jnt/official-transport";
 import "server-only";
 import {
   canRequestJntCancellation,
@@ -121,7 +124,10 @@ export async function createJntAwb(orderId: string, actorId: string) {
           "Paket pernah diproses kurir; rekonsiliasi pengiriman diperlukan sebelum resi baru",
           409,
         );
-      if (order.jntShipmentRequest && !replacing) {
+      const rejected =
+        order.jntShipmentRequest?.state === "PREPARED" &&
+        order.jntShipmentRequest.errorCode === "CREATION_REJECTED";
+      if (order.jntShipmentRequest && !replacing && !rejected) {
         if (
           order.jntShipmentRequest.state === "SUCCEEDED" &&
           order.jntShipmentRequest.awb
@@ -133,7 +139,7 @@ export async function createJntAwb(orderId: string, actorId: string) {
         );
       }
       if (
-        order.status !== "PACKED" ||
+        !["PROCESSING", "PACKED"].includes(order.status) ||
         order.paymentStatus !== "PAID" ||
         order.payment?.status !== "PAID" ||
         order.shippingCourier !== "J&T Express" ||
@@ -179,6 +185,21 @@ export async function createJntAwb(orderId: string, actorId: string) {
         order.shippingWeightGram > 100_000
       )
         throw new HttpError("Berat pesanan tidak valid", 422);
+      if (order.status === "PROCESSING") {
+        await tx.order.update({
+          where: { id: orderId },
+          data: { status: "PACKED" },
+        });
+        await tx.orderStatusHistory.create({
+          data: {
+            orderId,
+            fromStatus: "PROCESSING",
+            toStatus: "PACKED",
+            createdBy: actorId,
+            note: "Kompatibilitas penyiapan paket lama; tanpa perubahan stok",
+          },
+        });
+      }
       const qty = order.items.reduce((sum, i) => sum + i.quantity, 0);
       if (
         qty < 1 ||
@@ -207,14 +228,18 @@ export async function createJntAwb(orderId: string, actorId: string) {
       const pickupEnd = new Date(+pickupStart + 12 * 3600_000);
       const values = {
         ...sender,
-        orderid: externalId(
-          replacing
-            ? orderId +
-                ":attempt:" +
-                ((await tx.jntShipmentAttempt.count({ where: { orderId } })) +
-                  2)
-            : orderId,
-        ),
+        orderid: rejected
+          ? order.jntShipmentRequest!.externalOrderId
+          : externalId(
+              replacing
+                ? orderId +
+                    ":attempt:" +
+                    ((await tx.jntShipmentAttempt.count({
+                      where: { orderId },
+                    })) +
+                      2)
+                : orderId,
+            ),
         receiver_name: order.address.recipientName,
         receiver_phone: phoneNumber(order.address.phone),
         // J&T documents 00000 as the supported value when no postal code was supplied.
@@ -276,6 +301,7 @@ export async function createJntAwb(orderId: string, actorId: string) {
           tx,
         );
       }
+      if (rejected) await tx.jntShipmentRequest.delete({ where: { orderId } });
       await tx.jntShipmentRequest.create({
         data: {
           orderId,
@@ -307,7 +333,31 @@ export async function createJntAwb(orderId: string, actorId: string) {
   let result: Awaited<ReturnType<typeof createJntOrder>>;
   try {
     result = await createJntOrder(prepared.values, prepared.config);
-  } catch {
+  } catch (error) {
+    if (error instanceof JntCreationRejected) {
+      await prisma.$transaction(async (tx) => {
+        await lockOrder(tx, orderId);
+        await tx.jntShipmentRequest.updateMany({
+          where: {
+            orderId,
+            state: "DISPATCHED",
+            externalOrderId: prepared.values.orderid,
+          },
+          data: { state: "PREPARED", errorCode: "CREATION_REJECTED" },
+        });
+        await writeAudit(
+          {
+            userId: actorId,
+            action: "jnt.create.rejected",
+            entity: "Order",
+            entityId: orderId,
+            meta: { externalOrderId: prepared.values.orderid },
+          },
+          tx,
+        );
+      });
+      throw error;
+    }
     await prisma.jntShipmentRequest.updateMany({
       where: { orderId, state: "DISPATCHED" },
       data: { state: "UNKNOWN", errorCode: "UNCONFIRMED" },
@@ -352,6 +402,18 @@ export async function createJntAwb(orderId: string, actorId: string) {
         await tx.jntShipmentRequest.update({
           where: { orderId },
           data: { state: "SUCCEEDED", awb: result.awb, errorCode: null },
+        });
+        const noticeOrder = await tx.order.findUniqueOrThrow({
+          where: { id: orderId },
+          select: { userId: true, orderNumber: true },
+        });
+        await tx.notification.create({
+          data: {
+            userId: noticeOrder.userId,
+            type: "shipping",
+            title: "Menunggu pickup",
+            body: `Resi untuk pesanan ${noticeOrder.orderNumber} sudah dibuat; menunggu paket diterima kurir.`,
+          },
         });
         await writeAudit(
           {

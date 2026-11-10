@@ -387,7 +387,7 @@ try {
           "Copy action has a 44px touch target",
         );
       }
-      if (name === "orders")
+      if (name === "orders" && !process.env.SIMPLIFIED_ORDER_BROWSER)
         assert.equal(
           await page
             .getByTestId("admin-order-" + waiting.orderNumber)
@@ -417,11 +417,13 @@ try {
   }
   await (
     await import(
-      process.env.JNT_CANCEL_BROWSER
-        ? "./v156-browser-checks.mjs"
-        : process.env.PRODUCT_SETTINGS_BROWSER
-          ? "./v152-browser-checks.mjs"
-          : "./v151-browser-checks.mjs"
+      process.env.SIMPLIFIED_ORDER_BROWSER
+        ? "./v160-browser-checks.mjs"
+        : process.env.JNT_CANCEL_BROWSER
+          ? "./v156-browser-checks.mjs"
+          : process.env.PRODUCT_SETTINGS_BROWSER
+            ? "./v152-browser-checks.mjs"
+            : "./v151-browser-checks.mjs"
     )
   ).verify({
     db,
@@ -614,6 +616,8 @@ try {
   checks.push("Payment correction through UI requires a reason");
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(origin + `/admin/orders/${shipping.id}`);
+  const extras = page.getByText("Tindakan lainnya", { exact: true });
+  if (await extras.count()) await extras.click();
   await page
     .getByRole("button", { name: "Batalkan resi J&T", exact: true })
     .click();

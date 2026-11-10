@@ -204,6 +204,14 @@ const createResult = z
   .passthrough();
 /** Call only from a verified, durable paid-order workflow with an idempotency lock.
  * Not exposed as an admin test endpoint: each call may create a real AWB. */
+export class JntCreationRejected extends HttpError {
+  constructor() {
+    super(
+      "Data pengiriman ditolak J&T. Perbaiki konfigurasi atau data sebelum mencoba lagi.",
+      422,
+    );
+  }
+}
 export async function createJntOrder(
   value: z.input<typeof jntCreateOrderSchema>,
   approvedConfig?: JntConfig,
@@ -227,6 +235,35 @@ export async function createJntOrder(
     signedForm("data_param", payload, cfg.credentials.orderKey),
   );
   const result = createResult.safeParse(response);
+  const rejected = z
+    .object({
+      success: z.literal(true),
+      detail: z
+        .array(
+          z.object({
+            orderid: z.literal(input.orderid),
+            status: z.literal("Error"),
+            reason: z.string(),
+          }),
+        )
+        .length(1),
+    })
+    .safeParse(response);
+  // Only documented deterministic validation rejections prove that no AWB was created.
+  // Duplicate IDs, transport failures and unknown business errors remain UNKNOWN.
+  if (
+    rejected.success &&
+    [
+      "Username atau Api Key salah",
+      "Kesalahan signature",
+      "Origin_code salah",
+      "Destination_code salah",
+      "Kecamatan Penerima Error",
+      "Terdapat kesalahan format data yang dikirimkan",
+      "Kesalahan pada parameter",
+    ].includes(rejected.data.detail[0].reason.trim())
+  )
+    throw new JntCreationRejected();
   if (!result.success || result.data.detail[0].orderid !== input.orderid) {
     throw new HttpError(
       "J&T tidak mengonfirmasi pembuatan resi; periksa status sebelum mencoba ulang",

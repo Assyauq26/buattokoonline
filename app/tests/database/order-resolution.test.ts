@@ -631,7 +631,7 @@ it("locks bank destination before manual transfer and rejects concurrent bank ed
   expect((await view(o.id)).cases[0].bank?.number).toBe("0012345678");
 });
 
-it("normal payment -> packing -> mocked AWB -> seller handover -> carrier delivery -> buyer completion", async () => {
+it("normal payment -> one packing action -> mocked AWB -> carrier delivery -> automatic completion", async () => {
   process.env.JNT_API_ENV = "sandbox";
   process.env.JNT_ENABLE_ORDER_CREATE = "yes";
   const o = await fixture(false);
@@ -667,7 +667,6 @@ it("normal payment -> packing -> mocked AWB -> seller handover -> carrier delive
     proofMime: "application/pdf",
   });
   await approvePayment(o.payment!.id, staff.id);
-  await transitionOrder(o.id, "PROCESSING", staff.id);
   await transitionOrder(o.id, "PACKED", staff.id);
   carrier.create.mockImplementation(async (values) => ({
     orderId: values.orderid,
@@ -686,7 +685,11 @@ it("normal payment -> packing -> mocked AWB -> seller handover -> carrier delive
     events: [{ code: "200", time, status: "Paket diterima", note: null }],
   });
   await syncJntTracking(o.id, false, staff.id);
-  expect((await view(o.id)).orderStatus).toBe("DELIVERED");
+  expect((await view(o.id)).orderStatus).toBe("COMPLETED");
+  expect(
+    (await prisma.shipment.findUniqueOrThrow({ where: { orderId: o.id } }))
+      .status,
+  ).toBe("DELIVERED");
   await completeOrderForBuyer(o.id, buyer.id);
   expect((await view(o.id)).orderStatus).toBe("COMPLETED");
   expect(
@@ -799,10 +802,44 @@ it("generic status endpoints cannot bypass cancellation reason and financial rev
   ).toBe(2);
 });
 
-it("customer cancellation filtering, counts and pagination run across the entire owner-scoped dataset", async()=>{
- const prefix="PAG-"+randomUUID();
- await prisma.order.createMany({data:Array.from({length:26},(_,i)=>({orderNumber:prefix+"-"+i,userId:i===25?other.id:buyer.id,status:i<12?"CANCELLED":"PAID",paymentStatus:i<12?"EXPIRED":"PAID",subtotal:100,discount:0,shippingCost:0,total:100,createdAt:new Date(Date.now()+i*1000)}))});
- const result=await listCustomerOrderPage(buyer.id,{tab:"cancelled",q:prefix.toLowerCase(),page:2,pageSize:5});
- expect(result.total).toBe(12);expect(result.counts.all).toBe(25);expect(result.counts.cancelled).toBe(12);expect(result.orders).toHaveLength(5);expect(result.page).toBe(2);expect(result.pages).toBe(3);expect(result.orders.every(o=>o.userId===buyer.id&&o.status==="CANCELLED")).toBe(true);
- const last=await listCustomerOrderPage(buyer.id,{tab:"cancelled",q:prefix,page:999,pageSize:5});expect(last.page).toBe(3);expect(last.orders).toHaveLength(2);
+it("customer cancellation filtering, counts and pagination run across the entire owner-scoped dataset", async () => {
+  const prefix = "PAG-" + randomUUID();
+  await prisma.order.createMany({
+    data: Array.from({ length: 26 }, (_, i) => ({
+      orderNumber: prefix + "-" + i,
+      userId: i === 25 ? other.id : buyer.id,
+      status: i < 12 ? "CANCELLED" : "PAID",
+      paymentStatus: i < 12 ? "EXPIRED" : "PAID",
+      subtotal: 100,
+      discount: 0,
+      shippingCost: 0,
+      total: 100,
+      createdAt: new Date(Date.now() + i * 1000),
+    })),
+  });
+  const result = await listCustomerOrderPage(buyer.id, {
+    tab: "cancelled",
+    q: prefix.toLowerCase(),
+    page: 2,
+    pageSize: 5,
+  });
+  expect(result.total).toBe(12);
+  expect(result.counts.all).toBe(25);
+  expect(result.counts.cancelled).toBe(12);
+  expect(result.orders).toHaveLength(5);
+  expect(result.page).toBe(2);
+  expect(result.pages).toBe(3);
+  expect(
+    result.orders.every(
+      (o) => o.userId === buyer.id && o.status === "CANCELLED",
+    ),
+  ).toBe(true);
+  const last = await listCustomerOrderPage(buyer.id, {
+    tab: "cancelled",
+    q: prefix,
+    page: 999,
+    pageSize: 5,
+  });
+  expect(last.page).toBe(3);
+  expect(last.orders).toHaveLength(2);
 });

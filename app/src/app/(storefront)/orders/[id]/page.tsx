@@ -1,3 +1,4 @@
+import { orderFlow } from "@/modules/orders/flow-state";
 import { CompleteOrderButton } from "@/components/storefront/complete-order-button";
 import { shipmentHasLeftWarehouse } from "@/modules/shipping/jnt-cancellation-policy";
 import { reviewableOrderItems } from "@/modules/reviews/reviews.service";
@@ -12,11 +13,7 @@ import { formatIDR } from "@/lib/money";
 import { formatAddressLocality } from "@/lib/address-format";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  orderDisplayStatus,
-  orderBadgeVariant,
-  paymentDisplayStatus,
-} from "@/lib/order-status";
+import { orderBadgeVariant, paymentDisplayStatus } from "@/lib/order-status";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Detail Pesanan", robots: { index: false } };
@@ -70,7 +67,7 @@ export default async function OrderDetailPage({
           </p>
         </div>
         <Badge variant={orderBadgeVariant(order.status)}>
-          {orderDisplayStatus(order.status, order.paymentStatus)}
+          {orderFlow(order).label}
         </Badge>
       </div>
 
@@ -141,6 +138,16 @@ export default async function OrderDetailPage({
         </div>
       )}
 
+      {order.payment?.status === "REJECTED" &&
+        order.payment.confirmations[0]?.rejectionReason && (
+          <p role="status" className="rounded-xl border p-4">
+            Alasan perbaikan: {order.payment.confirmations[0].rejectionReason}
+          </p>
+        )}
+      <p>{orderFlow(order).description}</p>
+      {orderFlow(order).operation && (
+        <p role="status">{orderFlow(order).operation}</p>
+      )}
       {/* Items */}
       <section className="rounded-2xl border border-line p-4">
         <h2 className="mb-3 font-display font-bold text-ink">Produk</h2>
