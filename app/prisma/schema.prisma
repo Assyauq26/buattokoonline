@@ -81,6 +81,8 @@ model User {
   name         String
   email        String   @unique
   phone        String?  @unique
+  // Contact only; never a login or recovery identity.
+  sellerContactPhone String?
   passwordHash String
   isActive     Boolean  @default(true)
   sessionVersion Int @default(0)

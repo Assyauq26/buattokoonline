@@ -10,6 +10,7 @@ export default async function Page() {
       name: true,
       email: true,
       phone: true,
+      sellerContactPhone: true,
       isActive: true,
       updatedAt: true,
     },
@@ -19,7 +20,7 @@ export default async function Page() {
       profile={{
         name: p.name,
         email: p.email,
-        phone: p.phone,
+        phone: p.sellerContactPhone ?? p.phone,
         updatedAt: p.updatedAt.toISOString(),
       }}
     />

@@ -15,7 +15,12 @@ export default async function AdminAuditPage() {
   return (
     <div className="space-y-6">
       <h1 className="font-display text-2xl font-black text-ink">Audit Log</h1>
-      <div className="overflow-hidden rounded-2xl border border-line bg-white">
+      <div
+        className="overflow-x-auto rounded-2xl border border-line bg-white"
+        tabIndex={0}
+        role="region"
+        aria-label="Riwayat audit"
+      >
         <table className="w-full text-sm">
           <thead className="border-b border-line bg-surface text-left text-xs uppercase text-ink-muted">
             <tr>

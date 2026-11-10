@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useState, useRef, type FormEvent } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { SaveLabel, SettingsFeedback } from "./settings-feedback";
 import Link from "next/link";
 import {
   JntMappingSettings,
@@ -80,15 +82,18 @@ type Stored = {
   } | null;
 };
 const field =
-  "mt-1 block min-h-10 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500";
+  "mt-1 block min-h-11 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm";
 
 export function JntIntegrationSettings() {
-  const [environment, setEnvironment] = useState<Env>("sandbox");
+  const params = useSearchParams();
+  const [environment, setEnvironment] = useState<Env>(
+    params.get("environment") === "production" ? "production" : "sandbox",
+  );
   const [mapping, setMapping] = useState<MappingStatus | null>(null);
   return (
     <div className="space-y-5">
       <Link
-        href="/admin/settings/shipping/manual"
+        href="/admin/settings/shipping"
         className="text-sm font-semibold underline"
       >
         Pengiriman / API J&T Express
@@ -134,6 +139,9 @@ function JntEnvironmentSettings({
   const [enabled, setEnabled] = useState(false);
   const [busy, setBusy] = useState(true);
   const [notice, setNotice] = useState("");
+  const lock = useRef(false),
+    router = useRouter();
+  const [operation, setOperation] = useState<"save" | "test" | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -255,6 +263,9 @@ function JntEnvironmentSettings({
   }
   async function save(event: FormEvent) {
     event.preventDefault();
+    if (lock.current || busy) return;
+    lock.current = true;
+    setOperation("save");
     setBusy(true);
     setNotice("");
     try {
@@ -283,13 +294,19 @@ function JntEnvironmentSettings({
       }
       await refresh();
       setNotice("Konfigurasi tersimpan.");
+      router.refresh();
     } catch (error) {
       setNotice((error as Error).message);
     } finally {
+      lock.current = false;
+      setOperation(null);
       setBusy(false);
     }
   }
   async function testAll() {
+    if (lock.current || busy) return;
+    lock.current = true;
+    setOperation("test");
     setBusy(true);
     setNotice("");
     setTests({});
@@ -310,6 +327,8 @@ function JntEnvironmentSettings({
     } catch (error) {
       setNotice((error as Error).message);
     } finally {
+      lock.current = false;
+      setOperation(null);
       setBusy(false);
     }
   }
@@ -391,7 +410,7 @@ function JntEnvironmentSettings({
               }}
               className={
                 "relative h-6 w-11 rounded-full disabled:opacity-50 " +
-                (enabled ? "bg-red-600" : "bg-zinc-300")
+                (enabled ? "bg-primary" : "bg-zinc-300")
               }
             >
               <span
@@ -425,6 +444,7 @@ function JntEnvironmentSettings({
           <h2 className="text-lg font-bold">1. Kredensial API</h2>
           <p className="text-sm text-zinc-600">
             Masukkan kredensial API J&T sesuai dengan layanan yang digunakan.
+            Field kosong mempertahankan kredensial yang sudah tersimpan.
           </p>
         </div>
         <div className="grid gap-4 lg:grid-cols-2">
@@ -433,7 +453,7 @@ function JntEnvironmentSettings({
               key={group.kind}
               className="rounded-lg border border-zinc-200 bg-zinc-50/60 p-4"
             >
-              <h3 className="mb-4 border-l-4 border-red-600 pl-3 font-semibold">
+              <h3 className="mb-4 border-l-4 border-current pl-3 font-semibold">
                 {group.label.slice(3)}
               </h3>
               {credentialFields(group)}
@@ -477,7 +497,11 @@ function JntEnvironmentSettings({
           </div>
         </details>
       </fieldset>
-      <fieldset disabled={busy || !stored} className={card + " space-y-4"}>
+      <fieldset
+        id="warehouse"
+        disabled={busy || !stored}
+        className={card + " space-y-4 scroll-mt-28"}
+      >
         <div>
           <h2 className="text-lg font-bold">2. Gudang Pengirim</h2>
           <p className="text-sm text-zinc-600">
@@ -502,7 +526,7 @@ function JntEnvironmentSettings({
             />
           </label>
           <label className="text-sm">
-            Nomor telepon
+            Nomor HP
             <input
               required
               type="tel"
@@ -571,7 +595,7 @@ function JntEnvironmentSettings({
                   );
                   edited();
                 }}
-                className="accent-red-600"
+                className="accent-current"
               />
               {code}
             </label>
@@ -582,14 +606,15 @@ function JntEnvironmentSettings({
         <h2 className="text-lg font-bold">4. Uji Koneksi API</h2>
         <p className="text-sm text-zinc-600">
           Periksa respons HTTP seluruh endpoint tanpa membuat atau membatalkan
-          pesanan.
+          pesanan. Respons HTTP 200 hanya membuktikan endpoint dapat dijangkau,
+          bukan bukti kredensial, tarif, atau transaksi pengiriman valid.
         </p>
         <button
           type="button"
           onClick={testAll}
           className="min-h-11 rounded-lg bg-black px-5 text-sm font-semibold text-white disabled:opacity-50"
         >
-          {busy ? "Memeriksa…" : "Test API"}
+          {operation === "test" ? "Memeriksa…" : "Test API"}
         </button>
         <div aria-live="polite" className="grid gap-2 text-sm sm:grid-cols-2">
           {groups.map((group) => (
@@ -604,21 +629,14 @@ function JntEnvironmentSettings({
           Perubahan diterapkan setelah Simpan Konfigurasi.
         </p>
       )}
-      {notice && (
-        <p
-          role="status"
-          className="rounded-lg border border-zinc-200 bg-white p-4 text-sm"
-        >
-          {notice}
-        </p>
-      )}
+      <SettingsFeedback message={notice} />
       <div className="flex justify-end">
         <button
           type="submit"
           disabled={busy || !stored}
           className="min-h-11 rounded-lg bg-black px-6 font-semibold text-white disabled:opacity-50"
         >
-          Simpan Konfigurasi
+          <SaveLabel busy={operation === "save"}>Simpan Konfigurasi</SaveLabel>
         </button>
       </div>
     </form>
@@ -703,6 +721,7 @@ function WarehouseRegions({
       <label className="text-sm">
         Provinsi
         <select
+          aria-label="Provinsi"
           required
           className={field}
           value={province}
@@ -723,6 +742,7 @@ function WarehouseRegions({
       <label className="text-sm">
         Kota/Kabupaten
         <select
+          aria-label="Kota/Kabupaten"
           required
           disabled={!province}
           className={field}
@@ -743,6 +763,7 @@ function WarehouseRegions({
       <label className="text-sm">
         Kecamatan
         <select
+          aria-label="Kecamatan"
           required
           disabled={!city}
           className={field}

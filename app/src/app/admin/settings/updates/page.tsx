@@ -1,3 +1,4 @@
+import { UpdateCheckForm } from "@/components/admin/update-check-button";
 import { requireBackofficeUser } from "@/modules/admin/backoffice-access";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 
@@ -14,7 +15,7 @@ async function latestRelease() {
       `https://api.github.com/repos/${repository}/releases/latest`,
       {
         headers: { Accept: "application/vnd.github+json" },
-        next: { revalidate: 300 },
+        cache: "no-store",
         redirect: "error",
         signal: AbortSignal.timeout(4000),
       },
@@ -50,6 +51,8 @@ async function latestRelease() {
       status: "ok",
       version,
       href: `${releasePage}/tag/v${version}`,
+      notes:
+        typeof release.body === "string" ? release.body.slice(0, 12000) : "",
     } as const;
   } catch {
     return { status: "error" } as const;
@@ -104,15 +107,8 @@ export default async function UpdatesPage({
       </section>
       <section className="space-y-4 rounded-xl border border-line bg-white p-5">
         <h2 className="font-semibold">Rilis stabil</h2>
-        <form action="/admin/updates" method="get">
-          <button
-            name="check"
-            value="1"
-            className="rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-white"
-          >
-            Cek Update
-          </button>
-        </form>
+        <UpdateCheckForm />
+        {!release && <p role="status">Belum diperiksa.</p>}
         {release?.status === "ok" && (
           <p>
             Rilis terbaru:{" "}
@@ -129,6 +125,17 @@ export default async function UpdatesPage({
                   : "Periksa versi terpasang melalui VPS untuk mengetahui apakah toko perlu diperbarui."}
           </p>
         )}
+        {release?.status === "ok" && release.notes && (
+          <details className="rounded-lg border p-3">
+            <summary>Catatan rilis</summary>
+            <p className="mt-3 whitespace-pre-wrap text-sm">{release.notes}</p>
+          </details>
+        )}
+        <p className="text-sm text-zinc-600">
+          Halaman ini memeriksa ketersediaan rilis. Proses pemasangan, backup,
+          dan rollback dijalankan melalui updater VPS; status pemasangan tidak
+          dipantau dari halaman ini.
+        </p>
         {release?.status === "none" && <p>Belum ada rilis stabil.</p>}
         {release?.status === "unavailable" && (
           <p>Paket rilis resmi belum tersedia untuk dipasang.</p>
