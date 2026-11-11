@@ -87,3 +87,25 @@ def validate_source(source, installed):
         effective[name] = previous
         records.append(record)
     return effective, records
+
+
+def prepare_runtime_projection(source, installed):
+    """Copy audited applied bytes only into a new, isolated runtime checkout."""
+    source = Path(source).resolve()
+    allowed = (core.ROOT / 'staging-sources').resolve()
+    if not source.is_relative_to(allowed) or source == allowed:
+        raise core.StoreError('Proyeksi migrasi hanya untuk checkout deployment baru.')
+    effective, records = validate_source(source, installed)
+    for record in records:
+        relative = Path('app/prisma/migrations') / record['migration'] / 'migration.sql'
+        original = core.ROOT / 'development-sources' / BASE_SHA / relative
+        target = source / relative
+        # Validation just authenticated both raw representations. Recheck before
+        # writing to defend against an accidental change between the two steps.
+        old, fresh = original.read_bytes(), target.read_bytes()
+        if digest(old) != record['installed'] or digest(fresh) != record['artifact']:
+            raise core.StoreError('Source migrasi berubah selama persiapan.')
+        target.write_bytes(old)
+    if core.inventory(source) != effective:
+        raise core.StoreError('Proyeksi runtime tidak cocok dengan ledger.')
+    return records
