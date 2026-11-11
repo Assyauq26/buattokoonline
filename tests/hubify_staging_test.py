@@ -1,4 +1,5 @@
 import importlib.util
+import hashlib
 import json
 from pathlib import Path
 import tempfile
@@ -72,11 +73,17 @@ class StagingSafetyTests(unittest.TestCase):
             (config / 'installed').touch()
             (config / 'runtime.env').write_text('APP_ORIGIN=https://hubify.web.id\n')
             (config / 'setup.json').write_text(json.dumps({
-                'domain': 'hubify.web.id', 'complete': True, 'local_test': False}))
+                'domain': 'hubify.web.id', 'proof': 'fixture', 'complete': True, 'local_test': False}))
+            (config / 'Caddyfile').write_bytes(hubify.core.caddy_content({
+                'domain': 'hubify.web.id', 'proof': 'fixture', 'local_test': False}, True))
+            fixture_hashes = {mode: hashlib.sha256(hubify.core.caddy_content({
+                'domain': 'hubify.web.id', 'proof': 'fixture', 'local_test': False}, live)).hexdigest()
+                for mode, live in [('live', True), ('maintenance', False)]}
             (config / 'version.json').write_text(json.dumps({'version': '1.0.0'}))
             with patch.object(hubify.os, 'geteuid', return_value=0, create=True), \
                  patch.object(hubify.core, 'CONFIG', config), \
                  patch.object(hubify.core, 'STATE', config / 'setup.json'), \
+                 patch.object(hubify, 'REVIEWED_PROXY_HASHES', fixture_hashes), \
                  patch.object(hubify, 'JOURNAL', config / 'update.json'):
                 self.assertEqual(hubify.preflight()[1]['version'], '1.0.0')
                 (config / 'runtime.env').write_text(
@@ -133,11 +140,73 @@ class StagingSafetyTests(unittest.TestCase):
              patch.object(hubify, 'read_db_inventory', return_value=actual), \
              patch.object(hubify.core, 'atomic_json') as write:
             hubify.recover_code(journal, actual)
-            recover.assert_called_once_with(journal)
+            recover.assert_called_once_with(journal, preserve_extra_sites=True,
+                                            approved_proxy_hashes=hubify.REVIEWED_PROXY_HASHES)
             write.assert_called_once_with(hubify.core.CONFIG / 'version.json', {**installed, 'migrations': actual})
             with self.assertRaises(hubify.core.StoreError):
                 hubify.recover_code(journal, {'old': '1', 'new': 'unexpected'})
             self.assertEqual(write.call_count, 1)
+
+    def test_shared_proxy_suffix_and_inode_survive_maintenance_live_and_recovery(self):
+        state = {'domain': 'hubify.web.id', 'proof': 'fixture', 'local_test': False}
+        suffix = b'\nother.example, www.other.example {\n  reverse_proxy platform:8000\n}\n'
+        with tempfile.TemporaryDirectory() as directory, \
+             patch.object(hubify.core, 'CONFIG', Path(directory)), \
+             patch.object(hubify.core, 'dc'):
+            path = Path(directory) / 'Caddyfile'
+            original = hubify.core.caddy_content(state, True) + suffix
+            hashes = {mode: hashlib.sha256(hubify.core.caddy_content(state, live) + suffix).hexdigest()
+                      for mode, live in [('live', True), ('maintenance', False)]}
+            path.write_bytes(original)
+            inode = path.stat().st_ino
+            for live in (False, True, False, True):
+                hubify.core.write_caddy(state, live=live, preserve_extra_sites=True,
+                                        approved_proxy_hashes=hashes)
+                self.assertEqual(path.read_bytes(), hubify.core.caddy_content(state, live) + suffix)
+                self.assertEqual(path.stat().st_ino, inode)
+            self.assertEqual(path.read_bytes(), original)
+
+    def test_shared_proxy_unknown_template_or_missing_file_refuses_before_write(self):
+        state = {'domain': 'hubify.web.id', 'proof': 'fixture', 'local_test': False}
+        with tempfile.TemporaryDirectory() as directory, \
+             patch.object(hubify.core, 'CONFIG', Path(directory)), \
+             patch.object(hubify.core, 'dc') as dc:
+            path = Path(directory) / 'Caddyfile'
+            with self.assertRaises(hubify.core.StoreError):
+                hubify.core.write_caddy(state, preserve_extra_sites=True)
+            previous = b'hubify.web.id {\n  reverse_proxy custom:1234\n}\n'
+            path.write_bytes(previous)
+            with self.assertRaises(hubify.core.StoreError):
+                hubify.core.write_caddy(state, preserve_extra_sites=True)
+            self.assertEqual(path.read_bytes(), previous)
+            dc.assert_not_called()
+
+    def test_pinned_proxy_preserves_custom_updater_route_and_rejects_one_byte_change(self):
+        state = {'domain': 'hubify.web.id', 'proof': 'fixture', 'local_test': False}
+        route = b'  handle /api/local-updater/status {\n    reverse_proxy gateway:17841\n  }\n'
+        original = hubify.core.caddy_content(state, True).replace(b'https://hubify.web.id {\n', b'https://hubify.web.id {\n' + route)
+        maintenance = original.replace(b'  handle {\n    reverse_proxy app:3000\n  }\n',
+            b'  handle {\n    respond "Toko sedang disiapkan oleh pemilik server." 503\n  }\n')
+        hashes = {'live': hashlib.sha256(original).hexdigest(), 'maintenance': hashlib.sha256(maintenance).hexdigest()}
+        with tempfile.TemporaryDirectory() as directory, \
+             patch.object(hubify.core, 'CONFIG', Path(directory)), \
+             patch.object(hubify.core, 'dc') as dc:
+            path = Path(directory) / 'Caddyfile';path.write_bytes(original)
+            self.assertEqual(hubify.core.preserved_caddy_content(False, hashes), maintenance)
+            self.assertIn(route, maintenance)
+            path.write_bytes(original + b'\n')
+            with self.assertRaises(hubify.core.StoreError):
+                hubify.core.write_caddy(state, preserve_extra_sites=True, approved_proxy_hashes=hashes)
+            self.assertEqual(path.read_bytes(), original + b'\n')
+            dc.assert_not_called()
+
+    def test_default_proxy_rendering_for_new_installations_is_unchanged(self):
+        state = {'domain': 'hubify.web.id', 'proof': 'fixture', 'local_test': False}
+        with tempfile.TemporaryDirectory() as directory, \
+             patch.object(hubify.core, 'CONFIG', Path(directory)), \
+             patch.object(hubify.core, 'dc'):
+            hubify.core.write_caddy(state, live=True)
+            self.assertEqual((Path(directory) / 'Caddyfile').read_bytes(), hubify.core.caddy_content(state, True))
 
 
 if __name__ == '__main__':

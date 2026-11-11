@@ -174,7 +174,7 @@ def dns_status(answers, ips):
     return None
 
 
-def write_caddy(state, live=False):
+def caddy_content(state, live=False):
     domain, proof = state['domain'], state['proof']
     hosts = [domain] + (['www.' + domain] if state.get('www') else [])
     content = ''
@@ -191,9 +191,36 @@ def write_caddy(state, live=False):
         else:
             content += '  handle {\n    respond "Toko sedang disiapkan oleh pemilik server." 503\n  }\n'
         content += '  header X-Content-Type-Options nosniff\n  header Referrer-Policy strict-origin-when-cross-origin\n}\n'
+    return content.encode('utf8')
+
+
+def preserved_caddy_content(live, approved_proxy_hashes):
+    """Switch only the app handle in an explicitly reviewed whole proxy file."""
+    path = CONFIG / 'Caddyfile'
+    if (not isinstance(approved_proxy_hashes, dict) or not path.is_file()
+            or path.is_symlink()):
+        raise StoreError('Konfigurasi proxy Hubify perlu ditinjau sebelum deployment.')
+    previous = path.read_bytes()
+    handles = {
+        'live': b'  handle {\n    reverse_proxy app:3000\n  }\n',
+        'maintenance': b'  handle {\n    respond "Toko sedang disiapkan oleh pemilik server." 503\n  }\n',
+    }
+    digest = hashlib.sha256(previous).hexdigest()
+    target = 'live' if live else 'maintenance'
+    for mode, handle in handles.items():
+        if digest == approved_proxy_hashes.get(mode) and previous.count(handle) == 1:
+            result = previous.replace(handle, handles[target], 1)
+            if hashlib.sha256(result).hexdigest() == approved_proxy_hashes.get(target):
+                return result
+    # No parsing or guessing at custom routes, comments, or unrelated sites.
+    raise StoreError('Checksum proxy Hubify belum direview; perlu review operator.')
+
+
+def write_caddy(state, live=False, preserve_extra_sites=False, approved_proxy_hashes=None):
+    content = preserved_caddy_content(live, approved_proxy_hashes) if preserve_extra_sites else caddy_content(state, live)
     # Existing bind mount must keep its inode; Caddy reload reads the same file.
     path = CONFIG / 'Caddyfile'
-    with open(path, 'w') as file:
+    with open(path, 'wb') as file:
         os.chmod(path, 0o600)
         file.write(content)
         file.flush()

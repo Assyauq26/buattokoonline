@@ -108,4 +108,62 @@ class HistoricalCompatibilityTests(unittest.TestCase):
     self.assertEqual(core.inventory(source),self.installed['migrations'])
    for n in h.PAIRS:
     self.assertEqual((root/'development-sources'/h.BASE_SHA/'app/prisma/migrations'/n/'migration.sql').read_bytes(),self.material(n)[0])
+ def ui_installed(self):
+  return dict(self.installed,version='1.7.3',source_sha=h.V173_UI_BASE_SHA,
+              channel='hubify-staging',candidate_version='1.7.3')
+ def test_ui_redeploy_exact_pairs_and_tree_preserve_inputs_without_sql(self):
+  installed=self.ui_installed();before=copy.deepcopy(installed)
+  with patch.object(core,'sql') as sql:
+   for name in h.PAIRS:
+    old,fresh=self.material(name)
+    result=h.authorize(name,old,fresh,installed,self.context,ARCHIVE,
+                       source_app_tree=h.V173_UI_APP_TREE)
+    self.assertEqual(result['installed'],h.PAIRS[name][0])
+    self.assertEqual(result['application_tree'],h.V173_UI_APP_TREE)
+    self.assertEqual(result['installed_source'],h.V173_UI_BASE_SHA)
+   sql.assert_not_called()
+  self.assertEqual(installed,before)
+ def test_ui_redeploy_rejects_missing_or_unreviewed_tree_including_updater_calls(self):
+  name=next(iter(h.PAIRS));old,fresh=self.material(name)
+  for tree in [None,'','a'*40,h.V173_UI_APP_TREE+'x']:
+   with self.subTest(tree=tree),self.assertRaises(core.StoreError):
+    h.authorize(name,old,fresh,self.ui_installed(),self.context,ARCHIVE,source_app_tree=tree)
+ def test_ui_redeploy_rejects_other_metadata_context_versions_and_history(self):
+  name=next(iter(h.PAIRS));old,fresh=self.material(name);installed=self.ui_installed()
+  changes=[('version','1.7.4'),('source_sha','a'*40),('channel','stable'),
+           ('candidate_version',None),('db_contract',2),('migrations',{}),
+           ('migrations',dict(installed['migrations'],unexpected='a'*64))]
+  for key,value in changes:
+   with self.subTest(key=key,value=value),self.assertRaises(core.StoreError):
+    h.authorize(name,old,fresh,dict(installed,**{key:value}),self.context,ARCHIVE,
+                source_app_tree=h.V173_UI_APP_TREE)
+  for context in [dict(self.context,installation='a'*32),dict(self.context,origin='https://other.example')]:
+   with self.assertRaises(core.StoreError):
+    h.authorize(name,old,fresh,installed,context,ARCHIVE,source_app_tree=h.V173_UI_APP_TREE)
+  for target in ['1.7.2','1.7.4']:
+   with self.assertRaises(core.StoreError):
+    h.authorize(name,old,fresh,installed,self.context,ARCHIVE,target,h.V173_UI_APP_TREE)
+ def test_ui_redeploy_rejects_sql_whitespace_and_archive_changes(self):
+  name=next(iter(h.PAIRS));old,fresh=self.material(name)
+  for changed in [fresh+b' ',fresh.replace(b'ALTER',b'DROP',1),fresh.replace(b' ',b'  ',1),fresh+b'\nSELECT 1;']:
+   with self.assertRaises(core.StoreError):
+    h.authorize(name,old,changed,self.ui_installed(),self.context,ARCHIVE,
+                source_app_tree=h.V173_UI_APP_TREE)
+  with tempfile.TemporaryDirectory() as directory:
+   archive=Path(directory)/'changed.tar.gz';archive.write_bytes(ARCHIVE.read_bytes()+b'changed')
+   with self.assertRaises(core.StoreError):
+    h.authorize(name,old,fresh,self.ui_installed(),self.context,archive,
+                source_app_tree=h.V173_UI_APP_TREE)
+ def test_ui_runtime_projection_stays_confined_idempotent_and_ledger_readonly(self):
+  self.installed=self.ui_installed()
+  with patch.object(core,'run',return_value=h.V173_UI_APP_TREE) as git,patch.object(core,'sql') as sql:
+   self.test_runtime_projection_is_confined_and_idempotent()
+   self.assertEqual(git.call_count,1)
+   self.assertEqual(git.call_args.args[0][0],'git')
+   self.assertEqual(git.call_args.args[0][-3:],['rev-parse','--verify','HEAD:app'])
+   sql.assert_not_called()
+ def test_ui_runtime_projection_rejects_git_tree_mismatch(self):
+  self.installed=self.ui_installed()
+  with patch.object(core,'run',return_value='a'*40),self.assertRaises(core.StoreError):
+   self.test_runtime_projection_is_confined_and_idempotent()
 if __name__=='__main__':unittest.main()

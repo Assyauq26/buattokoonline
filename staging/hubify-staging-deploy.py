@@ -24,6 +24,12 @@ REPOSITORY = 'Assyauq26/buattokoonline'
 HOST = 'hubify.web.id'
 JOURNAL = core.CONFIG / 'update.json'
 STAGING_STATE = core.CONFIG / 'hubify-staging.json'
+# Exact live shared proxy audited before PR #43. Only its single app handle
+# changes during maintenance; updater and platform routes remain byte-identical.
+REVIEWED_PROXY_HASHES = {
+    'live': 'd9bcf3dffdf41abfb3500f9f3b0f002ff175fb8b742639a4539569610e6e7852',
+    'maintenance': 'fad40745569a46024700b1bab66043fb5b15aabf15f003a5324c22c63dbb4023',
+}
 # Shipping settings only add schema and copy legacy integration data in one transaction.
 REVIEWED_MIGRATIONS = {
     '20261105100000_shipping_settings': '4e0da4c8ce33d4dcffb3ca1a51c776c3a3551ddeb257519beb33120cc26e631e',
@@ -63,6 +69,7 @@ def preflight():
             raise core.StoreError('J&T Production tidak boleh diaktifkan di staging.')
     if JOURNAL.exists() and core.read_json(JOURNAL).get('status') in ('updating', 'failed'):
         raise core.StoreError('Update sebelumnya belum dipulihkan. Periksa journal sebelum melanjutkan.')
+    core.preserved_caddy_content(True, REVIEWED_PROXY_HASHES)
     return state, core.read_json(core.CONFIG / 'version.json')
 
 
@@ -117,7 +124,7 @@ def read_db_inventory():
 
 
 def recover_code(journal, approved_inventory):
-    updater.recover(journal)
+    updater.recover(journal, preserve_extra_sites=True, approved_proxy_hashes=REVIEWED_PROXY_HASHES)
     actual = read_db_inventory()
     if (any(actual.get(name) != digest for name, digest in journal['from']['migrations'].items())
             or any(approved_inventory.get(name) != digest for name, digest in actual.items())):
@@ -177,7 +184,7 @@ def deploy(sha):
     core.atomic_json(JOURNAL, journal)
     print('Staging main @ ' + sha + ' — backup dan deployment dimulai.', flush=True)
     try:
-        core.write_caddy(state, live=False)
+        core.write_caddy(state, live=False, preserve_extra_sites=True, approved_proxy_hashes=REVIEWED_PROXY_HASHES)
         core.run(['systemctl', 'stop', 'single-store-maintenance.timer', 'single-store-maintenance.service'])
         core.dc(['stop', 'app'])
         journal['backup'] = updater.backup()
@@ -190,7 +197,7 @@ def deploy(sha):
         core.atomic_json(core.COMPOSE, core.read_json(compose))
         core.dc(['up', '-d', '--no-build', '--wait', '--wait-timeout', '90', 'app'], timeout=180)
         core.healthy()
-        core.write_caddy(state, live=True)
+        core.write_caddy(state, live=True, preserve_extra_sites=True, approved_proxy_hashes=REVIEWED_PROXY_HASHES)
         core.public_health(state)
         core.atomic_json(core.CONFIG / 'version.json', {
             **installed, 'version': candidate_version, 'source_sha': sha, 'migrations': inventory,
@@ -224,7 +231,7 @@ def rollback():
     journal['status'] = 'failed'
     core.atomic_json(JOURNAL, journal)
     state = core.read_json(core.STATE)
-    core.write_caddy(state, live=False)
+    core.write_caddy(state, live=False, preserve_extra_sites=True, approved_proxy_hashes=REVIEWED_PROXY_HASHES)
     core.run(['systemctl', 'stop', 'single-store-maintenance.timer', 'single-store-maintenance.service'])
     core.dc(['stop', 'app'])
     recover_code(journal, current['migrations'])
