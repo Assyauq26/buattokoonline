@@ -310,6 +310,9 @@ def public_health(state):
 
 
 def initialize_store(state, password=None):
+    if state.get('store_ready'):
+        finish_installation(state)
+        return
     create_secrets(state['domain'])
     if not state.get('built'):
         started = time.monotonic()
@@ -349,6 +352,20 @@ def initialize_store(state, password=None):
     run(['systemctl', 'daemon-reload'])
     run(['systemctl', 'enable', '--now', 'single-store-maintenance.timer'])
     (CONFIG / 'installed').touch(mode=0o600)
+    state['store_ready'] = True
+    atomic_json(STATE, state)
+    finish_installation(state)
+
+
+def finish_installation(state):
+    # Retry only the final service registration. Never bootstrap accounts, rerun
+    # migrations or regenerate proxy configuration after the store is healthy.
+    if not state.get('store_ready') or read_json(CONFIG / 'version.json')['source_sha'] != state['source_sha']:
+        raise StoreError('Identitas finalisasi instalasi tidak cocok.')
+    healthy(state['local_test'])
+    public_health(state)
+    from update_service.new_install import install_new
+    install_new(state)
     state.update(step=4, complete=True, setup_hash=None, busy=False, message='Toko berhasil dibuat. Konfigurasikan pembayaran dan pengiriman sebelum menerima pesanan.')
     atomic_json(STATE, state)
     (CONFIG / 'setup-token').unlink(missing_ok=True)

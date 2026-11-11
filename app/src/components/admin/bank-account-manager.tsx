@@ -1,42 +1,210 @@
 "use client";
-import { useState, useTransition } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
-import { Input, Label } from "@/components/ui/input";
-import { saveBankAccountAction, toggleBankAccountAction, deleteBankAccountAction } from "@/modules/payments/bank.actions";
-
-type Account = { id: string; bankName: string; accountNumber: string; accountHolder: string; displayName: string; isActive: boolean; updatedAt: string };
+import {
+  saveBankAccountAction,
+  toggleBankAccountAction,
+  deleteBankAccountAction,
+} from "@/modules/payments/bank.actions";
+import { SaveLabel, SettingsFeedback } from "./settings-feedback";
+type Account = {
+  id: string;
+  bankName: string;
+  accountNumber: string;
+  accountHolder: string;
+  displayName: string;
+  isActive: boolean;
+  updatedAt: string;
+};
 export function BankAccountManager({ accounts }: { accounts: Account[] }) {
-  const [editing, setEditing] = useState<Account | null>(null);
-  const [message, setMessage] = useState("");
-  const [pending, start] = useTransition();
-  const router = useRouter();
-  function complete(result: { ok: boolean; error?: string; data?: { message: string } }) {
-    setMessage(result.ok ? result.data?.message || "Tersimpan." : result.error || "Tidak dapat menyimpan.");
-    if (result.ok) { setEditing(null); router.refresh(); }
+  const [editing, setEditing] = useState<Account | null>(null),
+    [message, setMessage] = useState("");
+  const [busy, setBusy] = useState(false);
+  const lock = useRef(false),
+    form = useRef<HTMLFormElement>(null),
+    router = useRouter();
+  async function run(
+    action: () => Promise<{
+      ok: boolean;
+      error?: string;
+      data?: { message?: string };
+    }>,
+    saved?: () => void,
+  ) {
+    if (lock.current) return;
+    lock.current = true;
+    setBusy(true);
+    setMessage("");
+    try {
+      const result = await action();
+      setMessage(
+        result.ok
+          ? result.data?.message || "Tersimpan."
+          : result.error || "Belum tersimpan.",
+      );
+      if (result.ok) {
+        saved?.();
+        router.refresh();
+      }
+    } catch {
+      setMessage("Koneksi terputus. Isian tetap tersedia, silakan coba lagi.");
+    } finally {
+      lock.current = false;
+      setBusy(false);
+    }
   }
-  return <div className="grid items-start gap-6 md:grid-cols-2">
-    <div className="space-y-3">
-      {!accounts.length && <p className="rounded-xl border p-5 text-sm text-zinc-500">Belum ada rekening pembayaran.</p>}
-      {accounts.map(a => <article key={a.id} className="rounded-xl border border-zinc-200 bg-white p-4" data-testid={`bank-${a.id}`}>
-        <div className="flex items-start justify-between gap-2"><h2 className="break-words font-semibold">{a.displayName}</h2><span className="shrink-0 rounded-full bg-zinc-100 px-2 py-1 text-xs">{a.isActive ? "Aktif" : "Nonaktif"}</span></div>
-        <p className="mt-2 break-all text-sm">{a.bankName} · {a.accountNumber}</p><p className="text-sm text-zinc-500">a.n. {a.accountHolder}</p>
-        <div className="mt-3 flex flex-wrap gap-2">
-          <Button variant="outline" disabled={pending} onClick={() => { setEditing(a); setMessage(""); }}>Edit</Button>
-          <Button variant="outline" disabled={pending} data-testid={`bank-toggle-${a.id}`} onClick={() => start(async () => complete(await toggleBankAccountAction(a.id, a.updatedAt, !a.isActive)))}>{a.isActive ? "Nonaktifkan" : "Aktifkan"}</Button>
-          <Button variant="outline" disabled={pending} onClick={() => { if (window.confirm(`Hapus rekening ${a.displayName} dari pilihan pembayaran? Rincian pembayaran lama tetap disimpan.`)) start(async () => complete(await deleteBankAccountAction(a.id, a.updatedAt))); }}>Hapus</Button>
+  function cancel() {
+    setEditing(null);
+    form.current?.reset();
+    setMessage("");
+  }
+  return (
+    <div className="settings-form">
+      <p className="text-sm text-zinc-600">
+        Rekening penerima pembayaran customer. Perubahan tidak mengubah rincian
+        pembayaran lama.
+      </p>
+      <SettingsFeedback message={message} />
+      <div className="settings-bank-grid">
+        <div className="settings-bank-list">
+          {!accounts.length && (
+            <p className="settings-card text-sm">
+              Belum ada rekening. Tambahkan rekening untuk menerima transfer
+              bank.
+            </p>
+          )}
+          {accounts.map((a) => (
+            <article key={a.id} className="settings-bank-row">
+              <header>
+                <strong>{a.bankName}</strong>
+                <span>{a.isActive ? "Aktif" : "Nonaktif"}</span>
+              </header>
+              <p>
+                •••• {a.accountNumber.slice(-4)} · {a.accountHolder}
+              </p>
+              <small>{a.displayName}</small>
+              <div className="settings-bank-actions">
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => {
+                    setEditing(a);
+                    setMessage("");
+                    requestAnimationFrame(() =>
+                      form.current
+                        ?.querySelector<HTMLInputElement>('[name="bankName"]')
+                        ?.focus({ preventScroll: false }),
+                    );
+                  }}
+                >
+                  Ubah
+                </button>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() =>
+                    void run(() =>
+                      toggleBankAccountAction(a.id, a.updatedAt, !a.isActive),
+                    )
+                  }
+                >
+                  {a.isActive ? "Nonaktifkan" : "Aktifkan"}
+                </button>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => {
+                    if (
+                      window.confirm(
+                        "Hapus rekening dari pilihan pembayaran? Riwayat pembayaran tetap disimpan.",
+                      )
+                    )
+                      void run(
+                        () => deleteBankAccountAction(a.id, a.updatedAt),
+                        () => {
+                          if (editing?.id === a.id) {
+                            setEditing(null);
+                            form.current?.reset();
+                          }
+                        },
+                      );
+                  }}
+                >
+                  Hapus
+                </button>
+              </div>
+            </article>
+          ))}
         </div>
-      </article>)}
+        <form
+          key={editing?.id || "new"}
+          ref={form}
+          className="settings-card identity-fields"
+          data-testid="bank-form"
+          onSubmit={(e) => {
+            e.preventDefault();
+            const target = e.currentTarget;
+            const input = Object.fromEntries(new FormData(target).entries());
+            void run(
+              () =>
+                saveBankAccountAction(
+                  editing?.id || null,
+                  editing?.updatedAt || "",
+                  input,
+                ),
+              () => {
+                setEditing(null);
+                target.reset();
+              },
+            );
+          }}
+        >
+          <h2>{editing ? "Ubah rekening" : "Tambah rekening"}</h2>
+          <fieldset disabled={busy} className="identity-fields">
+            {[
+              ["bankName", "Bank"],
+              ["accountNumber", "Nomor rekening"],
+              ["accountHolder", "Nama pemilik rekening"],
+              ["displayName", "Nama tampilan"],
+            ].map(([name, label]) => (
+              <label key={name} className="setting-field">
+                {label}
+                <input
+                  name={name}
+                  required
+                  defaultValue={
+                    (editing?.[name as keyof Account] as string) || ""
+                  }
+                  minLength={name === "accountNumber" ? 3 : 2}
+                  maxLength={name === "accountNumber" ? 34 : 100}
+                  inputMode={name === "accountNumber" ? "numeric" : undefined}
+                  pattern={name === "accountNumber" ? "[0-9]{3,34}" : undefined}
+                  autoComplete="off"
+                />
+              </label>
+            ))}
+          </fieldset>
+          <div className="flex flex-wrap gap-2">
+            {editing && (
+              <button
+                type="button"
+                className="setting-outline"
+                disabled={busy}
+                onClick={cancel}
+              >
+                Batal
+              </button>
+            )}
+            <button
+              className="setting-primary"
+              disabled={busy}
+              data-testid="bank-submit"
+            >
+              <SaveLabel busy={busy}>Simpan rekening</SaveLabel>
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
-    <form key={editing?.id || "new"} data-testid="bank-form" className="space-y-4 rounded-2xl border border-zinc-200 bg-white p-5" onSubmit={event => {
-      event.preventDefault(); const form = event.currentTarget; const value = Object.fromEntries(new FormData(form));
-      start(async () => { const result = await saveBankAccountAction(editing?.id || null, editing?.updatedAt || "", value); complete(result); if (result.ok) form.reset(); });
-    }}>
-      <h2 className="font-bold">{editing ? "Edit Rekening" : "Tambah Rekening"}</h2>
-      {([['bankName', 'Nama Bank'], ['accountNumber', 'Nomor Rekening'], ['accountHolder', 'Nama Pemilik'], ['displayName', 'Nama Tampilan']] as const).map(([key, label]) => <div key={key}><Label htmlFor={`bank-${key}`}>{label}</Label><Input id={`bank-${key}`} name={key} defaultValue={editing?.[key] || ""} required maxLength={key === "accountNumber" ? 34 : 100} minLength={key === "accountNumber" ? 3 : 2} inputMode={key === "accountNumber" ? "numeric" : "text"} pattern={key === "accountNumber" ? "[0-9]{3,34}" : undefined} disabled={pending} /></div>)}
-      {editing && <p className="text-xs text-zinc-500">Perubahan berlaku untuk pembayaran baru. Pesanan lama tetap menyimpan rekening sebelumnya.</p>}
-      <div className="flex gap-2"><Button type="submit" disabled={pending} data-testid="bank-submit">{pending ? "Menyimpan…" : "Simpan Rekening"}</Button>{editing && <Button type="button" variant="outline" disabled={pending} onClick={() => setEditing(null)}>Batal</Button>}</div>
-      {message && <p role="status" className="text-sm">{message}</p>}
-    </form>
-  </div>;
+  );
 }

@@ -15,6 +15,7 @@ import {
 } from "./auth.service";
 import { runAction, type ActionResult } from "@/lib/action";
 import { HttpError } from "@/lib/response";
+import { whatsappRegistrationProof } from "@/modules/whatsapp/registration-proof";
 import type { RegistrationFailure } from "./registration-contract";
 
 import {
@@ -98,6 +99,7 @@ export async function verifyRegistrationAction(
       parsed.data.email,
       parsed.data.otp,
       parsed.data.challengeId,
+      await whatsappRegistrationProof(),
     );
     await createSession(user.id, user.email, user.sessionVersion);
   });

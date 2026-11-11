@@ -8,3 +8,9 @@ for (const name of ['expire-orders', 'product-media-cleanup', 'jnt-tracking']) {
   if (!response.ok) throw new Error(`Local maintenance ${name} failed (${response.status})`);
   console.log(`${name}: completed`);
 }
+const mailSync = await fetch('http://127.0.0.1:3000/api/internal/cron/mail-brand', {
+  method: 'POST',
+  headers: { Authorization: `Bearer ${process.env.CRON_SECRET}` },
+  signal: AbortSignal.timeout(8000),
+});
+if (!mailSync.ok) throw new Error(`Local maintenance mail-brand failed (${mailSync.status})`);

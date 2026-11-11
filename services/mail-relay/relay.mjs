@@ -21,7 +21,7 @@ export function parseRegistry(entries, { requireCustomerAllowlist = false } = {}
         ((requireCustomerAllowlist || row.customerEmails !== undefined) && !validEmails(row.customerEmails)))
       throw new Error("invalid_registry");
     origins.add(row.origin);
-    stores.set(row.tokenHash, { tenantId: row.tenantId || row.origin, generation: row.generation, origin: row.origin, brand: sanitizeMailBrand(row.brand),
+    stores.set(row.tokenHash, { tenantId: row.tenantId || row.origin, generation: row.generation, origin: row.origin, brand: sanitizeMailBrand(row.brand), brandSync: row.brandSync === true,
       sellerEmails: normalizedEmails(row.sellerEmails),
       customerEmails: row.customerEmails === undefined ? null : normalizedEmails(row.customerEmails) });
   }
@@ -44,7 +44,7 @@ export async function relayMail({ authorization, payload }, { stores, reserve, d
     return 403;
   if (payload.purpose.startsWith("customer-") && store.customerEmails && !store.customerEmails.has(to))
     return 403;
-  if (payload.purpose.startsWith("customer-") && payload.brand !== store.brand) return 409;
+  if (payload.purpose.startsWith("customer-") && !store.brandSync && payload.brand !== store.brand) return 409;
   let message;
   try { message = renderOtpMail({ ...payload, to }, store); }
   catch { return 400; }

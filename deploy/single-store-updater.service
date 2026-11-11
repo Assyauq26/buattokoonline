@@ -1,0 +1,33 @@
+[Unit]
+Description=Single Store isolated update worker
+After=docker.service network-online.target
+Requires=docker.service
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/single-store/updater
+ExecStart=/usr/bin/python3 -m update_service.server
+User=root
+Group=root
+UMask=0077
+RuntimeDirectory=single-store-updater single-store-update-status
+RuntimeDirectoryMode=0755
+Restart=on-failure
+RestartSec=10
+KillMode=control-group
+TimeoutStopSec=30
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/opt/single-store /etc/single-store /var/lib/single-store /var/backups/single-store /run
+MemoryMax=256M
+TasksMax=64
+CPUQuota=50%
+StandardOutput=null
+StandardError=null
+
+[Install]
+WantedBy=multi-user.target

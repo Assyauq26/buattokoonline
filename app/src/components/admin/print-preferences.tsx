@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
+import { SettingsFeedback } from "./settings-feedback";
 export function PrintPreferences() {
   const [size, setSize] = useState("100x150"),
     [message, setMessage] = useState("");
@@ -14,10 +15,10 @@ export function PrintPreferences() {
   return (
     <div className="grid gap-4">
       <h1 className="text-2xl font-bold">Preferensi cetak AWB</h1>
-      <label>
+      <label className="setting-field">
         Ukuran kertas
         <select
-          className="ml-3 min-h-11 rounded-lg border p-2"
+          aria-label="Ukuran kertas"
           value={size}
           onChange={(e) => {
             setSize(e.target.value);
@@ -45,7 +46,7 @@ export function PrintPreferences() {
       >
         Simpan preferensi
       </button>
-      <p role="status">{message}</p>
+      <SettingsFeedback message={message} />
     </div>
   );
 }

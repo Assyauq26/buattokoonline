@@ -129,7 +129,7 @@ function Feedback({ error, id }: { error?: string; id: string }) {
     </div>
   );
 }
-function SocialButtons() {
+function SocialButtons({whatsapp=false,redirectTo="/account"}:{whatsapp?:boolean;redirectTo?:string}) {
   return (
     <div className="auth-social-block">
       <div className="auth-divider">
@@ -146,7 +146,7 @@ function SocialButtons() {
         >
           Lanjut dengan Google
         </Button>
-        <Button
+        {whatsapp?<Link className="auth-wa-link" href={"/whatsapp?account="+(/^\/admin(?:[/?]|$)/.test(redirectTo)?"seller":"customer")+"&redirectTo="+encodeURIComponent(redirectTo)}>Lanjut dengan WhatsApp</Link>:<Button
           type="button"
           variant="outline"
           disabled
@@ -155,10 +155,10 @@ function SocialButtons() {
           data-testid="whatsapp-login"
         >
           Lanjut dengan WhatsApp
-        </Button>
+        </Button>}
       </div>
       <p className="auth-social-note" id="social-coming-soon">
-        Google dan WhatsApp · Segera hadir
+        {whatsapp?"Google · Segera hadir":"Google dan WhatsApp · Segera hadir"}
       </p>
     </div>
   );
@@ -177,7 +177,7 @@ function Heading({
     </div>
   );
 }
-export function LoginForm({ redirectTo, passwordReset }: { redirectTo?: string; passwordReset?: boolean }) {
+export function LoginForm({ redirectTo, passwordReset, whatsapp=false }: { redirectTo?: string; passwordReset?: boolean;whatsapp?:boolean }) {
   const [state, action] = useFormState<FormState, FormData>(
     loginAction,
     initialState,
@@ -219,7 +219,7 @@ export function LoginForm({ redirectTo, passwordReset }: { redirectTo?: string; 
         <Feedback error={state?.error} id="login-error" />
         <Submit label="Masuk" />
       </form>
-      <SocialButtons />
+      <SocialButtons whatsapp={whatsapp} redirectTo={redirectTo}/>
       <p className="auth-switch">
         Belum punya akun? <Link href="/register">Daftar</Link>
       </p>
@@ -227,7 +227,7 @@ export function LoginForm({ redirectTo, passwordReset }: { redirectTo?: string; 
     </div>
   );
 }
-export function RegisterForm() {
+export function RegisterForm({ whatsapp = false }: { whatsapp?: boolean }) {
   const [attempt, setAttempt] = useState(0);
   const [restartReason, setRestartReason] = useState<string>();
   const [restartCode, setRestartCode] = useState<RegistrationFailure>();
@@ -243,6 +243,7 @@ export function RegisterForm() {
   return (
     <RegistrationForm
       key={attempt}
+      whatsapp={whatsapp}
       onRestart={onRestart}
       restartReason={restartReason}
       restartCode={restartCode}
@@ -250,10 +251,12 @@ export function RegisterForm() {
   );
 }
 function RegistrationForm({
+  whatsapp = false,
   onRestart,
   restartReason,
   restartCode,
 }: {
+  whatsapp?: boolean;
   onRestart: (reason?: string, code?: RegistrationFailure) => void;
   restartReason?: string;
   restartCode?: RegistrationFailure;
@@ -482,7 +485,7 @@ function RegistrationForm({
         )}
         <Submit label="Daftar" />
       </form>
-      <SocialButtons />
+      <SocialButtons whatsapp={whatsapp} />
       <p className="auth-switch">
         Sudah punya akun? <Link href="/login">Masuk</Link>
       </p>

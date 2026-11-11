@@ -6,10 +6,11 @@ export function remoteRegistry(endpoint, secret, { requireCustomerAllowlist = fa
   const url = new URL(endpoint);
   if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.search || url.hash ||
       !/^[a-f0-9]{64}$/.test(secret || '')) throw Error('invalid_control_configuration');
-  return async tokenHash => {
-    const response = await fetch(url, { method: 'POST', redirect: 'error',
+  const post = (target, data) => fetch(target, { method: 'POST', redirect: 'error',
       signal: AbortSignal.timeout(2500), headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${secret}` },
-      body: JSON.stringify({ tokenHash }) });
+      body: JSON.stringify(data) });
+  const lookup = async tokenHash => {
+    const response = await post(url, { tokenHash });
     if (response.status === 404) { await response.body?.cancel(); return new Map(); }
     if (!response.ok) { await response.body?.cancel(); throw Error('registry_unavailable'); }
     const entry = await response.json();
@@ -17,4 +18,13 @@ export function remoteRegistry(endpoint, secret, { requireCustomerAllowlist = fa
     if (recipients) entry.customerEmails = recipients;
     return parseRegistry([entry], { requireCustomerAllowlist });
   };
+  lookup.syncBrand = async (tokenHash, { origin, name, revision }) => {
+    const response = await post(new URL('mail-identity', url), { tokenHash, origin, name, revision });
+    if (!response.ok) {
+      await response.body?.cancel();
+      return { status: response.status };
+    }
+    return { status: 200, ...await response.json() };
+  };
+  return lookup;
 }

@@ -1,4 +1,5 @@
 import { LoginForm } from "@/components/auth/auth-forms";
+import { whatsappEnabled } from "@/modules/whatsapp/relay";
 
 export const metadata = { title: "Masuk", robots: { index: false } };
 
@@ -8,5 +9,5 @@ type LoginPageProps = {
 
 export default async function LoginPage({ searchParams }: LoginPageProps) {
   const params = await searchParams;
-  return <LoginForm redirectTo={params.redirectTo} passwordReset={params.passwordReset === "success"} />;
+  return <LoginForm redirectTo={params.redirectTo} passwordReset={params.passwordReset === "success"} whatsapp={whatsappEnabled()} />;
 }

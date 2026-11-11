@@ -1,4 +1,4 @@
-import { readDraft } from "@/modules/appearance/service";
+import { getPublishedAppearance } from "@/modules/appearance/published";
 import { themeStyle } from "@/modules/appearance/runtime";
 import { SettingsShell } from "@/components/admin/settings-shell";
 import { requireBackofficeUser } from "@/modules/admin/backoffice-access";
@@ -21,10 +21,10 @@ export default async function Layout({
   };
   return (
     <SettingsShell
-      style={themeStyle((await readDraft()).config)}
+      style={themeStyle((await getPublishedAppearance()).config)}
       allowed={Object.entries(permissions)
         .filter(([, p]) => !p || u.permissions.includes(p))
-        .map(([k]) => k)}
+        .map(([k]) => k).concat(process.env.STORE_WHATSAPP_ENABLED === "1" && u.roles.includes("Admin") ? ["whatsapp"] : [])}
     >
       {children}
     </SettingsShell>

@@ -315,6 +315,7 @@ export async function verifyRegistrationOtp(
   emailInput: string,
   otp: string,
   challengeInput: string,
+  whatsappProof?: {id:string;hash:string},
 ) {
   const { email, challengeId } = registrationVerificationSchema.parse({
     email: emailInput,
@@ -391,6 +392,16 @@ export async function verifyRegistrationOtp(
         },
         tx,
       );
+      // Only a newly created, email-verified customer can consume the browser's
+      // pending phone proof. Existing legacy contact numbers are never linked here.
+      if (whatsappProof && role && process.env.STORE_WHATSAPP_AUTH_ENABLED === "1") {
+        const linked = await tx.whatsAppChallenge.updateMany({
+          where: { id: whatsappProof.id, browserHash: whatsappProof.hash, phone: pending.phone,
+            purpose: "login", accountType: "customer", state: "verified", userId: null, expiresAt: { gt: new Date() } },
+          data: { state: "consumed", userId: user.id },
+        });
+        if (linked.count === 1) await tx.whatsAppIdentity.create({data:{userId:user.id,phone:pending.phone,sessionVersion:user.sessionVersion}});
+      }
       return { user } as const;
     });
     if (result.error !== undefined)

@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect, useState } from "react";
+import "./admin-nav.css";
 import { usePathname, useSearchParams } from "next/navigation";
 import Link from "@/components/ui/navigation";
 import {
@@ -94,101 +96,131 @@ function activeLink(pathname: string, href: string, exact?: boolean) {
     : pathname === href || pathname.startsWith(href + "/");
 }
 
+function NavDisclosure({
+  item,
+  pathname,
+  refund,
+}: {
+  item: (typeof links)[number];
+  pathname: string;
+  refund: boolean;
+}) {
+  const active = activeLink(pathname, item.href);
+  const [open, setOpen] = useState(active);
+  const [animate, setAnimate] = useState(false);
+  const id = "nav-" + item.href.split("/").pop();
+  useEffect(() => {
+    if (active) {
+      setAnimate(false);
+      setOpen(true);
+    }
+  }, [pathname, refund, active]);
+  const children =
+    item.href === "/admin/products"
+      ? [
+          { href: "/admin/products", label: "Daftar Produk" },
+          { href: "/admin/products/categories", label: "Kategori" },
+        ]
+      : [
+          { href: "/admin/orders", label: "Kelola Pesanan" },
+          { href: "/admin/orders?tab=refund", label: "Retur & Refund" },
+        ];
+  return (
+    <div className="admin-disclosure" data-open={open} data-animate={animate}>
+      <button
+        type="button"
+        className="admin-nav-row"
+        data-active={active}
+        aria-expanded={open}
+        aria-controls={id}
+        onClick={(e) => {
+          setAnimate(e.detail !== 0);
+          setOpen((v) => !v);
+        }}
+      >
+        <item.icon size={19} aria-hidden="true" />
+        <span>{item.label}</span>
+        <ChevronRight
+          className="admin-nav-chevron"
+          size={15}
+          aria-hidden="true"
+        />
+      </button>
+      <div id={id} className="admin-nav-children" aria-hidden={!open}>
+        <div>
+          {children.map((child) => (
+            <Link
+              key={child.href}
+              href={child.href}
+              className="admin-nav-child"
+              tabIndex={open ? undefined : -1}
+              aria-current={
+                (
+                  child.href.includes("?")
+                    ? pathname === "/admin/orders" && refund
+                    : pathname === child.href && !refund
+                )
+                  ? "page"
+                  : undefined
+              }
+            >
+              {child.label}
+            </Link>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
 export function AdminNav({
   permissions,
 }: {
   permissions: string[];
   canManageJnt?: boolean;
 }) {
-  const pathname = usePathname();
-  const params = useSearchParams();
-  const visible = links.filter((item) => allowed(permissions, item));
+  const pathname = usePathname(),
+    params = useSearchParams();
   return (
-    <nav aria-label="Navigasi admin" className="flex flex-col gap-1 px-4 py-2">
-      {visible.map((item, index) => {
-        if (item.href === "/admin/products" || item.href === "/admin/orders")
-          return (
-            <details key={item.href} open={pathname.startsWith(item.href)}>
-              <summary className="flex min-h-11 cursor-pointer items-center gap-3 px-4 py-3 text-sm font-semibold">
-                <item.icon size={19} />
-                {item.label}
-                <ChevronRight size={15} />
-              </summary>
-              {(item.href === "/admin/products"
-                ? [
-                    { href: "/admin/products", label: "Daftar Produk" },
-                    { href: "/admin/products/categories", label: "Kategori" },
-                  ]
-                : [
-                    { href: "/admin/orders", label: "Kelola Pesanan" },
-                    {
-                      href: "/admin/orders?tab=refund",
-                      label: "Retur & Refund",
-                    },
-                  ]
-              ).map((c) => (
-                <Link
-                  key={c.href}
-                  href={c.href}
-                  className="flex min-h-11 items-center px-7 text-sm"
-                  aria-current={
-                    (
-                      c.href.includes("?")
-                        ? params.get("tab") === "refund"
-                        : pathname === c.href && params.get("tab") !== "refund"
-                    )
-                      ? "page"
-                      : undefined
-                  }
-                >
-                  {c.label}
-                </Link>
-              ))}
-            </details>
-          );
-        const active = activeLink(
-          pathname,
-          item.href,
-          "exact" in item ? item.exact : false,
-        );
-        const Icon = item.icon;
-        return (
-          <div
-            key={item.href}
-            className={cn(index === 6 && "mt-4 border-t border-line pt-4")}
-          >
+    <nav aria-label="Navigasi admin" className="admin-nav">
+      {links
+        .filter((item) => allowed(permissions, item))
+        .map((item) =>
+          item.href === "/admin/products" || item.href === "/admin/orders" ? (
+            <NavDisclosure
+              key={item.href}
+              item={item}
+              pathname={pathname}
+              refund={params.get("tab") === "refund"}
+            />
+          ) : (
             <Link
-              href={item.href}
+              key={item.href}
+              href={
+                item.href === "/admin/settings"
+                  ? "/admin/settings/seller"
+                  : item.href
+              }
               prefetch={false}
-              aria-current={active ? "page" : undefined}
-              data-testid={`adminnav-${item.label.toLowerCase().replaceAll(" ", "-")}`}
               className={cn(
-                "group flex min-h-11 items-center gap-3 whitespace-nowrap rounded-xl text-sm font-medium transition-colors",
-                "px-4 py-3",
-                active
-                  ? "bg-primary font-semibold text-white shadow-sm"
-                  : "text-zinc-700 hover:bg-zinc-100 hover:text-black",
+                "admin-nav-row",
+                item.href === "/admin/inventory" && "admin-nav-divider",
               )}
+              data-testid={`adminnav-${item.label.toLowerCase().replaceAll(" ", "-")}`}
+              aria-current={
+                activeLink(
+                  pathname,
+                  item.href,
+                  "exact" in item ? item.exact : false,
+                )
+                  ? "page"
+                  : undefined
+              }
             >
-              <Icon
-                size={19}
-                strokeWidth={active ? 2.25 : 1.9}
-                aria-hidden="true"
-              />
-              <span className="flex-1">
-                {("display" in item && item.display) || item.label}
-              </span>
-              {item.href !== "/admin" && (
-                <ChevronRight
-                  size={15}
-                  className={active ? "text-white/80" : "text-zinc-400"}
-                  aria-hidden="true"
-                />
-              )}
+              <item.icon size={19} aria-hidden="true" />
+              <span>{("display" in item && item.display) || item.label}</span>
             </Link>
-          </div>
-        );
-      })}
+          ),
+        )}
     </nav>
   );
 }

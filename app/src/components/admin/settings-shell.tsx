@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   UserRound,
   Store,
@@ -11,7 +11,7 @@ import {
   Shield,
   ScrollText,
   Package,
-  ChevronLeft,
+  MessageCircle,
 } from "lucide-react";
 import "./settings.css";
 const items = [
@@ -21,6 +21,7 @@ const items = [
   ["payment-methods", "Metode Pembayaran", CreditCard],
   ["bank-accounts", "Rekening Bank", Landmark],
   ["email-otp", "Email & OTP", Mail],
+  ["whatsapp", "Integrasi WhatsApp", MessageCircle],
   ["security", "Keamanan Akun", Shield],
   ["audit", "Audit Log", ScrollText],
   ["updates", "Update Versi", Package],
@@ -35,13 +36,10 @@ export function SettingsShell({
   style: React.CSSProperties;
 }) {
   const path = usePathname();
+  const router = useRouter();
   const current = path.split("/")[3];
   return (
     <div className="settings-shell" style={style}>
-      <header className="settings-heading">
-        <h1>Pengaturan toko</h1>
-        <p>Kelola identitas toko dan layanan pelanggan.</p>
-      </header>
       <div className="settings-workspace">
         <nav aria-label="Submenu pengaturan">
           {items
@@ -53,18 +51,27 @@ export function SettingsShell({
                 aria-current={current === id ? "page" : undefined}
               >
                 <Icon size={21} />
-                <span>
-                  {title}
-                  {id === "seller" && <small>Data pribadi</small>}
-                </span>
+                <span>{title}</span>
               </Link>
             ))}
         </nav>
         <section className="settings-content">
-          <Link className="settings-back" href="/admin/settings">
-            <ChevronLeft size={20} />
-            Pengaturan
-          </Link>
+          <label className="settings-mobile-nav">
+            <span>Pengaturan</span>
+            <select
+              aria-label="Halaman pengaturan"
+              value={current || "seller"}
+              onChange={(e) => router.push("/admin/settings/" + e.target.value)}
+            >
+              {items
+                .filter(([id]) => allowed.includes(id))
+                .map(([id, title]) => (
+                  <option key={id} value={id}>
+                    {title}
+                  </option>
+                ))}
+            </select>
+          </label>
           {children}
         </section>
       </div>

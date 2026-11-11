@@ -1,6 +1,8 @@
 "use client";
 import { WhatsAppIcon } from "@/components/ui/whatsapp-icon";
 import { useState, useRef, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { SaveLabel, SettingsFeedback } from "./settings-feedback";
 import { UnsavedFormGuard } from "@/components/ui/unsaved-form-guard";
 import { normalizeWhatsApp, storeChatUrl } from "@/lib/store-contact";
 import type { StoreAppearanceV1 } from "@/modules/appearance/schema";
@@ -21,6 +23,7 @@ export function StoreInformation({
     [preview, setPreview] = useState(""),
     [revision, setRevision] = useState(0);
   const lock = useRef(false);
+  const router = useRouter();
   useEffect(
     () => () => {
       if (preview) URL.revokeObjectURL(preview);
@@ -89,7 +92,11 @@ export function StoreInformation({
         publishedVersion: j.data.publishedVersion,
       });
       setRevision((n) => n + 1);
-      setMessage("Informasi toko tersimpan dan diterbitkan.");
+      setMessage(j.data.mailBrandPending
+        ? "Informasi toko tersimpan. Identitas pengirim email sedang disinkronkan."
+        : "Informasi toko tersimpan dan diterbitkan.");
+      setPreview("");
+      router.refresh();
     } catch (e) {
       setMessage(
         e instanceof Error
@@ -116,6 +123,7 @@ export function StoreInformation({
       {label}
       {area ? (
         <textarea
+          aria-label={label}
           value={value[key]}
           maxLength={max}
           disabled={busy}
@@ -123,6 +131,7 @@ export function StoreInformation({
         />
       ) : (
         <input
+          aria-label={label}
           value={value[key]}
           maxLength={max}
           required={key === "name"}
@@ -149,119 +158,128 @@ export function StoreInformation({
           <h1>Informasi Toko</h1>
           <p>Informasi ini dapat dilihat pelanggan.</p>
         </header>
-        <section className="settings-card">
-          <h2>Identitas toko</h2>
-          <div className="identity-grid">
-            <div className="logo-editor">
-              <label>Logo toko</label>
-              {preview || value.logoAssetId ? (
-                <img
-                  src={
-                    preview ||
-                    "/api/v1/admin/store-branding/" + value.logoAssetId
-                  }
-                  alt="Preview logo"
-                />
-              ) : (
-                <span className="store-initials" aria-label="Inisial toko">
-                  {value.name
-                    .trim()
-                    .split(/\s+/)
-                    .slice(0, 2)
-                    .map((v) => v[0])
-                    .join("")
-                    .toUpperCase()}
-                </span>
-              )}
-              <label className="setting-outline upload-logo">
-                Ganti logo
-                <input
-                  type="file"
-                  accept="image/png,image/jpeg,image/webp"
-                  disabled={busy}
-                  onChange={(e) => {
-                    if (e.target.files?.[0]) void upload(e.target.files[0]);
+        <div className="store-settings-columns">
+          <section className="settings-card">
+            <h2>Identitas toko</h2>
+            <div className="identity-grid">
+              <div className="logo-editor">
+                <label>Logo toko</label>
+                {preview || value.logoAssetId ? (
+                  <img
+                    src={
+                      preview ||
+                      "/api/v1/admin/store-branding/" + value.logoAssetId
+                    }
+                    alt="Preview logo"
+                  />
+                ) : (
+                  <span className="store-initials" aria-label="Inisial toko">
+                    {value.name
+                      .trim()
+                      .split(/\s+/)
+                      .slice(0, 2)
+                      .map((v) => v[0])
+                      .join("")
+                      .toUpperCase()}
+                  </span>
+                )}
+                <label className="setting-outline upload-logo">
+                  Ganti logo
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    disabled={busy}
+                    onChange={(e) => {
+                      if (e.target.files?.[0]) void upload(e.target.files[0]);
+                    }}
+                  />
+                </label>
+                <small>
+                  Format JPG, PNG, WebP.
+                  <br />
+                  Maks. 2 MiB.
+                </small>
+              </div>
+              <div className="identity-fields">
+                {field("name", "Nama toko", 100)}
+                {field("description", "Deskripsi toko", 1000, true)}
+                {field("operationalAddress", "Alamat operasional", 1000, true)}
+                <small>Alamat ini tidak mengubah gudang pengirim J&T.</small>
+              </div>
+            </div>
+          </section>
+          <section className="settings-card">
+            <h2>Layanan pelanggan</h2>
+            <div className="service-grid">
+              <div className="identity-fields">
+                {field("whatsapp", "WhatsApp toko", 40)}
+                <small>
+                  Nomor ini digunakan tombol Chat Toko pada halaman produk.
+                </small>
+                {!valid && value.whatsapp && (
+                  <p role="alert">
+                    Gunakan nomor internasional yang valid, misalnya +62
+                    81234567890.
+                  </p>
+                )}
+                <a
+                  className="setting-outline test-whatsapp"
+                  href={url || undefined}
+                  aria-disabled={!url || busy}
+                  onClick={(e) => {
+                    if (!url || busy) e.preventDefault();
                   }}
-                />
-              </label>
-              <small>
-                Format JPG, PNG, WebP.
-                <br />
-                Maks. 2 MiB.
-              </small>
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <WhatsAppIcon size={18} /> Tes WhatsApp
+                </a>
+                <label className="setting-switch">
+                  <span>
+                    <strong>Tampilkan Chat WhatsApp</strong>
+                    <small>
+                      Pelanggan diarahkan langsung ke WhatsApp toko.
+                    </small>
+                  </span>
+                  <input
+                    role="switch"
+                    type="checkbox"
+                    checked={value.showWhatsApp}
+                    disabled={!valid || busy}
+                    onChange={(e) =>
+                      setValue((v) => ({
+                        ...v,
+                        showWhatsApp: e.target.checked,
+                      }))
+                    }
+                  />
+                </label>
+                {field("serviceHours", "Jam layanan", 200)}
+              </div>
+              <details className="chat-preview">
+                <summary>Pratinjau Chat Toko</summary>
+                <div>
+                  <p>
+                    {url
+                      ? new URL(url).searchParams.get("text")
+                      : "Isi nomor valid untuk melihat pratinjau."}
+                  </p>
+                  <hr />
+                  <small>Nomor tujuan</small>
+                  <b>
+                    {valid
+                      ? "+" + normalizeWhatsApp(value.whatsapp)
+                      : "Belum tersedia"}
+                  </b>
+                  <small>
+                    Tes memakai nilai form saat ini, termasuk perubahan yang
+                    belum disimpan. Membuka WhatsApp tidak mengirim pesan.
+                  </small>
+                </div>
+              </details>
             </div>
-            <div className="identity-fields">
-              {field("name", "Nama toko", 100)}
-              {field("description", "Deskripsi toko", 1000, true)}
-              {field("operationalAddress", "Alamat operasional", 1000, true)}
-              <small>Alamat ini tidak mengubah gudang pengirim J&T.</small>
-            </div>
-          </div>
-        </section>
-        <section className="settings-card">
-          <h2>Layanan pelanggan</h2>
-          <div className="service-grid">
-            <div className="identity-fields">
-              {field("whatsapp", "WhatsApp toko", 40)}
-              <small>
-                Nomor ini digunakan tombol Chat Toko pada halaman produk.
-              </small>
-              {!valid && value.whatsapp && (
-                <p role="alert">
-                  Gunakan nomor internasional yang valid, misalnya +62
-                  81234567890.
-                </p>
-              )}
-              <a
-                className="setting-outline test-whatsapp"
-                href={url || undefined}
-                aria-disabled={!url || busy}
-                onClick={(e) => {
-                  if (!url || busy) e.preventDefault();
-                }}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                <WhatsAppIcon size={18} /> Tes WhatsApp
-              </a>
-              <label className="setting-switch">
-                <span>
-                  <strong>Tampilkan Chat WhatsApp</strong>
-                  <small>Pelanggan diarahkan langsung ke WhatsApp toko.</small>
-                </span>
-                <input
-                  role="switch"
-                  type="checkbox"
-                  checked={value.showWhatsApp}
-                  disabled={!valid || busy}
-                  onChange={(e) =>
-                    setValue((v) => ({ ...v, showWhatsApp: e.target.checked }))
-                  }
-                />
-              </label>
-              {field("serviceHours", "Jam layanan", 200)}
-            </div>
-            <aside className="chat-preview">
-              <strong>Pratinjau Chat Toko</strong>
-              <p>
-                {url
-                  ? new URL(url).searchParams.get("text")
-                  : "Isi nomor valid untuk melihat pratinjau."}
-              </p>
-              <hr />
-              <small>Nomor tujuan</small>
-              <b>
-                {valid
-                  ? "+" + normalizeWhatsApp(value.whatsapp)
-                  : "Belum tersedia"}
-              </b>
-              <small>
-                Tes memakai nilai form saat ini, termasuk perubahan yang belum
-                disimpan. Membuka WhatsApp tidak mengirim pesan.
-              </small>
-            </aside>
-          </div>
-        </section>
+          </section>
+        </div>
         <aside className="settings-private">
           <strong>Data pribadi seller dikelola terpisah.</strong>
           <p>
@@ -269,9 +287,7 @@ export function StoreInformation({
             email customer; jam layanan bukan status online.
           </p>
         </aside>
-        <p role="status" aria-live="polite">
-          {message}
-        </p>
+        <SettingsFeedback message={message} />
         <footer className="settings-save">
           <span>
             {JSON.stringify(value) !== JSON.stringify(baseline)
@@ -281,7 +297,9 @@ export function StoreInformation({
           <button
             type="button"
             className="setting-outline"
-            disabled={busy}
+            disabled={
+              busy || JSON.stringify(value) === JSON.stringify(baseline)
+            }
             onClick={() => {
               setValue(baseline);
               setPreview("");
@@ -291,8 +309,13 @@ export function StoreInformation({
           >
             Batalkan
           </button>
-          <button disabled={busy} className="setting-primary">
-            {busy ? "Menyimpan…" : "Simpan perubahan"}
+          <button
+            disabled={
+              busy || JSON.stringify(value) === JSON.stringify(baseline)
+            }
+            className="setting-primary"
+          >
+            <SaveLabel busy={busy}>Simpan perubahan</SaveLabel>
           </button>
         </footer>
       </form>

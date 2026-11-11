@@ -81,6 +81,8 @@ model User {
   name         String
   email        String   @unique
   phone        String?  @unique
+  // Contact only; never a login or recovery identity.
+  sellerContactPhone String?
   passwordHash String
   isActive     Boolean  @default(true)
   sessionVersion Int @default(0)
@@ -102,6 +104,80 @@ model User {
   resetTokens     PasswordResetToken[]
   revokedSessions SessionRevocation[]
   checkoutIntents CheckoutIntent[]
+  whatsappIdentity WhatsAppIdentity?
+  whatsappChallenges WhatsAppChallenge[]
+}
+
+// Separate from legacy, unverified contact phone. Never infer ownership from User.phone.
+model WhatsAppIdentity {
+  accountType String @default("customer")
+  userId String @id
+  phone String @unique
+  sessionVersion Int
+  linkedAt DateTime @default(now())
+  verifiedAt DateTime @default(now())
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model WhatsAppChallenge {
+  accountType String @default("customer")
+  id String @id @default(uuid())
+  centralId String @unique
+  browserHash String
+  phone String
+  purpose String
+  userId String?
+  sessionVersion Int?
+  state String @default("pending")
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([expiresAt])
+}
+
+model WhatsAppOutbox {
+  revision BigInt @id @default(autoincrement())
+  eventId String @unique @default(uuid())
+  orderId String
+  state String @default("pending")
+  payload Json?
+  attempts Int @default(0)
+  nextAt DateTime @default(now())
+  createdAt DateTime @default(now())
+  @@index([state,nextAt])
+}
+model WhatsAppOrderHead {
+  orderId String @id
+  fingerprint String
+}
+model WhatsAppPreference {
+  id Int @id @default(1)
+  enabled Boolean @default(false)
+  desiredEnabled Boolean @default(false)
+  preparing Boolean @default(false)
+  changedAt DateTime @default(now())
+  syncedAt DateTime?
+}
+model WhatsAppWorkerLease {
+  id Int @id @default(1)
+  token String
+  expiresAt DateTime
+}
+model WhatsAppConsentEvent {
+  revision BigInt @id @default(autoincrement())
+  userId String
+  phone String
+  granted Boolean
+  changedAt DateTime
+  state String @default("pending")
+  @@index([state,revision])
+}
+model WhatsAppConsent {
+  userId String @id
+  phone String
+  granted Boolean @default(false)
+  changedAt DateTime @default(now())
+  deliveredAt DateTime?
 }
 
 // Isolated Buy Now: a browser-bound guest intent can be claimed after login.
@@ -896,6 +972,16 @@ model ProductEditorSave {
 }
 
 // Store customization is independent of catalog, cart, payment and order models.
+model StoreMailBrandSync {
+  id          Int      @id
+  revision    Int
+  name        String
+  attempts    Int      @default(0)
+  nextAttempt DateTime @default(now())
+  syncedAt    DateTime?
+  status      String   @default("pending")
+}
+
 model StoreAppearance {
   key              String   @id @default("primary") @db.VarChar(16)
   draft            Json

@@ -40,11 +40,13 @@ else:
     state = {'step': 1, 'local_test': local, 'source_sha': sha, 'setup_hash': hashlib.sha256(token.encode()).hexdigest(),
              'proof': secrets.token_hex(24), 'busy': False, 'complete': False}
     core.atomic_json(core.STATE, state)
+state['installer_source']=str(source)
+core.atomic_json(core.STATE,state)
 core.run(['rsync', '-a', '--exclude=node_modules', '--exclude=.next', '--exclude=*.tsbuildinfo', '--exclude=.env*', source / 'app', str(core.ROOT) + '/'])
 core.run(['rsync', '-a', str(source / 'installer') + '/', str(core.ROOT / 'manager') + '/'])
 for name in ['VERSION', 'update.sh', 'restore.sh']:
     (core.ROOT / 'manager' / name).write_bytes((source / name).read_bytes())
-for name in ['single-store-maintenance.service', 'single-store-maintenance.timer']:
+for name in ['single-store-maintenance.service', 'single-store-maintenance.timer', 'single-store-updater.service', 'updater-trust.json']:
     (core.ROOT / 'manager' / name).write_bytes((source / 'deploy' / name).read_bytes())
 (core.ROOT / 'manager/compose-base.json').write_bytes((source / 'deploy/compose.yaml').read_bytes())
 if not core.COMPOSE.exists():
