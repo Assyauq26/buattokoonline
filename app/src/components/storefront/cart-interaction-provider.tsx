@@ -41,7 +41,7 @@ export function CartInteractionProvider({ children }: { children: ReactNode }) {
   if (phase !== "closed") lastPhase.current = phase;
   const displayPhase = phase === "closed" && productPage ? lastPhase.current : phase;
   const [keyboardInput, setKeyboardInput] = useState(false);
-  const { present, visible } = useProductSheetPresence(phase !== "closed", productPage, keyboardInput);
+  const [directProductAdd, setDirectProductAdd] = useState(false);
   useEffect(() => {
     if (!productPage) return;
     const keyboard = () => setKeyboardInput(true);
@@ -55,6 +55,10 @@ export function CartInteractionProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null),
     [uncertain, setUncertain] = useState(false),
     [busy, setBusy] = useState(false);
+  // Keep the product button pending until the server responds. Showing the
+  // taller options sheet first makes the success sheet appear to slide down.
+  const sheetOpen = phase !== "closed" && !(directProductAdd && busy && phase === "options");
+  const { present, visible } = useProductSheetPresence(sheetOpen, productPage, keyboardInput);
   const [seedQuantity, setSeedQuantity] = useState(1);
   const [seed, setSeed] = useState<Record<string, string>>({});
   const [container, setContainer] = useState<HTMLElement | null>(null);
@@ -148,6 +152,7 @@ export function CartInteractionProvider({ children }: { children: ReactNode }) {
     element?: HTMLElement,
   ) {
     if (mutation.current) return false;
+    setDirectProductAdd(productPage && phase === "closed" && Boolean(element));
     setContainer(document.querySelector<HTMLElement>(".storefront-root"));
     const generation = epoch.current;
     mutation.current = true;
@@ -278,7 +283,7 @@ export function CartInteractionProvider({ children }: { children: ReactNode }) {
     <Context.Provider value={{ busy, openProduct, add }}>
       {children}
       <Dialog.Root
-        open={phase !== "closed"}
+        open={sheetOpen}
         onOpenChange={(open) => {
           if (!open) close();
         }}

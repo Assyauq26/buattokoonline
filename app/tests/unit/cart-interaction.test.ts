@@ -13,9 +13,10 @@ const mocks = vi.hoisted(() => ({
   add: vi.fn(),
   push: vi.fn(),
   refresh: vi.fn(),
+  pathname: "/shop",
 }));
 vi.mock("next/navigation", () => ({
-  usePathname: () => "/shop",
+  usePathname: () => mocks.pathname,
   useRouter: () => ({ push: mocks.push, refresh: mocks.refresh }),
 }));
 vi.mock("@/modules/cart/cart.actions", () => ({ addToCartAction: mocks.add }));
@@ -70,9 +71,10 @@ function mount() {
     }),
   );
 }
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => { vi.clearAllMocks(); mocks.pathname = "/shop"; });
 afterEach(cleanup);
-it("emits no count or success before confirmation and blocks duplicate requests", async () => {
+it.each(["/shop", "/product/p"])("%s confirms before success and blocks duplicate requests", async (pathname) => {
+  mocks.pathname = pathname;
   let resolve!: (value: unknown) => void;
   mocks.add.mockImplementation(
     () =>
@@ -90,6 +92,7 @@ it("emits no count or success before confirmation and blocks duplicate requests"
     expect(mocks.add).toHaveBeenCalledTimes(1);
     expect(counts).toEqual([]);
     expect(screen.queryByTestId("cart-success-sheet")).toBeNull();
+    if (pathname.startsWith("/product/")) expect(screen.queryByTestId("purchase-dialog")).toBeNull();
     await act(async () =>
       resolve({
         ok: true,
