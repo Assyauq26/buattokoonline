@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Info, Settings2 } from "lucide-react";
 import { applyBulk } from "@/modules/catalog/product-editor-domain";
@@ -17,6 +17,7 @@ export function ProductBulkEditor({
   selectedOnly,
   onMode,
   onChange,
+  onDraftChange,
 }: {
   rows: Row[];
   basePrice: number;
@@ -26,6 +27,7 @@ export function ProductBulkEditor({
   selectedOnly: boolean;
   onMode: (selected: boolean) => void;
   onChange: (rows: Row[]) => void;
+  onDraftChange?: (dirty: boolean) => void;
 }) {
   const [fields, setFields] = useState({
     price: "",
@@ -34,6 +36,13 @@ export function ProductBulkEditor({
   });
   const [message, setMessage] = useState("");
   const [failed, setFailed] = useState(false);
+  const [appliedFields, setAppliedFields] = useState(fields);
+  const dirty = (Object.keys(fields) as (keyof typeof fields)[]).some(
+    (key) => fields[key] !== appliedFields[key],
+  );
+  useEffect(() => {
+    onDraftChange?.(dirty);
+  }, [dirty, onDraftChange]);
   return (
     <section
       className="variation-bulk variation-card p-4 sm:p-6"
@@ -123,6 +132,7 @@ export function ProductBulkEditor({
                 canStock,
               ),
             );
+            setAppliedFields(fields);
             setFailed(false);
             setMessage(
               `${selectedOnly ? selected.size : rows.length} SKU diperbarui pada formulir. Belum tersimpan; klik Simpan produk untuk menyimpannya.`,

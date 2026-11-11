@@ -1,0 +1,25 @@
+{
+  "checks": [
+    "Simple: satu SKU internal, harga/diskon/stok tersimpan tanpa Varian 1",
+    "Simple reopen mempertahankan data",
+    "Foto opsi dari media draft; upload lalu Batal tidak mengganti mapping",
+    "Urutkan opsi melalui keyboard memakai ID, bukan indeks",
+    "Foto tetap hanya satu jenis; batal transfer tidak melepas mapping",
+    "Tiga jenis opsi membentuk 2×2×1 SKU",
+    "Bulk semua/terpilih hanya mengubah field terisi",
+    "Back/Next dan rename menjaga SKU, harga, stok serta input bulk",
+    "Isian bulk yang belum diterapkan tidak hilang saat tutup/simpan tanpa konfirmasi",
+    "Desktop modal besar dan mobile fullscreen; 7 viewport tanpa overflow",
+    "Footer terjangkau pada tinggi 500px; reduced motion dan perpindahan keyboard tanpa animasi",
+    "Validasi inline dan Simpan variasi hanya draft, bukan autosave",
+    "Tutup/konfirmasi batal memulihkan snapshot tanpa kehilangan draft sebelumnya",
+    "Simpan produk permanen menjaga kombinasi, harga, stok dan foto",
+    "Reopen/rename/reorder existing menjaga seluruh ID SKU dan pasangan harga tersimpan",
+    "Opsi baru: SKU baru stok 0, existing SKU dan stok tetap",
+    "Hapus opsi aman hanya melepas SKU tanpa riwayat; movement existing tidak bertambah",
+    "Legacy multi-option adoption menjaga SKU terlindungi, stock dan harga",
+    "Hak stok readonly tetap berlaku dan fokus kembali ke pemicu setelah tutup",
+    "Guard perubahan belum tersimpan tetap bekerja lintas tab"
+  ],
+  "errors": []
+}

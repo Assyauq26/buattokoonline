@@ -3,7 +3,13 @@ import { allocateProductSkusAction } from "@/modules/catalog/product-management.
 import { reorderById, SortableHandle } from "./sortable-handle";
 import { ProductBulkEditor } from "./product-bulk-editor";
 import { suggestSku } from "@/modules/catalog/product-editor-domain";
-import { useEffect, useRef, useState } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  useImperativeHandle,
+  type Ref,
+} from "react";
 import Image from "next/image";
 import * as Dialog from "@radix-ui/react-dialog";
 import {
@@ -35,7 +41,12 @@ type Row = ProductInput["variants"][number] & {
   protected?: boolean;
 };
 type Photo = { id: string; url: string; alt: string; recovered?: boolean };
+export type VariationEditorHandle = { prepare: () => void };
 type Props = {
+  handleRef?: Ref<VariationEditorHandle>;
+  onPrepared?: () => void;
+  onBusy?: (busy: boolean) => void;
+  onBulkDraftChange?: (dirty: boolean) => void;
   fieldErrors?: Record<string, string>;
   mode?: "all" | "groups" | "stock";
   reordering?: boolean;
@@ -72,6 +83,7 @@ export function CustomVariationEditor(p: Props) {
     valueId: string;
     photoId: string | null;
   } | null>(null);
+  const generationLock = useRef(false);
   const [generating, setGenerating] = useState(false);
   const [selected, setSelected] = useState(new Set<number>());
   const [selectedOnly, setSelectedOnly] = useState(false);
@@ -105,6 +117,10 @@ export function CustomVariationEditor(p: Props) {
   }, [identities]);
   const count = combinationCount(p.groups);
   const blocked = p.disabled || upload !== null || generating;
+  const onBusy = p.onBusy;
+  useEffect(() => {
+    onBusy?.(blocked);
+  }, [blocked, onBusy]);
   function change(groups: OptionGroup[], rows = p.rows) {
     setError("");
     setUploadNotice("");
@@ -189,7 +205,11 @@ export function CustomVariationEditor(p: Props) {
     if (blocked) return;
     retry.current = { id: valueId, file };
     setUploadNotice("");
-    setUpload({ id: valueId, progress: 0, preview: URL.createObjectURL(file) });
+    setUpload({
+      id: valueId,
+      progress: 0,
+      preview: URL.createObjectURL(file),
+    });
     setError("");
     try {
       const image = await p.onUpload(file, (progress) =>
@@ -197,15 +217,14 @@ export function CustomVariationEditor(p: Props) {
       );
       if (image) {
         setPicker((current) =>
-          current?.valueId === valueId
+          current?.groupId === groupId && current.valueId === valueId
             ? { ...current, photoId: image.id }
             : current,
         );
-        valueChange(groupId, valueId, { imageId: image.id });
         setUploadNotice(
           image.recovered
-            ? "Hasil upload dipulihkan. Klik Simpan untuk memasang foto."
-            : "Foto sementara siap. Klik Simpan untuk memasang foto.",
+            ? "Hasil upload dipulihkan. Klik Gunakan gambar untuk memasang foto."
+            : "Foto sementara siap. Klik Gunakan gambar untuk memasang foto.",
         );
         retry.current = null;
       } else
@@ -219,6 +238,7 @@ export function CustomVariationEditor(p: Props) {
     }
   }
   function generate() {
+    if (blocked || generationLock.current) return;
     if (count > 50) {
       setError(
         "Jumlah kombinasi melebihi batas maksimum 50 SKU. Kurangi beberapa opsi untuk melanjutkan.",
@@ -276,6 +296,8 @@ export function CustomVariationEditor(p: Props) {
       return;
     }
     const apply = async () => {
+      if (generationLock.current) return;
+      generationLock.current = true;
       setGenerating(true);
       try {
         const used = new Set(p.rows.map((row) => row.sku.toUpperCase()));
@@ -326,9 +348,11 @@ export function CustomVariationEditor(p: Props) {
         }
         setSelected(new Set());
         change(p.groups, rows);
+        p.onPrepared?.();
       } catch (error) {
         setError(error instanceof Error ? error.message : "SKU gagal dibuat.");
       } finally {
+        generationLock.current = false;
         setGenerating(false);
       }
     };
@@ -341,6 +365,7 @@ export function CustomVariationEditor(p: Props) {
       });
     else apply();
   }
+  useImperativeHandle(p.handleRef, () => ({ prepare: generate }));
   function rowChange(index: number, patch: Partial<Row>) {
     change(
       p.groups,
@@ -733,7 +758,11 @@ export function CustomVariationEditor(p: Props) {
                       groupChange(group.id, {
                         values: [
                           ...group.values,
-                          { id: crypto.randomUUID(), value: "", imageId: null },
+                          {
+                            id: crypto.randomUUID(),
+                            value: "",
+                            imageId: null,
+                          },
                         ],
                       })
                     }
@@ -834,350 +863,353 @@ export function CustomVariationEditor(p: Props) {
           )}
         </>
       )}
-      {p.mode !== "groups" && (
-        <>
-          {p.groups.length > 0 && (
-            <section className="variation-review">
-              <div>
-                <h3>Kombinasi SKU</h3>
-                <p aria-live="polite">
-                  {count > 50 ? "Lebih dari 50" : count} kombinasi akan dibuat.
-                  Harga dan stok lama dipertahankan untuk kombinasi yang sama.
-                </p>
-                {p.productName.trim() &&
-                  count > 0 &&
-                  count <= 50 &&
-                  p.groups.every(
-                    (group) =>
-                      group.name.trim() &&
-                      group.values.every((value) => value.value.trim()),
-                  ) && (
-                    <p>
-                      Pratinjau SKU baru:{" "}
-                      <strong>
-                        {suggestSku(
-                          p.productName,
-                          p.groups,
-                          generateCombinations(p.groups)[0],
-                        )}
-                      </strong>
-                      . SKU existing tetap dipertahankan.
-                    </p>
-                  )}
-                {count > 50 && (
-                  <p role="alert" className="variation-error">
-                    Jumlah kombinasi melebihi batas maksimum 50 SKU. Kurangi
-                    beberapa opsi untuk melanjutkan.
+      <div hidden={p.mode === "groups"} className="variation-stock-panel">
+        {p.groups.length > 0 && (p.mode === "all" || p.mode === undefined) && (
+          <section className="variation-review">
+            <div>
+              <h3>Kombinasi SKU</h3>
+              <p aria-live="polite">
+                {count > 50 ? "Lebih dari 50" : count} kombinasi akan dibuat.
+                Harga dan stok lama dipertahankan untuk kombinasi yang sama.
+              </p>
+              {p.productName.trim() &&
+                count > 0 &&
+                count <= 50 &&
+                p.groups.every(
+                  (group) =>
+                    group.name.trim() &&
+                    group.values.every((value) => value.value.trim()),
+                ) && (
+                  <p>
+                    Pratinjau SKU baru:{" "}
+                    <strong>
+                      {suggestSku(
+                        p.productName,
+                        p.groups,
+                        generateCombinations(p.groups)[0],
+                      )}
+                    </strong>
+                    . SKU existing tetap dipertahankan.
                   </p>
                 )}
-              </div>
-              <Button
-                type="button"
-                variant="outline"
-                disabled={
-                  blocked || !count || count > 50 || !p.productName.trim()
-                }
-                onClick={generate}
-              >
-                Buat {count > 50 ? "" : count} kombinasi
-              </Button>
-            </section>
-          )}
-          {p.rows.some((row) => row.optionValueIds?.length) && (
-            <>
-              <ProductBulkEditor
-                rows={p.rows}
-                basePrice={p.basePrice}
-                canStock={p.canStock}
-                disabled={blocked}
-                selected={selected}
-                selectedOnly={selectedOnly}
-                onMode={setSelectedOnly}
-                onChange={(rows) => change(p.groups, rows)}
-              />
-              <section
-                className="variation-skus"
-                aria-label="Harga dan stok SKU"
-              >
-                <div className="variation-section-title">
-                  <h3>Harga &amp; Stok</h3>
-                  <span>
-                    {p.rows.filter((r) => r.sku).length} / {p.rows.length} SKU
-                  </span>
-                </div>
-                <p>
-                  {p.basePrice > 0
-                    ? `Harga kosong mengikuti harga tersimpan Rp${p.basePrice.toLocaleString("id-ID")}.`
-                    : "Isi harga normal setiap kombinasi melalui Input Massal atau masing-masing SKU."}{" "}
-                  Stok diubah hanya oleh operator berizin.
+              {count > 50 && (
+                <p role="alert" className="variation-error">
+                  Jumlah kombinasi melebihi batas maksimum 50 SKU. Kurangi
+                  beberapa opsi untuk melanjutkan.
                 </p>
-                {p.rows.map((row, index) => (
-                  <details
-                    key={
-                      row.id ||
-                      combinationKey(row.optionValueIds ?? []) ||
-                      "default"
-                    }
-                    open={desktop || index === 0}
-                    className="variation-sku"
-                    onInvalidCapture={(e) => {
-                      e.currentTarget.open = true;
+              )}
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={
+                blocked || !count || count > 50 || !p.productName.trim()
+              }
+              onClick={generate}
+            >
+              Buat {count > 50 ? "" : count} kombinasi
+            </Button>
+          </section>
+        )}
+        {p.rows.some((row) => row.optionValueIds?.length) && (
+          <>
+            <div className="variation-bulk-disclosure">
+              <details open>
+                <summary>
+                  Atur massal <span>(opsional)</span>
+                </summary>
+                <ProductBulkEditor
+                  onDraftChange={p.onBulkDraftChange}
+                  rows={p.rows}
+                  basePrice={p.basePrice}
+                  canStock={p.canStock}
+                  disabled={blocked}
+                  selected={selected}
+                  selectedOnly={selectedOnly}
+                  onMode={setSelectedOnly}
+                  onChange={(rows) => change(p.groups, rows)}
+                />
+              </details>
+            </div>
+            <section className="variation-skus" aria-label="Harga dan stok SKU">
+              <div className="variation-section-title">
+                <h3>Harga &amp; Stok</h3>
+                <span>
+                  {p.rows.filter((r) => r.sku).length} / {p.rows.length} SKU
+                </span>
+              </div>
+              <p>
+                {p.basePrice > 0
+                  ? `Harga kosong mengikuti harga tersimpan Rp${p.basePrice.toLocaleString("id-ID")}.`
+                  : "Isi harga normal setiap kombinasi melalui Input Massal atau masing-masing SKU."}{" "}
+                Stok diubah hanya oleh operator berizin.
+              </p>
+              <div className="variation-table-heading" aria-hidden="true">
+                <span>Opsi variasi</span>
+                <span>SKU</span>
+                <span>Harga normal</span>
+                <span>Harga diskon</span>
+                <span>Stok fisik</span>
+                <span />
+              </div>
+              {p.rows.map((row, index) => (
+                <details
+                  key={
+                    row.id ||
+                    combinationKey(row.optionValueIds ?? []) ||
+                    "default"
+                  }
+                  open={desktop || index === 0}
+                  className="variation-sku"
+                  onInvalidCapture={(e) => {
+                    e.currentTarget.open = true;
+                  }}
+                >
+                  <summary
+                    onClick={(event) => {
+                      if (
+                        desktop &&
+                        !(event.target instanceof HTMLInputElement)
+                      )
+                        event.preventDefault();
                     }}
                   >
-                    <summary
-                      onClick={(event) => {
-                        if (
-                          desktop &&
-                          !(event.target instanceof HTMLInputElement)
-                        )
-                          event.preventDefault();
-                      }}
-                    >
-                      {selectedOnly && (
-                        <input
-                          type="checkbox"
-                          aria-label={`Pilih SKU ${index + 1}`}
-                          checked={selected.has(index)}
-                          disabled={blocked}
-                          onClick={(e) => e.stopPropagation()}
-                          onChange={(e) =>
-                            setSelected((current) => {
-                              const next = new Set(current);
-                              if (e.target.checked) next.add(index);
-                              else next.delete(index);
-                              return next;
-                            })
-                          }
-                        />
-                      )}
-                      {(() => {
-                        const imageId = p.groups
-                          .find((g) => g.allowsImage)
-                          ?.values.find((v) =>
-                            row.optionValueIds?.includes(v.id),
-                          )?.imageId;
-                        const image = p.photos.find(
-                          (photo) => photo.id === imageId,
-                        );
-                        return image ? (
-                          <Image
-                            unoptimized
-                            src={image.url}
-                            alt=""
-                            width={40}
-                            height={40}
-                            className="variation-sku-photo"
-                          />
-                        ) : null;
-                      })()}
-                      <span>
-                        {optionLabel(p.groups, row.optionValueIds ?? []) ||
-                          "SKU dasar"}
-                        <small>
-                          {row.sku || "Buat kombinasi atau isi SKU"}
-                        </small>
-                      </span>
-                      <span className="variation-pill">
-                        {row.protected ? "Dilindungi" : "SKU"}
-                      </span>
-                      <ChevronDown size={18} aria-hidden="true" />
-                    </summary>
-                    <div className="variation-sku-fields">
-                      <div className="variation-field">
-                        <label htmlFor={`sku-${index}`}>
-                          SKU <span aria-hidden="true">*</span>
-                        </label>
-                        <input
-                          id={`sku-${index}`}
-                          aria-invalid={Boolean(
-                            p.fieldErrors?.[`sku-${index}`],
-                          )}
-                          aria-describedby={
-                            p.fieldErrors?.[`sku-${index}`]
-                              ? `sku-${index}-error`
-                              : undefined
-                          }
-                          aria-label={`SKU kombinasi ${index + 1}`}
-                          required
-                          maxLength={80}
-                          value={row.sku}
-                          readOnly={row.protected}
-                          title={
-                            row.protected
-                              ? "SKU dikunci karena memiliki stok atau riwayat."
-                              : undefined
-                          }
-                          disabled={blocked}
-                          onChange={(e) =>
-                            rowChange(index, { sku: e.target.value })
-                          }
-                        />
-                        {p.fieldErrors?.[`sku-${index}`] && (
-                          <p
-                            id={`sku-${index}-error`}
-                            className="editor-field-error"
-                            role="alert"
-                          >
-                            {p.fieldErrors[`sku-${index}`]}
-                          </p>
-                        )}
-                      </div>
-                      <div className="variation-field">
-                        <label htmlFor={`sku-price-${index}`}>Harga (Rp)</label>
-                        <input
-                          id={`sku-price-${index}`}
-                          aria-invalid={Boolean(
-                            p.fieldErrors?.[`sku-price-${index}`],
-                          )}
-                          aria-describedby={
-                            p.fieldErrors?.[`sku-price-${index}`]
-                              ? `sku-price-${index}-error`
-                              : undefined
-                          }
-                          type="number"
-                          inputMode="numeric"
-                          min={1}
-                          step={1}
-                          max={2147483647}
-                          value={row.price ?? ""}
-                          placeholder="Ikuti harga utama"
-                          disabled={blocked}
-                          onChange={(e) =>
-                            rowChange(index, {
-                              price: e.target.value
-                                ? Number(e.target.value)
-                                : null,
-                            })
-                          }
-                        />
-                        {p.fieldErrors?.[`sku-price-${index}`] && (
-                          <p
-                            id={`sku-price-${index}-error`}
-                            className="editor-field-error"
-                            role="alert"
-                          >
-                            {p.fieldErrors[`sku-price-${index}`]}
-                          </p>
-                        )}
-                      </div>
-                      <div className="variation-field">
-                        <label htmlFor={`sku-sale-${index}`}>
-                          Harga diskon (Rp)
-                        </label>
-                        <input
-                          id={`sku-sale-${index}`}
-                          aria-invalid={Boolean(
-                            p.fieldErrors?.[`sku-sale-${index}`],
-                          )}
-                          aria-describedby={
-                            p.fieldErrors?.[`sku-sale-${index}`]
-                              ? `sku-sale-${index}-error`
-                              : undefined
-                          }
-                          type="number"
-                          inputMode="numeric"
-                          min={1}
-                          step={1}
-                          max={(row.price ?? p.basePrice) - 1}
-                          value={row.salePrice ?? ""}
-                          placeholder="Opsional"
-                          disabled={blocked}
-                          onChange={(e) =>
-                            rowChange(index, {
-                              salePrice: e.target.value
-                                ? Number(e.target.value)
-                                : null,
-                              ...(e.target.value && row.price == null
-                                ? { price: p.basePrice }
-                                : {}),
-                            })
-                          }
-                        />
-                        {p.fieldErrors?.[`sku-sale-${index}`] && (
-                          <p
-                            id={`sku-sale-${index}-error`}
-                            className="editor-field-error"
-                            role="alert"
-                          >
-                            {p.fieldErrors[`sku-sale-${index}`]}
-                          </p>
-                        )}
-                      </div>
-                      {row.onHand !== undefined && (
-                        <div className="variation-field">
-                          <label htmlFor={`sku-stock-${index}`}>
-                            Stok fisik
-                          </label>
-                          <input
-                            id={`sku-stock-${index}`}
-                            aria-invalid={Boolean(
-                              p.fieldErrors?.[`sku-stock-${index}`],
-                            )}
-                            aria-describedby={
-                              p.fieldErrors?.[`sku-stock-${index}`]
-                                ? `sku-stock-${index}-error`
-                                : undefined
-                            }
-                            type="number"
-                            inputMode="numeric"
-                            min={row.reserved ?? 0}
-                            step={1}
-                            max={2147483647}
-                            value={row.onHand}
-                            disabled={blocked || !p.canStock}
-                            onChange={(e) =>
-                              rowChange(index, {
-                                onHand: Number(e.target.value),
-                              })
-                            }
-                          />
-                          {p.fieldErrors?.[`sku-stock-${index}`] && (
-                            <p
-                              id={`sku-stock-${index}-error`}
-                              className="editor-field-error"
-                              role="alert"
-                            >
-                              {p.fieldErrors[`sku-stock-${index}`]}
-                            </p>
-                          )}
-                          <small>
-                            {row.reserved ?? 0} direservasi ·{" "}
-                            {Math.max(0, row.onHand - (row.reserved ?? 0))}{" "}
-                            tersedia
-                          </small>
-                        </div>
-                      )}
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        className="variation-remove-sku"
-                        disabled={
-                          blocked || p.rows.length <= 1 || row.protected
-                        }
-                        onClick={() =>
-                          setConfirmation({
-                            title: "Hapus SKU?",
-                            description:
-                              "Kombinasi ini tidak lagi tersedia untuk pembelian. Server tetap memeriksa stok dan referensi sebelum menghapus.",
-                            confirm: "Hapus SKU",
-                            run: () =>
-                              change(
-                                p.groups,
-                                p.rows.filter((_, i) => i !== index),
-                              ),
+                    {selectedOnly && (
+                      <input
+                        type="checkbox"
+                        aria-label={`Pilih SKU ${index + 1}`}
+                        checked={selected.has(index)}
+                        disabled={blocked}
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={(e) =>
+                          setSelected((current) => {
+                            const next = new Set(current);
+                            if (e.target.checked) next.add(index);
+                            else next.delete(index);
+                            return next;
                           })
                         }
-                      >
-                        <Trash2 size={16} /> Hapus SKU
-                      </Button>
+                      />
+                    )}
+                    {(() => {
+                      const imageId = p.groups
+                        .find((g) => g.allowsImage)
+                        ?.values.find((v) =>
+                          row.optionValueIds?.includes(v.id),
+                        )?.imageId;
+                      const image = p.photos.find(
+                        (photo) => photo.id === imageId,
+                      );
+                      return image ? (
+                        <Image
+                          unoptimized
+                          src={image.url}
+                          alt=""
+                          width={40}
+                          height={40}
+                          className="variation-sku-photo"
+                        />
+                      ) : null;
+                    })()}
+                    <span>
+                      {optionLabel(p.groups, row.optionValueIds ?? []) ||
+                        "SKU dasar"}
+                      <small>{row.sku || "Buat kombinasi atau isi SKU"}</small>
+                    </span>
+                    <span className="variation-pill">
+                      {row.protected ? "Dilindungi" : "SKU"}
+                    </span>
+                    <ChevronDown size={18} aria-hidden="true" />
+                  </summary>
+                  <div className="variation-sku-fields">
+                    <div className="variation-field">
+                      <label htmlFor={`sku-${index}`}>
+                        SKU <span aria-hidden="true">*</span>
+                      </label>
+                      <input
+                        id={`sku-${index}`}
+                        aria-invalid={Boolean(p.fieldErrors?.[`sku-${index}`])}
+                        aria-describedby={
+                          p.fieldErrors?.[`sku-${index}`]
+                            ? `sku-${index}-error`
+                            : undefined
+                        }
+                        aria-label={`SKU kombinasi ${index + 1}`}
+                        required
+                        maxLength={80}
+                        value={row.sku}
+                        readOnly={row.protected}
+                        title={
+                          row.protected
+                            ? "SKU dikunci karena memiliki stok atau riwayat."
+                            : undefined
+                        }
+                        disabled={blocked}
+                        onChange={(e) =>
+                          rowChange(index, { sku: e.target.value })
+                        }
+                      />
+                      {p.fieldErrors?.[`sku-${index}`] && (
+                        <p
+                          id={`sku-${index}-error`}
+                          className="editor-field-error"
+                          role="alert"
+                        >
+                          {p.fieldErrors[`sku-${index}`]}
+                        </p>
+                      )}
                     </div>
-                  </details>
-                ))}
-              </section>
-            </>
-          )}
-        </>
-      )}
+                    <div className="variation-field">
+                      <label htmlFor={`sku-price-${index}`}>Harga (Rp)</label>
+                      <input
+                        id={`sku-price-${index}`}
+                        aria-invalid={Boolean(
+                          p.fieldErrors?.[`sku-price-${index}`],
+                        )}
+                        aria-describedby={
+                          p.fieldErrors?.[`sku-price-${index}`]
+                            ? `sku-price-${index}-error`
+                            : undefined
+                        }
+                        type="number"
+                        inputMode="numeric"
+                        min={1}
+                        step={1}
+                        max={2147483647}
+                        value={row.price ?? ""}
+                        placeholder="Ikuti harga utama"
+                        disabled={blocked}
+                        onChange={(e) =>
+                          rowChange(index, {
+                            price: e.target.value
+                              ? Number(e.target.value)
+                              : null,
+                          })
+                        }
+                      />
+                      {p.fieldErrors?.[`sku-price-${index}`] && (
+                        <p
+                          id={`sku-price-${index}-error`}
+                          className="editor-field-error"
+                          role="alert"
+                        >
+                          {p.fieldErrors[`sku-price-${index}`]}
+                        </p>
+                      )}
+                    </div>
+                    <div className="variation-field">
+                      <label htmlFor={`sku-sale-${index}`}>
+                        Harga diskon (Rp)
+                      </label>
+                      <input
+                        id={`sku-sale-${index}`}
+                        aria-invalid={Boolean(
+                          p.fieldErrors?.[`sku-sale-${index}`],
+                        )}
+                        aria-describedby={
+                          p.fieldErrors?.[`sku-sale-${index}`]
+                            ? `sku-sale-${index}-error`
+                            : undefined
+                        }
+                        type="number"
+                        inputMode="numeric"
+                        min={1}
+                        step={1}
+                        max={(row.price ?? p.basePrice) - 1}
+                        value={row.salePrice ?? ""}
+                        placeholder="Opsional"
+                        disabled={blocked}
+                        onChange={(e) =>
+                          rowChange(index, {
+                            salePrice: e.target.value
+                              ? Number(e.target.value)
+                              : null,
+                            ...(e.target.value && row.price == null
+                              ? { price: p.basePrice }
+                              : {}),
+                          })
+                        }
+                      />
+                      {p.fieldErrors?.[`sku-sale-${index}`] && (
+                        <p
+                          id={`sku-sale-${index}-error`}
+                          className="editor-field-error"
+                          role="alert"
+                        >
+                          {p.fieldErrors[`sku-sale-${index}`]}
+                        </p>
+                      )}
+                    </div>
+                    {row.onHand !== undefined && (
+                      <div className="variation-field">
+                        <label htmlFor={`sku-stock-${index}`}>Stok fisik</label>
+                        <input
+                          id={`sku-stock-${index}`}
+                          aria-invalid={Boolean(
+                            p.fieldErrors?.[`sku-stock-${index}`],
+                          )}
+                          aria-describedby={
+                            p.fieldErrors?.[`sku-stock-${index}`]
+                              ? `sku-stock-${index}-error`
+                              : undefined
+                          }
+                          type="number"
+                          inputMode="numeric"
+                          min={row.reserved ?? 0}
+                          step={1}
+                          max={2147483647}
+                          value={row.onHand}
+                          disabled={blocked || !p.canStock}
+                          onChange={(e) =>
+                            rowChange(index, {
+                              onHand: Number(e.target.value),
+                            })
+                          }
+                        />
+                        {p.fieldErrors?.[`sku-stock-${index}`] && (
+                          <p
+                            id={`sku-stock-${index}-error`}
+                            className="editor-field-error"
+                            role="alert"
+                          >
+                            {p.fieldErrors[`sku-stock-${index}`]}
+                          </p>
+                        )}
+                        <small>
+                          {row.reserved ?? 0} direservasi ·{" "}
+                          {Math.max(0, row.onHand - (row.reserved ?? 0))}{" "}
+                          tersedia
+                        </small>
+                      </div>
+                    )}
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      className="variation-remove-sku"
+                      disabled={blocked || p.rows.length <= 1 || row.protected}
+                      onClick={() =>
+                        setConfirmation({
+                          title: "Hapus SKU?",
+                          description:
+                            "Kombinasi ini tidak lagi tersedia untuk pembelian. Server tetap memeriksa stok dan referensi sebelum menghapus.",
+                          confirm: "Hapus SKU",
+                          run: () =>
+                            change(
+                              p.groups,
+                              p.rows.filter((_, i) => i !== index),
+                            ),
+                        })
+                      }
+                    >
+                      <Trash2 size={16} /> Hapus SKU
+                    </Button>
+                  </div>
+                </details>
+              ))}
+            </section>
+          </>
+        )}
+      </div>
       <Dialog.Root
         open={picker !== null}
         onOpenChange={(open) => {

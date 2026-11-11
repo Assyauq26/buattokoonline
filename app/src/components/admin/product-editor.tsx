@@ -8,19 +8,18 @@ import {
   useTransition,
   type FormEvent,
 } from "react";
+import Image from "next/image";
 import Link from "@/components/ui/navigation";
 import { useRouter } from "next/navigation";
 import {
-  Plus,
-  Trash2,
   ArrowLeft,
-  ChevronDown,
-  Layers3,
   Package,
   Info,
-  Check,
   Save,
-  Sparkles,
+  ImageIcon,
+  Tag,
+  Truck,
+  List,
 } from "lucide-react";
 import {
   canonicalProductForm,
@@ -33,12 +32,7 @@ import {
   mmToCm,
   weightToGrams,
 } from "@/modules/catalog/product-shipping";
-import { ProductBulkEditor } from "./product-bulk-editor";
-import { CustomVariationEditor } from "./custom-variation-editor";
-import {
-  ProductVariantBuilder,
-  type VariantChoice,
-} from "@/components/admin/product-variant-builder";
+import { ProductVariationDialog } from "./product-variation-dialog";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Textarea } from "@/components/ui/input";
 import {
@@ -97,17 +91,6 @@ function valuesFor(p?: ProductEditorData): Values {
     ],
   };
 }
-function isEmptyDraftVariant(row: Values["variants"][number]) {
-  return (
-    !row.id &&
-    !row.sku &&
-    !row.color &&
-    !row.size &&
-    row.price == null &&
-    row.salePrice == null &&
-    !row.onHand
-  );
-}
 function suggestSlug(name: string) {
   return name
     .toLowerCase()
@@ -163,10 +146,52 @@ export function ProductEditor({
 }) {
   const router = useRouter();
   const [productId, setProductId] = useState(initial?.id || "");
-  const [bulkSelected, setBulkSelected] = useState(new Set<number>());
-  const [bulkSelectedOnly, setBulkSelectedOnly] = useState(false);
   const [custom, setCustom] = useState(initial?.optionsEnabled ?? false);
-  const [reordering, setReordering] = useState(false);
+  const [activeTab, setActiveTab] = useState("basic");
+  const [variationOpen, setVariationOpen] = useState(false);
+  const [variationStep, setVariationStep] = useState<"groups" | "stock">(
+    "groups",
+  );
+  const variationTrigger = useRef<HTMLElement | null>(null);
+  const variationSnapshot = useRef<{
+    optionGroups: Values["optionGroups"];
+    variants: Values["variants"];
+    optionImages: Values["optionImages"];
+    custom: boolean;
+  }>();
+  function openVariation(step: "groups" | "stock", mode = custom) {
+    variationTrigger.current =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+    variationSnapshot.current = structuredClone({
+      optionGroups: values.optionGroups,
+      variants: values.variants,
+      optionImages: values.optionImages,
+      custom: mode,
+    });
+    setVariationStep(step);
+    setVariationOpen(true);
+  }
+  function cancelVariation() {
+    const snapshot = variationSnapshot.current;
+    if (snapshot) {
+      setValues((current) => ({
+        ...current,
+        optionGroups: snapshot.optionGroups,
+        variants: snapshot.variants,
+        optionImages: snapshot.optionImages,
+      }));
+      setCustom(snapshot.custom);
+    }
+  }
+  const productTabs = [
+    ["basic", "Informasi Dasar", "product-basic"],
+    ["media", "Media", "product-media"],
+    ["pricing", "Harga & Variasi", "product-pricing"],
+    ["shipping", "Pengiriman", "product-shipping"],
+    ["detail", "Detail", "product-detail"],
+  ] as const;
   const [queueBusy, setQueueBusy] = useState(false);
   const restoreBack = useRef(false);
   const backState = useRef({ dirty: false, uploading: false });
@@ -187,6 +212,16 @@ export function ProductEditor({
   );
   const simple =
     !custom && isSimpleProduct({ ...values, optionsEnabled: false });
+  const hasVariations = !simple;
+  const variationChanged = Boolean(
+    variationSnapshot.current &&
+    canonicalProductForm({
+      optionGroups: values.optionGroups,
+      variants: values.variants,
+      optionImages: values.optionImages,
+      custom,
+    }) !== canonicalProductForm(variationSnapshot.current),
+  );
   const dirty = formSnapshot(values, custom, shipping) !== baseline;
   const saveRequest = useRef<{ payload: string; id: string }>();
   const uploadRequests = useRef(new WeakMap<File, string>());
@@ -400,7 +435,7 @@ export function ProductEditor({
                   : key === "salePrice"
                     ? "product-sale-price"
                     : "product-price"
-              : custom
+              : hasVariations
                 ? key === "sku"
                   ? `sku-${index}`
                   : `sku-${key === "onHand" ? "stock" : key === "salePrice" ? "sale" : "price"}-${index}`
@@ -421,12 +456,28 @@ export function ProductEditor({
         }
         setFieldErrors(issues);
         setNotice("Periksa kolom yang ditandai sebelum menyimpan produk.");
-        const target = document.getElementById(Object.keys(issues)[0]);
+        const firstId = Object.keys(issues)[0];
+        if (/^(sku-|variant-|group-title-|option-value-)/.test(firstId)) {
+          setActiveTab("pricing");
+          openVariation(/^(group-|option-)/.test(firstId) ? "groups" : "stock");
+        } else
+          setActiveTab(
+            firstId === "product-name" || firstId === "product-slug"
+              ? "basic"
+              : firstId.startsWith("simple-") || firstId.includes("pric")
+                ? "pricing"
+                : "detail",
+          );
+        const target = document.getElementById(firstId);
         const details = target?.closest("details");
         if (details) details.open = true;
         requestAnimationFrame(() => {
-          target?.focus();
-          target?.scrollIntoView({ block: "center" });
+          requestAnimationFrame(() => {
+            const visible = document.getElementById(firstId);
+            visible?.closest("details")?.setAttribute("open", "");
+            visible?.focus();
+            visible?.scrollIntoView({ block: "center" });
+          });
         });
         return;
       }
@@ -711,9 +762,6 @@ export function ProductEditor({
     window.addEventListener("popstate", pop, true);
     return () => window.removeEventListener("popstate", pop, true);
   }, []);
-  useEffect(() => {
-    setBulkSelected(new Set());
-  }, [values.variants.length]);
   function variantChange(
     index: number,
     patch: Partial<Values["variants"][number]>,
@@ -722,82 +770,6 @@ export function ProductEditor({
       "variants",
       values.variants.map((v, i) => (i === index ? { ...v, ...patch } : v)),
     );
-  }
-  async function appendCombinations(
-    combinations: VariantChoice[],
-  ): Promise<boolean> {
-    if (busy.current) return false;
-    // A blank create-mode row is only a form placeholder, not a persisted variant.
-    const placeholder =
-      values.variants.length === 1 && isEmptyDraftVariant(values.variants[0]);
-    const list = placeholder ? [] : [...values.variants];
-    const retainedCount = list.length;
-    const pairs = new Set(
-      list.map(
-        (v) =>
-          `${v.color.trim().toLocaleLowerCase("id")}::${v.size.trim().toLocaleLowerCase("id")}`,
-      ),
-    );
-    const skus = new Set(list.map((v) => v.sku.trim().toUpperCase()));
-    for (const choice of combinations) {
-      const color = choice.color.trim();
-      const size = choice.size.trim();
-      const key = `${color.toLocaleLowerCase("id")}::${size.toLocaleLowerCase("id")}`;
-      if (pairs.has(key)) continue;
-      if (list.length >= 50) {
-        setError("Maksimal 50 varian per produk.");
-        return false;
-      }
-      const dimensions = [
-        ["color", color],
-        ["size", size],
-      ]
-        .filter(([, value]) => value)
-        .map(([axis, value]) => ({
-          id: axis,
-          name: axis,
-          allowsImage: false,
-          values: [{ id: `${axis}:${value.toLocaleLowerCase("id")}`, value }],
-        }));
-      const sku = suggestSku(
-        values.name,
-        dimensions,
-        dimensions.map((group) => group.values[0].id),
-        skus,
-      );
-      list.push({
-        sku,
-        color,
-        size,
-        price: null,
-        salePrice: null,
-        ...(canStock ? { onHand: 0 } : {}),
-      });
-      pairs.add(key);
-      skus.add(sku.toUpperCase());
-    }
-    if (!list.length || list.length === retainedCount) return false;
-    busy.current = true;
-    setPending("sku");
-    try {
-      const fresh = list.slice(retainedCount);
-      const keyFor = (row: Values["variants"][number]) =>
-        `${row.color.trim().toLocaleLowerCase("id")}::${row.size.trim().toLocaleLowerCase("id")}`;
-      const result = await allocateProductSkusAction(
-        fresh.map((row) => ({ key: keyFor(row), sku: row.sku })),
-      );
-      if (!result.ok || !result.data)
-        throw new Error(result.error || "SKU gagal dibuat. Coba lagi.");
-      for (const row of fresh)
-        row.sku = result.data.find(
-          (candidate) => candidate.key === keyFor(row),
-        )!.sku;
-      change("variants", list);
-      return true;
-    } finally {
-      busy.current = false;
-      setPending(null);
-    }
   }
   let payload: unknown;
   try {
@@ -902,6 +874,54 @@ export function ProductEditor({
             </p>
           ))}
       </div>
+      <nav
+        className="seller-product-tabs"
+        role="tablist"
+        aria-label="Bagian produk"
+      >
+        {productTabs.map(([id, label, panel], index) => (
+          <button
+            key={id}
+            type="button"
+            role="tab"
+            id={`product-tab-${id}`}
+            aria-selected={activeTab === id}
+            aria-controls={panel}
+            tabIndex={activeTab === id ? 0 : -1}
+            onClick={() => setActiveTab(id)}
+            onKeyDown={(event) => {
+              let next = index;
+              if (event.key === "ArrowRight")
+                next = (index + 1) % productTabs.length;
+              else if (event.key === "ArrowLeft")
+                next = (index + productTabs.length - 1) % productTabs.length;
+              else if (event.key === "Home") next = 0;
+              else if (event.key === "End") next = productTabs.length - 1;
+              else return;
+              event.preventDefault();
+              setActiveTab(productTabs[next][0]);
+              document
+                .getElementById(`product-tab-${productTabs[next][0]}`)
+                ?.focus();
+            }}
+          >
+            <span className="product-tab-icon" aria-hidden="true">
+              {index === 0 ? (
+                <Info size={18} />
+              ) : index === 1 ? (
+                <ImageIcon size={18} />
+              ) : index === 2 ? (
+                <Tag size={18} />
+              ) : index === 3 ? (
+                <Truck size={18} />
+              ) : (
+                <List size={18} />
+              )}
+            </span>
+            <span>{label}</span>
+          </button>
+        ))}
+      </nav>
       <form
         noValidate
         onSubmit={(event) =>
@@ -915,33 +935,43 @@ export function ProductEditor({
         data-testid="product-editor"
         className="space-y-5"
       >
-        <div className="grid items-start gap-5 2xl:grid-cols-[minmax(0,1fr)_260px]">
+        <div className="min-w-0">
           <fieldset
             disabled={!canEdit || !!pending || queueBusy}
             className="min-w-0 space-y-5"
           >
-            <ProductPhotoEditor
-              photos={values.images}
-              name={values.name}
-              disabled={!canEdit || !!pending || !mediaRecovered}
-              canUndo={Boolean(
-                persistedSnapshot.current?.images.some(
-                  (i) => !values.images.some((photo) => photo.id === i.id),
-                ),
-              )}
-              onUndo={() => restorePhotos("images")}
-              onBusy={setQueueBusy}
-              onChange={(photos) =>
-                setValues((current) => ({ ...current, images: photos }))
-              }
-              onRemove={(id) => removePhoto(id, "images")}
-              onUpload={(file, progress) =>
-                uploadFile(file, "gallery", progress)
-              }
-            />
+            <div
+              id="product-media"
+              role="tabpanel"
+              aria-labelledby="product-tab-media"
+              hidden={activeTab !== "media"}
+            >
+              <ProductPhotoEditor
+                photos={values.images}
+                name={values.name}
+                disabled={!canEdit || !!pending || !mediaRecovered}
+                canUndo={Boolean(
+                  persistedSnapshot.current?.images.some(
+                    (i) => !values.images.some((photo) => photo.id === i.id),
+                  ),
+                )}
+                onUndo={() => restorePhotos("images")}
+                onBusy={setQueueBusy}
+                onChange={(photos) =>
+                  setValues((current) => ({ ...current, images: photos }))
+                }
+                onRemove={(id) => removePhoto(id, "images")}
+                onUpload={(file, progress) =>
+                  uploadFile(file, "gallery", progress)
+                }
+              />
+            </div>
 
             <section
               id="product-basic"
+              hidden={activeTab !== "basic"}
+              role="tabpanel"
+              aria-labelledby="product-tab-basic"
               className="min-w-0 space-y-4 rounded-2xl border border-zinc-200 bg-white p-4 shadow-[0_3px_14px_rgba(0,0,0,.025)] sm:p-6"
             >
               <div>
@@ -1049,6 +1079,9 @@ export function ProductEditor({
 
             <section
               id="product-detail"
+              hidden={activeTab !== "detail"}
+              role="tabpanel"
+              aria-labelledby="product-tab-detail"
               className="min-w-0 space-y-4 rounded-2xl border border-zinc-200 bg-white p-4 shadow-[0_3px_14px_rgba(0,0,0,.025)] sm:p-6"
             >
               <div>
@@ -1104,11 +1137,14 @@ export function ProductEditor({
 
             <section
               id="product-pricing"
+              hidden={activeTab !== "pricing"}
+              role="tabpanel"
+              aria-labelledby="product-tab-pricing"
               className="min-w-0 space-y-4 rounded-2xl border border-zinc-200 bg-white p-4 shadow-[0_3px_14px_rgba(0,0,0,.025)] sm:p-6"
             >
               <div>
                 <h2 className="text-base font-bold sm:text-lg">
-                  Info penjualan
+                  Harga &amp; Variasi
                 </h2>
                 <p className="mt-1 text-xs text-zinc-500">
                   Tentukan harga utama. Harga khusus dapat diatur per varian.
@@ -1129,7 +1165,7 @@ export function ProductEditor({
                     type="checkbox"
                     role="switch"
                     aria-label="Aktifkan variasi produk"
-                    checked={custom}
+                    checked={hasVariations}
                     disabled={!canEdit || !!pending}
                     onChange={(event) => {
                       const enabled = event.target.checked;
@@ -1168,6 +1204,7 @@ export function ProductEditor({
                         }));
                       }
                       setCustom(enabled);
+                      if (enabled) openVariation("groups", true);
                       setError("");
                       setNotice("");
                     }}
@@ -1177,7 +1214,7 @@ export function ProductEditor({
               </div>
               {
                 <>
-                  <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="seller-main-prices grid gap-4 sm:grid-cols-2">
                     <div>
                       <Label htmlFor="product-price">
                         Harga normal (Rp){" "}
@@ -1312,323 +1349,185 @@ export function ProductEditor({
               )}
             </section>
 
-            {custom ? (
-              <section id="product-variants" className="min-w-0 space-y-4">
-                <Button
-                  type="button"
-                  variant="outline"
-                  aria-pressed={reordering}
-                  onClick={() => setReordering((value) => !value)}
-                >
-                  {reordering ? "Selesai mengurutkan" : "Urutkan variasi"}
-                </Button>
-                <CustomVariationEditor
-                  mode="all"
-                  fieldErrors={fieldErrors}
-                  reordering={reordering}
-                  groups={values.optionGroups ?? []}
-                  rows={values.variants}
-                  photos={[...values.images, ...values.optionImages]}
-                  galleryPhotos={values.images}
-                  optionPhotos={values.optionImages}
-                  canUndoPhotos={Boolean(
-                    persistedSnapshot.current?.optionImages.some(
-                      (i) =>
-                        !values.optionImages.some(
-                          (current) => current.id === i.id,
-                        ),
-                    ),
-                  )}
-                  onRemovePhoto={(id) => removePhoto(id, "optionImages")}
-                  onUndoPhotos={() => restorePhotos("optionImages")}
-                  disabled={!canEdit || !!pending || !mediaRecovered}
-                  canStock={canStock}
-                  productName={values.name}
-                  basePrice={values.basePrice}
-                  onUpload={uploadOption}
-                  onChange={(optionGroups, variants) => {
-                    setError("");
-                    setValues((current) => {
-                      const next = {
-                        ...current,
-                        optionGroups,
-                        variants,
-                      };
-                      return next;
-                    });
-                    setNotice("");
-                  }}
-                />
-              </section>
-            ) : !simple ? (
+            {hasVariations && (
               <section
                 id="product-variants"
-                className="min-w-0 space-y-4 rounded-2xl border border-zinc-200 bg-white p-4 shadow-[0_3px_14px_rgba(0,0,0,.025)] sm:p-6"
+                hidden={activeTab !== "pricing"}
+                className="variation-overview"
               >
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <h2 className="flex items-center gap-2 text-base font-bold sm:text-lg">
-                      <Layers3 size={19} /> Varian &amp; stok
-                    </h2>
-                    <p className="mt-1 text-xs text-zinc-500">
-                      Kelola warna, ukuran, harga, SKU, dan persediaan.
-                    </p>
+                {(values.optionGroups ?? []).map((group) => (
+                  <div className="variation-overview-card" key={group.id}>
+                    <div>
+                      <strong>
+                        {group.name || "Variasi belum diberi nama"}
+                      </strong>
+                      <span>
+                        {" "}
+                        · {group.values.length} opsi
+                        {group.allowsImage ? " · gambar aktif" : ""}
+                      </span>
+                      <div className="variation-overview-options">
+                        {group.values.slice(0, 5).map((value) => {
+                          const photo = [
+                            ...values.images,
+                            ...values.optionImages,
+                          ].find((image) => image.id === value.imageId);
+                          return (
+                            <span key={value.id}>
+                              {photo && (
+                                <Image
+                                  unoptimized
+                                  src={photo.url}
+                                  alt=""
+                                  width={48}
+                                  height={48}
+                                />
+                              )}
+                              <span>{value.value || "Opsi kosong"}</span>
+                            </span>
+                          );
+                        })}
+                        {group.values.length > 5 && (
+                          <span>+{group.values.length - 5} opsi</span>
+                        )}
+                      </div>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={!canEdit || !!pending}
+                      onClick={() => openVariation("groups")}
+                    >
+                      Atur variasi
+                    </Button>
                   </div>
-                  <span className="rounded-full bg-zinc-100 px-3 py-1 text-xs font-semibold text-zinc-700">
-                    {values.variants.length} / 50
-                  </span>
-                </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={
-                    !canEdit ||
-                    !!pending ||
-                    values.variants.some((row) => row.id)
-                  }
-                  onClick={() => {
-                    if (values.variants.some((row) => row.id)) {
-                      setError(
-                        "SKU produk lama perlu konversi terkontrol untuk menjaga integritas keranjang dan histori transaksi.",
-                      );
-                      return;
-                    }
-                    setCustom(true);
-                    requestAnimationFrame(() =>
-                      document
-                        .getElementById("product-variants")
-                        ?.scrollIntoView({ block: "start" }),
-                    );
-                  }}
-                >
-                  Gunakan variasi kustom
-                </Button>
-                <ProductBulkEditor
-                  rows={values.variants}
-                  basePrice={values.basePrice}
-                  canStock={canStock}
-                  disabled={!canEdit || !!pending}
-                  selected={bulkSelected}
-                  selectedOnly={bulkSelectedOnly}
-                  onMode={setBulkSelectedOnly}
-                  onChange={(rows) => change("variants", rows)}
-                />
-                <div className="flex flex-wrap items-center gap-2 rounded-xl bg-zinc-50 p-3">
-                  <ProductVariantBuilder
-                    disabled={!canEdit || !!pending}
-                    variants={values.variants}
-                    placeholderRow={
-                      values.variants.length === 1 &&
-                      isEmptyDraftVariant(values.variants[0])
-                    }
-                    onAdd={appendCombinations}
-                  />
+                ))}
+                {!values.optionGroups?.length && (
+                  <div className="variation-overview-card">
+                    <div>
+                      <strong>Opsi variasi</strong>
+                      <p>Tambahkan warna, ukuran, motif, atau pilihan lain.</p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={!canEdit || !!pending}
+                      onClick={() => openVariation("groups")}
+                    >
+                      Atur variasi
+                    </Button>
+                  </div>
+                )}
+                <div className="variation-overview-card">
+                  <div>
+                    <strong>
+                      {
+                        values.variants.filter(
+                          (row) => row.optionValueIds?.length,
+                        ).length
+                      }{" "}
+                      kombinasi SKU
+                    </strong>
+                    <p>Harga dan stok untuk setiap pilihan produk.</p>
+                  </div>
                   <Button
                     type="button"
                     variant="outline"
-                    size="sm"
-                    className="min-h-10 border-zinc-300"
-                    disabled={
-                      !canEdit || !!pending || values.variants.length >= 50
-                    }
+                    disabled={!canEdit || !!pending}
                     onClick={() =>
-                      change("variants", [
-                        ...values.variants,
-                        {
-                          sku: "",
-                          color: "",
-                          size: "",
-                          price: null,
-                          salePrice: null,
-                          ...(canStock ? { onHand: 0 } : {}),
-                        },
-                      ])
+                      openVariation(
+                        values.variants.some(
+                          (row) => row.optionValueIds?.length,
+                        )
+                          ? "stock"
+                          : "groups",
+                      )
                     }
                   >
-                    <Plus size={16} /> Tambah varian
+                    Atur harga &amp; stok
                   </Button>
                 </div>
-                <p className="text-xs leading-relaxed text-zinc-500">
-                  SKU wajib unik. Harga varian yang kosong mengikuti harga
-                  utama. Varian yang sudah digunakan dalam transaksi mungkin
-                  tidak dapat dihapus.
+                <p className="variation-draft-note">
+                  <Info size={16} /> Perubahan variasi diterapkan ke formulir.
+                  Simpan produk untuk menyimpannya permanen.
                 </p>
-                <div className="space-y-3">
-                  {values.variants.map((v, index) => (
-                    <details
-                      key={v.id || `new-${index}`}
-                      open={index === 0}
-                      onInvalidCapture={(event) => {
-                        event.currentTarget.open = true;
-                      }}
-                      className="group min-w-0 overflow-hidden rounded-xl border border-zinc-200 bg-white"
-                    >
-                      <summary className="flex min-h-14 cursor-pointer list-none items-center gap-3 bg-zinc-50 px-3 py-3 text-sm transition-colors hover:bg-zinc-100 sm:px-4 [&::-webkit-details-marker]:hidden">
-                        {bulkSelectedOnly && (
-                          <input
-                            type="checkbox"
-                            aria-label={`Pilih SKU sederhana ${index + 1}`}
-                            checked={bulkSelected.has(index)}
-                            onClick={(e) => e.stopPropagation()}
-                            onChange={(e) =>
-                              setBulkSelected((current) => {
-                                const next = new Set(current);
-                                if (e.target.checked) next.add(index);
-                                else next.delete(index);
-                                return next;
-                              })
-                            }
-                          />
-                        )}
-                        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-white font-bold text-zinc-600 shadow-sm">
-                          {index + 1}
-                        </span>
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate font-semibold text-zinc-900">
-                            {[v.color, v.size].filter(Boolean).join(" · ") ||
-                              `Varian ${index + 1}`}
-                          </span>
-                          <span className="mt-0.5 block truncate text-xs text-zinc-500">
-                            {v.sku || "SKU belum diisi"}
-                          </span>
-                        </span>
-                        <ChevronDown
-                          size={17}
-                          className="shrink-0 text-zinc-500 transition-transform group-open:rotate-180"
-                        />
-                      </summary>
-                      <div className="space-y-3 border-t border-zinc-200 p-3 sm:p-4">
-                        <div className="grid gap-3 sm:grid-cols-3">
-                          {(
-                            [
-                              ["sku", "SKU"],
-                              ["color", "Warna"],
-                              ["size", "Ukuran"],
-                            ] as const
-                          ).map(([key, label]) => (
-                            <div key={key}>
-                              <Label htmlFor={`variant-${index}-${key}`}>
-                                {label}
-                                {key === "sku" && (
-                                  <span
-                                    aria-hidden="true"
-                                    className="text-red-500"
-                                  >
-                                    {" "}
-                                    *
-                                  </span>
-                                )}
-                              </Label>
-                              <Input
-                                id={`variant-${index}-${key}`}
-                                aria-label={label}
-                                value={v[key] || ""}
-                                readOnly={v.protected}
-                                required={key === "sku"}
-                                maxLength={
-                                  key === "sku" ? 80 : key === "color" ? 80 : 40
-                                }
-                                placeholder={
-                                  key === "sku"
-                                    ? "SKU unik"
-                                    : key === "color"
-                                      ? "Contoh: Hitam"
-                                      : "Contoh: M"
-                                }
-                                onChange={(e) =>
-                                  variantChange(index, {
-                                    [key]: e.target.value,
-                                  })
-                                }
-                              />
-                            </div>
-                          ))}
-                        </div>
-                        <div className="grid gap-3 sm:grid-cols-3">
-                          {(
-                            [
-                              ["price", "Harga varian (Rp)"],
-                              ["salePrice", "Diskon varian (Rp)"],
-                            ] as const
-                          ).map(([key, label]) => (
-                            <div key={key}>
-                              <Label htmlFor={`variant-${index}-${key}`}>
-                                {label}
-                              </Label>
-                              <Input
-                                id={`variant-${index}-${key}`}
-                                type="number"
-                                inputMode="numeric"
-                                min={1}
-                                step={1}
-                                value={v[key] ?? ""}
-                                placeholder="Ikuti harga utama"
-                                onChange={(e) =>
-                                  variantChange(index, {
-                                    [key]: e.target.value
-                                      ? Number(e.target.value)
-                                      : null,
-                                  })
-                                }
-                              />
-                            </div>
-                          ))}
-                          {(canStock || v.onHand !== undefined) && (
-                            <div>
-                              <Label htmlFor={`variant-${index}-stock`}>
-                                Stok fisik
-                              </Label>
-                              <Input
-                                id={`variant-${index}-stock`}
-                                type="number"
-                                inputMode="numeric"
-                                min={v.reserved ?? 0}
-                                step={1}
-                                disabled={!canStock}
-                                value={v.onHand ?? 0}
-                                onChange={(e) =>
-                                  variantChange(index, {
-                                    onHand: Number(e.target.value),
-                                  })
-                                }
-                              />
-                              <p className="mt-1 text-xs text-zinc-500">
-                                {v.reserved ?? 0} unit direservasi.
-                              </p>
-                            </div>
-                          )}
-                        </div>
-                        <div className="flex justify-end border-t border-zinc-100 pt-2">
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="ghost"
-                            className="text-red-600 hover:bg-red-50 hover:text-red-700"
-                            aria-label={`Hapus varian ${index + 1}`}
-                            disabled={
-                              !canEdit ||
-                              !!pending ||
-                              values.variants.length === 1
-                            }
-                            onClick={() =>
-                              change(
-                                "variants",
-                                values.variants.filter((_, i) => i !== index),
-                              )
-                            }
-                          >
-                            <Trash2 size={15} /> Hapus varian
-                          </Button>
-                        </div>
-                      </div>
-                    </details>
-                  ))}
-                </div>
+                <ProductVariationDialog
+                  open={variationOpen}
+                  initialStep={variationStep}
+                  changed={variationChanged}
+                  onOpenChange={setVariationOpen}
+                  onCancel={cancelVariation}
+                  onReturnFocus={() => {
+                    const trigger = variationTrigger.current;
+                    if (trigger && trigger.offsetParent !== null)
+                      trigger.focus();
+                    else
+                      document.getElementById("product-tab-pricing")?.focus();
+                  }}
+                  onApply={() => {
+                    const previous = variationSnapshot.current;
+                    const shape = (rows: Values["variants"]) =>
+                      rows.map((row) => ({
+                        id: row.id,
+                        optionValueIds: row.optionValueIds,
+                      }));
+                    if (
+                      !custom &&
+                      previous &&
+                      (canonicalProductForm(values.optionGroups) !==
+                        canonicalProductForm(previous.optionGroups) ||
+                        canonicalProductForm(shape(values.variants)) !==
+                          canonicalProductForm(shape(previous.variants)))
+                    )
+                      setCustom(true);
+                    setNotice(
+                      "Variasi diterapkan ke formulir. Simpan produk untuk menyimpannya permanen.",
+                    );
+                  }}
+                  editor={{
+                    fieldErrors: fieldErrors,
+                    groups: values.optionGroups ?? [],
+                    rows: values.variants,
+                    photos: [...values.images, ...values.optionImages],
+                    galleryPhotos: values.images,
+                    optionPhotos: values.optionImages,
+                    canUndoPhotos: Boolean(
+                      persistedSnapshot.current?.optionImages.some(
+                        (i) =>
+                          !values.optionImages.some(
+                            (current) => current.id === i.id,
+                          ),
+                      ),
+                    ),
+                    onRemovePhoto: (id) => removePhoto(id, "optionImages"),
+                    onUndoPhotos: () => restorePhotos("optionImages"),
+                    disabled: !canEdit || !!pending || !mediaRecovered,
+                    canStock: canStock,
+                    productName: values.name,
+                    basePrice: values.basePrice,
+                    onUpload: uploadOption,
+                    onChange: (optionGroups, variants) => {
+                      setError("");
+                      setValues((current) => {
+                        const next = {
+                          ...current,
+                          optionGroups,
+                          variants,
+                        };
+                        return next;
+                      });
+                      setNotice("");
+                    },
+                  }}
+                />
               </section>
-            ) : null}
+            )}
 
             <section
               id="product-shipping"
+              hidden={activeTab !== "shipping"}
+              role="tabpanel"
+              aria-labelledby="product-tab-shipping"
               className="min-w-0 space-y-4 rounded-2xl border border-zinc-200 bg-white p-4 sm:p-6"
             >
               <div>
@@ -1698,6 +1597,9 @@ export function ProductEditor({
 
             <section
               id="product-settings"
+              hidden={activeTab !== "detail"}
+              role="tabpanel"
+              aria-labelledby="product-tab-detail"
               className="min-w-0 space-y-4 rounded-2xl border border-zinc-200 bg-white p-4 shadow-[0_3px_14px_rgba(0,0,0,.025)] sm:p-6"
             >
               <h2 className="text-base font-bold sm:text-lg">
@@ -1733,54 +1635,6 @@ export function ProductEditor({
               </p>
             </section>
           </fieldset>
-          <aside className="hidden space-y-4 2xl:block">
-            <div className="sticky top-24 space-y-4">
-              <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-[0_3px_14px_rgba(0,0,0,.025)]">
-                <h2 className="text-sm font-bold text-zinc-950">
-                  Isi data produk
-                </h2>
-                <p className="mb-4 mt-1 text-xs leading-relaxed text-zinc-500">
-                  Navigasi cepat untuk melengkapi katalog.
-                </p>
-                <nav aria-label="Bagian editor produk" className="space-y-1">
-                  {(
-                    [
-                      ["product-images", "Foto produk"],
-                      ["product-basic", "Informasi dasar"],
-                      ["product-detail", "Detail produk"],
-                      ["product-pricing", "Harga"],
-                      ...(!simple
-                        ? [["product-variants", "Varian & stok"] as const]
-                        : []),
-                      ["product-shipping", "Pengiriman"],
-                      ["product-settings", "Pengaturan lainnya"],
-                    ] as const
-                  ).map(([href, label], index) => (
-                    <a
-                      key={href}
-                      href={`#${href}`}
-                      className="flex min-h-10 items-center gap-3 rounded-lg px-2 text-sm text-zinc-700 transition-colors hover:bg-zinc-50 hover:text-zinc-950"
-                    >
-                      <span className="grid h-6 w-6 place-items-center rounded-full bg-zinc-100 text-[11px] font-bold">
-                        {index + 1}
-                      </span>
-                      {label}
-                    </a>
-                  ))}
-                </nav>
-              </div>
-              <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-5">
-                <div className="flex items-center gap-2 text-sm font-semibold">
-                  <Sparkles size={18} /> Tips katalog
-                </div>
-                <p className="mt-2 text-xs leading-relaxed text-zinc-600">
-                  Gunakan nama yang spesifik, foto yang terang, dan SKU unik
-                  untuk setiap kombinasi. Pastikan harga dan stok sudah benar
-                  sebelum publikasi.
-                </p>
-              </div>
-            </div>
-          </aside>
         </div>
         {canEdit && (
           <div className="seller-product-actions">
@@ -1847,6 +1701,9 @@ export function ProductEditor({
       {productId && (
         <section
           id="product-publication"
+          hidden={activeTab !== "detail"}
+          role="tabpanel"
+          aria-labelledby="product-tab-detail"
           className="space-y-4 rounded-2xl border border-zinc-200 bg-white p-4 sm:p-6"
         >
           <div>
