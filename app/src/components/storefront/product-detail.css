@@ -19,19 +19,19 @@
 .pdp-page .public-review-card { border-color: var(--store-decorative-border, #eee); border-radius: var(--store-radius, 16px); }
 
 /* Native scroll owns touch momentum, cancellation and direction changes. */
-.pdp-gallery-frame { position: relative; aspect-ratio: 4 / 5; overflow: hidden; background: var(--store-surface, #f5f3f1); }
+.pdp-gallery-frame { position: relative; aspect-ratio: 1 / 1; overflow: hidden; background: var(--store-surface, #f5f3f1); }
 .pdp-gallery-track { display: flex; width: 100%; height: 100%; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory; overscroll-behavior-x: contain; scrollbar-width: none; }
 .pdp-gallery-track::-webkit-scrollbar { display: none; }
 .pdp-gallery-slide { position: relative; flex: 0 0 100%; min-width: 0; height: 100%; padding: 0; border: 0; border-radius: 0; background: transparent; scroll-snap-align: start; scroll-snap-stop: always; cursor: zoom-in; }
 .pdp-gallery-slide:focus-visible { outline: 3px solid var(--store-focus, #171717); outline-offset: -4px; }
-.pdp-gallery-image { object-fit: contain; user-select: none; }
+.pdp-gallery-image { object-fit: contain; object-position: center; user-select: none; }
 .pdp-gallery-loading, .pdp-gallery-empty { position: absolute; inset: 0; display: grid; place-items: center; padding: 1rem; background: var(--store-surface, #f5f3f1); color: var(--store-secondaryText, #595959); text-align: center; font-size: .875rem; pointer-events: none; }
 .pdp-gallery-loading { background: linear-gradient(100deg, transparent 20%, rgb(255 255 255 / .45) 50%, transparent 80%), var(--store-surface, #f5f3f1); background-size: 220% 100%; }
 .pdp-count { position: absolute; bottom: 12px; z-index: 1; display: flex; align-items: center; gap: 6px; padding: 6px 9px; border-radius: 999px; background: rgb(0 0 0 / .6); color: #fff; font-size: 11px; pointer-events: none; }
 .pdp-count { right: 12px; font-variant-numeric: tabular-nums; }
 .pdp-gallery-progress { position: absolute; left: 4px; bottom: 4px; z-index: 2; display: grid; place-items: center; width: 64px; min-height: 44px; border-radius: 4px; cursor: pointer; }
-.pdp-gallery-progress-track { display: block; width: 48px; height: 4px; border-radius: 99px; overflow: hidden; background: rgb(0 0 0 / .3); box-shadow: 0 0 0 1px rgb(255 255 255 / .3); }
-.pdp-gallery-progress-thumb { display: block; height: 100%; border-radius: inherit; background: #fff; }
+.pdp-gallery-progress-track { display: block; width: 48px; height: 4px; border-radius: 99px; overflow: hidden; background: rgb(255 255 255 / .7); }
+.pdp-gallery-progress-thumb { display: block; height: 100%; border-radius: inherit; background: #000; }
 .pdp-gallery-progress:focus-visible, .pdp-gallery-thumb:focus-visible { outline: 2px solid var(--store-focus, #171717); outline-offset: 2px; }
 .pdp-thumb-bar { display: flex; max-width: 100%; overflow-x: auto; gap: .7rem; padding: 4px 2px; }
 .pdp-gallery-thumb { position: relative; height: 64px; width: 64px; flex-shrink: 0; border-radius: 10px; overflow: hidden; border: 2px solid transparent; background: var(--store-surface, #f5f5f5); }
@@ -84,6 +84,7 @@
 .pdp-cart-pill:disabled, .pdp-buy-pill:disabled { cursor: not-allowed; }
 .pdp-whatsapp { display: grid; place-items: center; min-width: 44px; height: 52px; border: 1px solid var(--store-border, #ddd); border-radius: 10px; color: var(--store-icon, #222); }
 .pdp-header-action { color: inherit; border-radius: 10px; }
+.pdp-topbar, .storefront-root:has(.pdp-page) > header { box-shadow: 0 1px 2px rgb(0 0 0 / .04), 0 3px 8px rgb(0 0 0 / .05); }
 .pdp-purchase-actions :focus-visible, .pdp-choice-pill:focus-visible { outline: 2px solid var(--store-focus, #171717); outline-offset: 3px; }
 .pdp-page :is(.pdp-choice-pill, .quantity-stepper button, .pdp-cart-pill, .pdp-buy-pill, .pdp-header-action, .pdp-whatsapp) { transition: transform 140ms var(--pdp-ease), background-color 180ms ease, color 180ms ease, border-color 180ms ease, opacity 160ms ease; }
 .pdp-page :is(.pdp-choice-pill, .quantity-stepper button, .pdp-cart-pill, .pdp-buy-pill, .pdp-header-action, .pdp-whatsapp):active:not(:disabled):not(:focus-visible) { transform: scale(.97); }
