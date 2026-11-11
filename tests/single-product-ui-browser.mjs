@@ -55,6 +55,8 @@ try {
   await context.route('**/api/v1/product-images/ui-fixture-*',route=>route.fulfill({contentType:'image/svg+xml',body:`<svg xmlns="http://www.w3.org/2000/svg" width="600" height="720"><rect width="600" height="720" fill="${['#d5dfd4','#c6d9e4','#e5d8c8'][Number(route.request().url().split('-').at(-1))]||'#ddd'}"/><path d="M180 110 60 230 120 285 180 245 160 650 440 650 420 245 480 285 540 230 420 110 360 90 300 145 240 90Z" fill="#6e8c80"/></svg>`}));
   await context.route('**/_next/image?*',route=>route.fulfill({contentType:'image/svg+xml',body:'<svg xmlns="http://www.w3.org/2000/svg" width="600" height="720"><rect width="600" height="720" fill="#d5dfd4"/><path d="M180 110 60 230 120 285 180 245 160 650 440 650 420 245 480 285 540 230 420 110 360 90 300 145 240 90Z" fill="#6e8c80"/></svg>'}));
   const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));
+  // Compile the development route before holding a short database lock.
+  if(process.env.PDP_DEV==='1')await (await fetch(origin+'/product/'+product.slug)).text();
   let release, locked;
   const hold=new Promise(r=>{release=r;}); const ready=new Promise(r=>{locked=r;});
   const transaction=db.$transaction(async tx=>{await tx.$executeRawUnsafe('LOCK TABLE "Product" IN ACCESS EXCLUSIVE MODE');locked();await hold;},{timeout:25000});
@@ -81,6 +83,8 @@ try {
     const colorWidth=await page.getByRole('button',{name:'Biru',exact:true}).evaluate(el=>({button:el.getBoundingClientRect().width,row:el.parentElement.getBoundingClientRect().width,display:getComputedStyle(el.parentElement).display}));
     assert.equal(colorWidth.display,'flex');assert.ok(colorWidth.button<colorWidth.row/2,'color option follows content width');
     assert.ok(await page.getByRole('button',{name:'Biru',exact:true}).locator('img').evaluate(el=>el.complete&&el.naturalWidth>0),'variant thumbnail is loaded');
+    const thumbnail=await page.getByRole('button',{name:'Biru',exact:true}).locator('.purchase-swatch').evaluate(el=>{const box=el.getBoundingClientRect(),button=el.parentElement.getBoundingClientRect();return {width:box.width,height:box.height,left:box.left-button.left,radius:parseFloat(getComputedStyle(el).borderTopLeftRadius)};});
+    assert.equal(thumbnail.width,thumbnail.height,'square variant thumbnail');assert.ok(thumbnail.radius<=8&&thumbnail.left<=2,'small thumbnail radius, flush with left border');
     await page.screenshot({path:resolve(out,`product-${width}.png`),fullPage:true});
     if(width===390)await page.screenshot({path:resolve(out,'product-mobile-preview.png')});
     checks.push(`${width}px: no overflow, edge-to-edge mobile gallery, lower-left indicator without arrows/zoom label, content-width colors, Q&A removed`);
