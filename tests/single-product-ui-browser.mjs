@@ -25,6 +25,21 @@ try {
   const user = await db.user.create({data:{name:'Pembeli Uji',email:`${run}@example.test`,passwordHash:'disabled-test-only',customer:{create:{fullName:'Pembeli Uji'}}}});
   const product = await db.product.create({data:{slug:`ui-${run}`,name:'Blouse Kamila',description:'Kemeja nyaman untuk aktivitas harian. '.repeat(30),material:'Katun',careInstruction:'Cuci dengan warna senada.',basePrice:73000,salePrice:67000,status:'PUBLISHED',images:{create:[0,1,2].map(i=>({url:`/api/v1/product-images/ui-fixture-${i}`,alt:`Foto ${i+1}`,sortOrder:i}))},variants:{create:[{sku:`blue-${run}`,color:'Biru',size:'M',inventory:{create:{onHand:8}}},{sku:`green-${run}`,color:'Hijau',size:'L',inventory:{create:{onHand:8}}}]}},include:{variants:true}});
   const one = await db.product.create({data:{slug:`one-${run}`,name:'Satu Foto',basePrice:55000,status:'PUBLISHED',images:{create:{url:'/api/v1/product-images/ui-fixture-0',alt:'Satu foto'}},variants:{create:{sku:`one-${run}`,inventory:{create:{onHand:3}}}}}});
+  const photos=await db.productImage.findMany({where:{productId:product.id},orderBy:{sortOrder:'asc'}});
+  for(const [axis,name,values] of [['color','Warna',['Biru','Hijau']],['size','Ukuran',['M','L']]]){
+    const groupId=`${axis}-${run}`;
+    await db.productOptionGroup.create({data:{id:groupId,productId:product.id,name,normalizedName:name.toLowerCase(),allowsImage:axis==='color',sortOrder:axis==='color'?0:1}});
+    for(const [i,value] of values.entries()){
+      const valueId=`${axis}-${i}-${run}`;
+      await db.productOptionValue.create({data:{id:valueId,groupId,productId:product.id,value,normalizedValue:value.toLowerCase(),sortOrder:i,imageId:axis==='color'?photos[i].id:null}});
+      await db.productVariantOptionValue.create({data:{productId:product.id,groupId,valueId,variantId:product.variants.find(v=>v[axis]===value).id}});
+    }
+  }
+  for(const variant of product.variants){
+    const selections=await db.productVariantOptionValue.findMany({where:{variantId:variant.id}});
+    await db.productVariant.update({where:{id:variant.id},data:{combinationKey:selections.map(v=>v.valueId).sort().join('|')}});
+  }
+  await db.product.update({where:{id:product.id},data:{optionsEnabled:true}});
   const { defaultSizeChart }=require('../app/node_modules/tsx/dist/cjs/api/index.cjs').require('../app/src/modules/catalog/product-size-chart.ts',import.meta.url);
   await db.product.update({where:{id:product.id},data:{sizeChart:defaultSizeChart()}});
   const empty = await db.product.create({data:{slug:`empty-${run}`,name:'Tanpa Foto',basePrice:45000,status:'PUBLISHED',variants:{create:{sku:`empty-${run}`,inventory:{create:{onHand:3}}}}}});
@@ -65,6 +80,7 @@ try {
     assert.ok(indicator.x>=frame.x&&indicator.x<frame.x+20&&indicator.y>frame.y+frame.height-60&&indicator.y+indicator.height<=frame.y+frame.height,'indicator overlays lower-left photo');
     const colorWidth=await page.getByRole('button',{name:'Biru',exact:true}).evaluate(el=>({button:el.getBoundingClientRect().width,row:el.parentElement.getBoundingClientRect().width,display:getComputedStyle(el.parentElement).display}));
     assert.equal(colorWidth.display,'flex');assert.ok(colorWidth.button<colorWidth.row/2,'color option follows content width');
+    assert.ok(await page.getByRole('button',{name:'Biru',exact:true}).locator('img').evaluate(el=>el.complete&&el.naturalWidth>0),'variant thumbnail is loaded');
     await page.screenshot({path:resolve(out,`product-${width}.png`),fullPage:true});
     if(width===390)await page.screenshot({path:resolve(out,'product-mobile-preview.png')});
     checks.push(`${width}px: no overflow, edge-to-edge mobile gallery, lower-left indicator without arrows/zoom label, content-width colors, Q&A removed`);
@@ -100,6 +116,10 @@ try {
   await page.getByRole('button',{name:'Hapus dari wishlist',exact:true}).waitFor();
   checks.push('wishlist selection preserved');
   await page.getByRole('button',{name:'Biru',exact:true}).click();
+  assert.ok(await page.getByRole('button',{name:'Biru',exact:true}).locator('img').evaluate(el=>el.complete&&el.naturalWidth>0),'selected variant retains thumbnail');
+  assert.equal(await page.getByRole('button',{name:'Biru',exact:true}).locator('svg').count(),0,'selected variant has no checkmark');
+  await page.screenshot({path:resolve(out,'variant-selected.png')});
+  checks.push('assigned variant thumbnail loads and remains visible after selection, without checkmark');
   await page.getByRole('button',{name:'M',exact:true}).click();
   await page.getByTestId('qty-plus').click();assert.equal(await page.getByTestId('qty-value').textContent(),'2');
   await page.getByTestId('add-to-cart-btn').click();

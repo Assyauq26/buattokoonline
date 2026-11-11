@@ -27,6 +27,8 @@ The gallery frame is edge-to-edge on mobile and uses a 4:5 silhouette. Images us
 
 Following screenshot review, the capsule indicator overlays the lower-left photo where the Perbesar label previously appeared. The label and arrows beside the indicator are removed; clicking/tapping the photo still opens fullscreen. Color options use content-width flex wrapping instead of two equal columns. The loading silhouette follows both changes. Fullscreen previous/next controls remain available for desktop navigation.
 
+Selected variants use their existing selected color/border and `aria-pressed`, with no checkmark or reserved icon space. Assigned option thumbnails remain visible before and after selection. Browser fixtures now include image-backed color options to verify thumbnail loading and capture it in the preview; products without assigned option images retain the existing fallback.
+
 ## Local verification
 
 Use Node 22 and a disposable local PostgreSQL database named `single_product_ui_test`. Apply existing migrations, generate Prisma and build `app`. Set `DATABASE_URL`/`DIRECT_URL` to this database, then run `node tests/single-product-ui-browser.mjs` from the repository root. The script rejects remote hosts and other database names, creates fixture data, starts a local preview on port 3119, exercises actual cart actions and writes screenshots/results under `output/single-product-ui` (ignored by Git).
