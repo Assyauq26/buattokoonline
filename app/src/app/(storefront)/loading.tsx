@@ -1,4 +1,11 @@
+"use client";
+
+import { usePathname } from "next/navigation";
+import { ProductSkeleton } from "@/components/storefront/product-skeleton";
+
 export default function StorefrontLoading() {
+  const pathname = usePathname();
+  if (pathname?.startsWith("/product/")) return <ProductSkeleton />;
   return (
     <div className="space-y-6" aria-label="Memuat halaman" role="status">
       <div className="h-10 w-2/3 motion-safe:animate-pulse rounded-xl bg-surface" />
