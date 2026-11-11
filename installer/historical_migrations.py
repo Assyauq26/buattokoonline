@@ -6,6 +6,11 @@ import tarfile
 import core
 
 BASE_SHA = '5145bdcd7cd84f93f49a066aa669560e858db0ac'
+# Proposed Hubify-only continuation for PR #43. Approval is required before
+# installing this module. Pin the known deployed release and the complete app
+# tree, rather than permitting arbitrary future v1.7.3 deployments.
+V173_UI_BASE_SHA = 'b8b33ebecec3f1c9798b7148f0f407da142afb46'
+V173_UI_APP_TREE = '79de568eb19b30baaefe99b2023500aa7ceab82d'
 ARCHIVE_SHA = 'dd7d400a3821e4fc20b6886f688ee48c46300a440344b0e06978e32313dad938'
 INSTALLATION = '2d958c50e7a60006f3a8531cf217335e'
 PAIRS = {
@@ -20,13 +25,20 @@ PAIRS = {
 def digest(data):
     return hashlib.sha256(data).hexdigest()
 
-def authorize(name, old, fresh, installed, context, archive, target_version="1.7.3"):
-    """Return audited bytes only for the exact original transition."""
+def authorize(name, old, fresh, installed, context, archive, target_version="1.7.3",
+              source_app_tree=None):
+    """Authenticate original bytes or the separately reviewed pinned UI redeploy."""
     reject = lambda: core.StoreError('Kompatibilitas migrasi historis tidak terverifikasi: ' + name)
     pair = PAIRS.get(name)
+    original = (installed.get('version') == '1.7.2'
+                and installed.get('source_sha') == BASE_SHA)
+    ui_redeploy = (installed.get('version') == '1.7.3'
+                   and installed.get('source_sha') == V173_UI_BASE_SHA
+                   and installed.get('channel') == 'hubify-staging'
+                   and installed.get('candidate_version') == '1.7.3'
+                   and source_app_tree == V173_UI_APP_TREE)
     if (target_version != '1.7.3' or pair is None or (digest(old), digest(fresh)) != pair
-            or installed.get('version') != '1.7.2'
-            or installed.get('source_sha') != BASE_SHA
+            or not (original or ui_redeploy)
             or installed.get('db_contract') != 1
             or context != {'installation': INSTALLATION, 'origin': 'https://hubify.web.id'}
             or installed.get('migrations', {}).get(name) != pair[0]
@@ -55,9 +67,13 @@ def authorize(name, old, fresh, installed, context, archive, target_version="1.7
                 or manifest.get('files', {}).get(relative) != pair[1]
                 or tar.extractfile(relative).read() != fresh):
             raise reject()
-    return {'migration': name, 'installed': pair[0], 'artifact': pair[1],
+    record = {'migration': name, 'installed': pair[0], 'artifact': pair[1],
             'installation': INSTALLATION, 'history': BASE_SHA,
             'evidence_archive': ARCHIVE_SHA}
+    if ui_redeploy:
+        record.update(transition='v1.7.3-ui-pr43', installed_source=V173_UI_BASE_SHA,
+                      application_tree=V173_UI_APP_TREE)
+    return record
 
 def runtime_context():
     config = core.read_json(core.CONFIG / 'updater/config.json')
@@ -71,6 +87,7 @@ def validate_source(source, installed):
     candidate = core.inventory(source)
     effective = dict(candidate)
     records = []
+    source_app_tree = None
     for name, previous in installed['migrations'].items():
         if candidate.get(name) == previous:
             continue
@@ -81,9 +98,11 @@ def validate_source(source, installed):
         fresh_path = Path(source) / relative
         if old_path.is_symlink() or fresh_path.is_symlink():
             raise core.StoreError('File migrasi historis harus regular.')
+        if installed.get('version') == '1.7.3' and source_app_tree is None:
+            source_app_tree = core.run(['git', '-C', source, 'rev-parse', '--verify', 'HEAD:app'])
         record = authorize(name, old_path.read_bytes(), fresh_path.read_bytes(), installed,
                            runtime_context(), core.CONFIG / 'migration-compatibility/v1.7.2.tar.gz',
-                           (Path(source) / 'VERSION').read_text().strip())
+                           (Path(source) / 'VERSION').read_text().strip(), source_app_tree)
         effective[name] = previous
         records.append(record)
     return effective, records

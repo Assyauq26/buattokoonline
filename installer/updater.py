@@ -219,13 +219,14 @@ def verify_backup(path):
         core.run(['docker', 'compose', '-f', core.COMPOSE, 'exec', '-T', 'db', 'dropdb', '-U', 'postgres', database])
 
 
-def recover(journal):
+def recover(journal, preserve_extra_sites=False, approved_proxy_hashes=None):
     if journal.get('status') not in ['updating', 'failed']:
         return
     core.atomic_json(core.COMPOSE, journal['old_compose'])
     core.dc(['up', '-d', '--no-build', '--wait', '--wait-timeout', '90', 'app'])
     core.healthy()
-    core.write_caddy(core.read_json(core.STATE), live=True)
+    core.write_caddy(core.read_json(core.STATE), live=True, preserve_extra_sites=preserve_extra_sites,
+                     approved_proxy_hashes=approved_proxy_hashes)
     core.public_health(core.read_json(core.STATE))
     core.atomic_json(core.CONFIG / 'version.json', journal['from'])
     shutil.copytree(journal['manager_backup'], core.ROOT / 'manager', dirs_exist_ok=True)
