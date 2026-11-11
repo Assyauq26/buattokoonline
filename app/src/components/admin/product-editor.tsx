@@ -20,6 +20,8 @@ import {
   Tag,
   Truck,
   List,
+  Pencil,
+  Layers3,
 } from "lucide-react";
 import {
   canonicalProductForm,
@@ -32,7 +34,7 @@ import {
   mmToCm,
   weightToGrams,
 } from "@/modules/catalog/product-shipping";
-import { ProductVariationDialog } from "./product-variation-dialog";
+import { ProductVariationSheet } from "./product-variation-sheet";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Textarea } from "@/components/ui/input";
 import {
@@ -147,11 +149,47 @@ export function ProductEditor({
   const router = useRouter();
   const [productId, setProductId] = useState(initial?.id || "");
   const [custom, setCustom] = useState(initial?.optionsEnabled ?? false);
-  const [activeTab, setActiveTab] = useState("basic");
+  const [activeTab, setActiveTab] = useState(initial ? "basic" : "media");
+  useEffect(() => {
+    const sync = () => {
+      const hash = window.location.hash.slice(1);
+      const tab =
+        hash.startsWith("sku-") ||
+        hash.startsWith("option-") ||
+        hash.startsWith("group-")
+          ? "pricing"
+          : (
+              {
+                "product-images": "media",
+                "product-media": "media",
+                media: "media",
+                "product-basic": "basic",
+                basic: "basic",
+                "product-detail": "detail",
+                detail: "detail",
+                "product-pricing": "pricing",
+                "product-variants": "pricing",
+                pricing: "pricing",
+                "product-shipping": "shipping",
+                shipping: "shipping",
+                "product-settings": "detail",
+                "product-publication": "detail",
+              } as Record<string, string>
+            )[hash];
+      if (tab) setActiveTab(tab);
+    };
+    sync();
+    window.addEventListener("hashchange", sync);
+    return () => window.removeEventListener("hashchange", sync);
+  }, []);
   const [variationOpen, setVariationOpen] = useState(false);
-  const [variationStep, setVariationStep] = useState<"groups" | "stock">(
-    "groups",
+  const [variationMode, setVariationMode] = useState<"group" | "stock">(
+    "group",
   );
+  const [variationGroupId, setVariationGroupId] = useState<string>();
+  const [variationNotice, setVariationNotice] = useState("");
+  const [sheetDirty, setSheetDirty] = useState(false);
+  const [variationPointer, setVariationPointer] = useState(false);
   const variationTrigger = useRef<HTMLElement | null>(null);
   const variationSnapshot = useRef<{
     optionGroups: Values["optionGroups"];
@@ -159,18 +197,36 @@ export function ProductEditor({
     optionImages: Values["optionImages"];
     custom: boolean;
   }>();
-  function openVariation(step: "groups" | "stock", mode = custom) {
+  function openVariation(mode: "group" | "stock", groupId?: string) {
+    if (
+      mode === "stock" &&
+      (!values.optionGroups?.length ||
+        !values.variants.some((row) => row.optionValueIds?.length))
+    ) {
+      setActiveTab("pricing");
+      setNotice(
+        "Tambahkan dan simpan opsi variasi ke formulir sebelum mengatur Harga & Stok.",
+      );
+      return;
+    }
     variationTrigger.current =
       document.activeElement instanceof HTMLElement
         ? document.activeElement
         : null;
+    setVariationPointer(
+      Boolean(
+        variationTrigger.current &&
+        !variationTrigger.current.matches(":focus-visible"),
+      ),
+    );
     variationSnapshot.current = structuredClone({
       optionGroups: values.optionGroups,
       variants: values.variants,
       optionImages: values.optionImages,
-      custom: mode,
+      custom,
     });
-    setVariationStep(step);
+    setVariationMode(mode);
+    setVariationGroupId(groupId);
     setVariationOpen(true);
   }
   function cancelVariation() {
@@ -186,11 +242,11 @@ export function ProductEditor({
     }
   }
   const productTabs = [
+    ["media", "Foto Produk", "product-media"],
     ["basic", "Informasi Dasar", "product-basic"],
-    ["media", "Media", "product-media"],
-    ["pricing", "Harga & Variasi", "product-pricing"],
-    ["shipping", "Pengiriman", "product-shipping"],
     ["detail", "Detail", "product-detail"],
+    ["pricing", "Variasi", "product-pricing"],
+    ["shipping", "Pengiriman", "product-shipping"],
   ] as const;
   const [queueBusy, setQueueBusy] = useState(false);
   const restoreBack = useRef(false);
@@ -213,16 +269,8 @@ export function ProductEditor({
   const simple =
     !custom && isSimpleProduct({ ...values, optionsEnabled: false });
   const hasVariations = !simple;
-  const variationChanged = Boolean(
-    variationSnapshot.current &&
-    canonicalProductForm({
-      optionGroups: values.optionGroups,
-      variants: values.variants,
-      optionImages: values.optionImages,
-      custom,
-    }) !== canonicalProductForm(variationSnapshot.current),
-  );
-  const dirty = formSnapshot(values, custom, shipping) !== baseline;
+  const dirty =
+    formSnapshot(values, custom, shipping) !== baseline || sheetDirty;
   const saveRequest = useRef<{ payload: string; id: string }>();
   const uploadRequests = useRef(new WeakMap<File, string>());
   const [mediaRecovered, setMediaRecovered] = useState(false);
@@ -352,6 +400,65 @@ export function ProductEditor({
     setNotice("");
     try {
       let saveValues = values;
+      const basicIssues: Record<string, string> = {};
+      const beforeAllocation = productInputSchema.safeParse(values);
+      if (!beforeAllocation.success)
+        for (const issue of beforeAllocation.error.issues) {
+          const key = issue.path[0];
+          if (key === "name" || key === "slug") {
+            const id = key === "name" ? "product-name" : "product-slug";
+            basicIssues[id] ||= issue.message;
+          }
+        }
+      if (Object.keys(basicIssues).length) {
+        setFieldErrors(basicIssues);
+        setActiveTab("basic");
+        setNotice("Lengkapi informasi dasar sebelum menyimpan produk.");
+        requestAnimationFrame(() =>
+          document.getElementById(Object.keys(basicIssues)[0])?.focus(),
+        );
+        return;
+      }
+      const shippingIssues: Record<string, string> = {};
+      try {
+        weightToGrams(shipping.weight);
+      } catch (error) {
+        shippingIssues["package-weight"] =
+          error instanceof Error ? error.message : "Periksa berat paket.";
+      }
+      for (const key of ["length", "width", "height"] as const) {
+        try {
+          cmToMm(shipping[key]);
+        } catch (error) {
+          shippingIssues[`package-${key}`] =
+            error instanceof Error ? error.message : "Periksa dimensi paket.";
+        }
+      }
+      if (Object.keys(shippingIssues).length) {
+        setFieldErrors(shippingIssues);
+        setActiveTab("shipping");
+        setNotice("Periksa informasi pengiriman sebelum menyimpan produk.");
+        requestAnimationFrame(() =>
+          document.getElementById(Object.keys(shippingIssues)[0])?.focus(),
+        );
+        return;
+      }
+      if (custom && !values.optionGroups?.length) {
+        setActiveTab("pricing");
+        setFieldErrors({
+          "product-pricing":
+            "Tambahkan minimal satu jenis variasi beserta opsi, atau nonaktifkan variasi untuk produk tunggal.",
+        });
+        setNotice("Lengkapi opsi variasi sebelum menyimpan produk.");
+        requestAnimationFrame(() =>
+          document
+            .querySelector<HTMLButtonElement>(
+              ".variation-empty-overview button",
+            )
+            ?.focus(),
+        );
+        return;
+      }
       if (simple && !values.variants[0].sku.trim()) {
         const allocated = await allocateProductSkusAction([
           { key: "simple", sku: suggestSku(values.name, [], [], new Set()) },
@@ -424,6 +531,13 @@ export function ProductEditor({
                 slug: "product-slug",
                 basePrice: "product-price",
                 salePrice: "product-sale-price",
+                weightGrams: "package-weight",
+                packageLengthMm: "package-length",
+                packageWidthMm: "package-width",
+                packageHeightMm: "package-height",
+                description: "product-description",
+                material: "product-material",
+                shippingReturn: "product-shippingReturn",
               } as Record<string, string>
             )[String(field)] || "product-pricing";
           if (field === "variants" && typeof index === "number")
@@ -459,14 +573,21 @@ export function ProductEditor({
         const firstId = Object.keys(issues)[0];
         if (/^(sku-|variant-|group-title-|option-value-)/.test(firstId)) {
           setActiveTab("pricing");
-          openVariation(/^(group-|option-)/.test(firstId) ? "groups" : "stock");
+          const group = values.optionGroups?.find(
+            (g) =>
+              firstId === `group-title-${g.id}` ||
+              g.values.some((v) => firstId === `option-value-${v.id}`),
+          );
+          openVariation(group ? "group" : "stock", group?.id);
         } else
           setActiveTab(
             firstId === "product-name" || firstId === "product-slug"
               ? "basic"
-              : firstId.startsWith("simple-") || firstId.includes("pric")
-                ? "pricing"
-                : "detail",
+              : firstId.startsWith("package-")
+                ? "shipping"
+                : firstId.startsWith("simple-") || firstId.includes("pric")
+                  ? "pricing"
+                  : "detail",
           );
         const target = document.getElementById(firstId);
         const details = target?.closest("details");
@@ -833,6 +954,7 @@ export function ProductEditor({
       </header>
       <div
         ref={feedback}
+        hidden={!error && !notice && !Object.keys(fieldErrors).length}
         role="region"
         aria-label="Status perubahan produk"
         tabIndex={-1}
@@ -906,13 +1028,13 @@ export function ProductEditor({
             }}
           >
             <span className="product-tab-icon" aria-hidden="true">
-              {index === 0 ? (
+              {id === "basic" ? (
                 <Info size={18} />
-              ) : index === 1 ? (
+              ) : id === "media" ? (
                 <ImageIcon size={18} />
-              ) : index === 2 ? (
+              ) : id === "pricing" ? (
                 <Tag size={18} />
-              ) : index === 3 ? (
+              ) : id === "shipping" ? (
                 <Truck size={18} />
               ) : (
                 <List size={18} />
@@ -1204,7 +1326,7 @@ export function ProductEditor({
                         }));
                       }
                       setCustom(enabled);
-                      if (enabled) openVariation("groups", true);
+
                       setError("");
                       setNotice("");
                     }}
@@ -1355,171 +1477,228 @@ export function ProductEditor({
                 hidden={activeTab !== "pricing"}
                 className="variation-overview"
               >
-                {(values.optionGroups ?? []).map((group) => (
-                  <div className="variation-overview-card" key={group.id}>
-                    <div>
-                      <strong>
-                        {group.name || "Variasi belum diberi nama"}
-                      </strong>
-                      <span>
-                        {" "}
-                        · {group.values.length} opsi
-                        {group.allowsImage ? " · gambar aktif" : ""}
-                      </span>
-                      <div className="variation-overview-options">
-                        {group.values.slice(0, 5).map((value) => {
-                          const photo = [
-                            ...values.images,
-                            ...values.optionImages,
-                          ].find((image) => image.id === value.imageId);
-                          return (
-                            <span key={value.id}>
-                              {photo && (
-                                <Image
-                                  unoptimized
-                                  src={photo.url}
-                                  alt=""
-                                  width={48}
-                                  height={48}
-                                />
-                              )}
-                              <span>{value.value || "Opsi kosong"}</span>
+                <div className="variation-options-overview">
+                  {values.optionGroups?.length ? (
+                    <>
+                      <header>
+                        <h3>Opsi variasi</h3>
+                        <p>
+                          Tambahkan warna, ukuran, motif, atau pilihan lain.
+                        </p>
+                      </header>
+                      {values.optionGroups.map((group) => (
+                        <div className="variation-overview-card" key={group.id}>
+                          <div>
+                            <strong>{group.name}</strong>
+                            <span>
+                              {" "}
+                              · {group.values.length} opsi
+                              {group.allowsImage ? " · foto aktif" : ""}
                             </span>
-                          );
-                        })}
-                        {group.values.length > 5 && (
-                          <span>+{group.values.length - 5} opsi</span>
-                        )}
-                      </div>
+                          </div>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            disabled={!canEdit || !!pending}
+                            onClick={() => openVariation("group", group.id)}
+                          >
+                            <Pencil size={14} aria-hidden="true" />
+                            Edit {group.name}
+                          </Button>
+                          <div className="variation-overview-options">
+                            {group.values.slice(0, 5).map((value) => {
+                              const photo = [
+                                ...values.images,
+                                ...values.optionImages,
+                              ].find((p) => p.id === value.imageId);
+                              return (
+                                <span
+                                  key={value.id}
+                                  className={
+                                    photo
+                                      ? "has-photo"
+                                      : "variation-option-chip"
+                                  }
+                                >
+                                  {photo && (
+                                    <Image
+                                      unoptimized
+                                      src={photo.url}
+                                      alt=""
+                                      width={48}
+                                      height={52}
+                                    />
+                                  )}
+                                  <span>{value.value}</span>
+                                </span>
+                              );
+                            })}
+                            {group.values.length > 5 && (
+                              <span>+{group.values.length - 5} opsi</span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="variation-add-type"
+                        disabled={
+                          !canEdit ||
+                          !!pending ||
+                          values.optionGroups.length >= 3
+                        }
+                        onClick={() => openVariation("group")}
+                      >
+                        + Tambah jenis variasi ({values.optionGroups.length}/3)
+                      </Button>
+                    </>
+                  ) : (
+                    <div className="variation-empty-overview">
+                      <Tag size={32} aria-hidden="true" />
+                      <h3>Belum ada variasi</h3>
+                      <p>
+                        Tambahkan warna, ukuran, motif, atau pilihan lain untuk
+                        produk ini.
+                      </p>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        disabled={!canEdit || !!pending}
+                        onClick={() => openVariation("group")}
+                      >
+                        + Tambah variasi pertama
+                      </Button>
                     </div>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      disabled={!canEdit || !!pending}
-                      onClick={() => openVariation("groups")}
-                    >
-                      Atur variasi
-                    </Button>
-                  </div>
-                ))}
-                {!values.optionGroups?.length && (
-                  <div className="variation-overview-card">
-                    <div>
-                      <strong>Opsi variasi</strong>
-                      <p>Tambahkan warna, ukuran, motif, atau pilihan lain.</p>
-                    </div>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      disabled={!canEdit || !!pending}
-                      onClick={() => openVariation("groups")}
-                    >
-                      Atur variasi
-                    </Button>
-                  </div>
-                )}
-                <div className="variation-overview-card">
+                  )}
+                </div>
+                <div className="variation-overview-card variation-sku-overview">
                   <div>
                     <strong>
-                      {
-                        values.variants.filter(
-                          (row) => row.optionValueIds?.length,
-                        ).length
-                      }{" "}
-                      kombinasi SKU
+                      {values.optionGroups?.length
+                        ? `${values.variants.filter((row) => row.optionValueIds?.length).length} kombinasi SKU`
+                        : "Harga & Stok"}
                     </strong>
-                    <p>Harga dan stok untuk setiap pilihan produk.</p>
+                    <p>
+                      {values.optionGroups?.length
+                        ? "Harga dan stok untuk setiap pilihan produk."
+                        : "Tersedia setelah opsi variasi dibuat."}
+                    </p>
                   </div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    disabled={!canEdit || !!pending}
-                    onClick={() =>
-                      openVariation(
-                        values.variants.some(
+                  {Boolean(values.optionGroups?.length) && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={
+                        !canEdit ||
+                        !!pending ||
+                        !values.variants.some(
                           (row) => row.optionValueIds?.length,
                         )
-                          ? "stock"
-                          : "groups",
-                      )
-                    }
-                  >
-                    Atur harga &amp; stok
-                  </Button>
+                      }
+                      onClick={() => openVariation("stock")}
+                    >
+                      <Layers3 size={15} aria-hidden="true" />
+                      Atur harga &amp; stok
+                    </Button>
+                  )}
                 </div>
-                <p className="variation-draft-note">
-                  <Info size={16} /> Perubahan variasi diterapkan ke formulir.
-                  Simpan produk untuk menyimpannya permanen.
+                <p className="variation-draft-note" role="status">
+                  <Info size={16} />
+                  {variationNotice ||
+                    "Perubahan diterapkan ke formulir; simpan produk untuk menyimpan permanen."}
                 </p>
-                <ProductVariationDialog
-                  open={variationOpen}
-                  initialStep={variationStep}
-                  changed={variationChanged}
-                  onOpenChange={setVariationOpen}
-                  onCancel={cancelVariation}
-                  onReturnFocus={() => {
-                    const trigger = variationTrigger.current;
-                    if (trigger && trigger.offsetParent !== null)
-                      trigger.focus();
-                    else
-                      document.getElementById("product-tab-pricing")?.focus();
-                  }}
-                  onApply={() => {
-                    const previous = variationSnapshot.current;
-                    const shape = (rows: Values["variants"]) =>
-                      rows.map((row) => ({
-                        id: row.id,
-                        optionValueIds: row.optionValueIds,
-                      }));
-                    if (
-                      !custom &&
-                      previous &&
-                      (canonicalProductForm(values.optionGroups) !==
-                        canonicalProductForm(previous.optionGroups) ||
-                        canonicalProductForm(shape(values.variants)) !==
-                          canonicalProductForm(shape(previous.variants)))
-                    )
-                      setCustom(true);
-                    setNotice(
-                      "Variasi diterapkan ke formulir. Simpan produk untuk menyimpannya permanen.",
-                    );
-                  }}
-                  editor={{
-                    fieldErrors: fieldErrors,
-                    groups: values.optionGroups ?? [],
-                    rows: values.variants,
-                    photos: [...values.images, ...values.optionImages],
-                    galleryPhotos: values.images,
-                    optionPhotos: values.optionImages,
-                    canUndoPhotos: Boolean(
-                      persistedSnapshot.current?.optionImages.some(
-                        (i) =>
-                          !values.optionImages.some(
-                            (current) => current.id === i.id,
-                          ),
-                      ),
-                    ),
-                    onRemovePhoto: (id) => removePhoto(id, "optionImages"),
-                    onUndoPhotos: () => restorePhotos("optionImages"),
-                    disabled: !canEdit || !!pending || !mediaRecovered,
-                    canStock: canStock,
-                    productName: values.name,
-                    basePrice: values.basePrice,
-                    onUpload: uploadOption,
-                    onChange: (optionGroups, variants) => {
-                      setError("");
-                      setValues((current) => {
-                        const next = {
-                          ...current,
-                          optionGroups,
-                          variants,
-                        };
-                        return next;
-                      });
+                {variationOpen && (
+                  <ProductVariationSheet
+                    mode={variationMode}
+                    pointerOpened={variationPointer}
+                    groupId={variationGroupId}
+                    onDirtyChange={setSheetDirty}
+                    onCancel={() => {
+                      cancelVariation();
+                      setSheetDirty(false);
                       setNotice("");
-                    },
-                  }}
-                />
+                      setError("");
+                      setVariationOpen(false);
+                    }}
+                    onReturnFocus={() => {
+                      const trigger = variationTrigger.current;
+                      if (trigger && trigger.offsetParent !== null)
+                        trigger.focus();
+                      else
+                        document.getElementById("product-tab-pricing")?.focus();
+                    }}
+                    onApply={(optionGroups, variants) => {
+                      setSheetDirty(false);
+                      const shape = (rows: Values["variants"]) =>
+                        rows.map((row) => ({
+                          id: row.id,
+                          optionValueIds: row.optionValueIds,
+                        }));
+                      const adopt =
+                        custom ||
+                        canonicalProductForm(optionGroups) !==
+                          canonicalProductForm(values.optionGroups) ||
+                        canonicalProductForm(shape(variants)) !==
+                          canonicalProductForm(shape(values.variants));
+                      setValues((current) =>
+                        optionGroups.length
+                          ? { ...current, optionGroups, variants }
+                          : {
+                              ...current,
+                              optionGroups: [],
+                              basePrice:
+                                variants[0]?.price ?? current.basePrice,
+                              salePrice:
+                                variants[0]?.price != null
+                                  ? variants[0].salePrice
+                                  : current.salePrice,
+                              variants: [simpleProductRow(variants)],
+                            },
+                      );
+                      setCustom(optionGroups.length ? adopt : false);
+                      setVariationOpen(false);
+                      setVariationNotice(
+                        "Perubahan variasi diterapkan ke formulir. Simpan produk untuk menyimpannya permanen.",
+                      );
+                      setNotice("");
+                      setFieldErrors((current) =>
+                        Object.fromEntries(
+                          Object.entries(current).filter(
+                            ([id]) =>
+                              !/^(sku-|variant-|group-title-|option-value-|product-pricing)/.test(
+                                id,
+                              ),
+                          ),
+                        ),
+                      );
+                    }}
+                    editor={{
+                      fieldErrors: fieldErrors,
+                      groups: values.optionGroups ?? [],
+                      rows: values.variants,
+                      photos: [...values.images, ...values.optionImages],
+                      galleryPhotos: values.images,
+                      optionPhotos: values.optionImages,
+                      canUndoPhotos: Boolean(
+                        persistedSnapshot.current?.optionImages.some(
+                          (i) =>
+                            !values.optionImages.some(
+                              (current) => current.id === i.id,
+                            ),
+                        ),
+                      ),
+                      onRemovePhoto: (id) => removePhoto(id, "optionImages"),
+                      onUndoPhotos: () => restorePhotos("optionImages"),
+                      disabled: !canEdit || !!pending || !mediaRecovered,
+                      canStock: canStock,
+                      productName: values.name,
+                      basePrice: values.basePrice,
+                      onUpload: uploadOption,
+                      onChange: () => {},
+                    }}
+                  />
+                )}
               </section>
             )}
 
@@ -1543,6 +1722,7 @@ export function ProductEditor({
                 <div className="relative">
                   <Input
                     id="package-weight"
+                    {...validationProps("package-weight")}
                     inputMode="numeric"
                     placeholder="Contoh: 500"
                     value={shipping.weight}
@@ -1554,6 +1734,7 @@ export function ProductEditor({
                     }
                     className="pr-16"
                   />
+                  {fieldError("package-weight")}
                   <span className="pointer-events-none absolute right-3 top-3 text-sm text-zinc-500">
                     gram
                   </span>
@@ -1575,6 +1756,7 @@ export function ProductEditor({
                     <Label htmlFor={`package-${key}`}>{label} (cm)</Label>
                     <Input
                       id={`package-${key}`}
+                      {...validationProps(`package-${key}`)}
                       inputMode="decimal"
                       placeholder="Opsional"
                       value={shipping[key]}
@@ -1585,6 +1767,7 @@ export function ProductEditor({
                         }))
                       }
                     />
+                    {fieldError(`package-${key}`)}
                   </div>
                 ))}
               </div>

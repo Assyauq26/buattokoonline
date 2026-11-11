@@ -2,6 +2,7 @@
 import { allocateProductSkusAction } from "@/modules/catalog/product-management.actions";
 import { reorderById, SortableHandle } from "./sortable-handle";
 import { ProductBulkEditor } from "./product-bulk-editor";
+import { VariationSkuGrid } from "./variation-sku-grid";
 import { suggestSku } from "@/modules/catalog/product-editor-domain";
 import {
   useEffect,
@@ -11,7 +12,6 @@ import {
   type Ref,
 } from "react";
 import Image from "next/image";
-import * as Dialog from "@radix-ui/react-dialog";
 import {
   Plus,
   Trash2,
@@ -31,7 +31,6 @@ import {
   combinationCount,
   combinationKey,
   generateCombinations,
-  optionLabel,
   type OptionGroup,
 } from "@/modules/catalog/variation-domain";
 import type { ProductInput } from "@/modules/catalog/product-management.validation";
@@ -44,7 +43,8 @@ type Photo = { id: string; url: string; alt: string; recovered?: boolean };
 export type VariationEditorHandle = { prepare: () => void };
 type Props = {
   handleRef?: Ref<VariationEditorHandle>;
-  onPrepared?: () => void;
+  onPrepared?: (groups: OptionGroup[], rows: Row[]) => void;
+  groupId?: string;
   onBusy?: (busy: boolean) => void;
   onBulkDraftChange?: (dirty: boolean) => void;
   fieldErrors?: Record<string, string>;
@@ -69,14 +69,6 @@ type Props = {
   ) => Promise<Photo | undefined>;
 };
 export function CustomVariationEditor(p: Props) {
-  const [desktop, setDesktop] = useState(false);
-  useEffect(() => {
-    const media = window.matchMedia("(min-width: 1024px)");
-    const sync = () => setDesktop(media.matches);
-    sync();
-    media.addEventListener("change", sync);
-    return () => media.removeEventListener("change", sync);
-  }, []);
   const [collapsed, setCollapsed] = useState(new Set<string>());
   const [picker, setPicker] = useState<{
     groupId: string;
@@ -108,7 +100,24 @@ export function CustomVariationEditor(p: Props) {
   );
   const retry = useRef<{ id: string; file: File } | null>(null);
   const root = useRef<HTMLDivElement>(null);
-  const focusAfterConfirm = useRef(false);
+  useEffect(() => {
+    if (picker)
+      requestAnimationFrame(() =>
+        root.current
+          ?.querySelector<HTMLElement>(`#photo-options-${picker.valueId}`)
+          ?.scrollIntoView({ block: "nearest" }),
+      );
+  }, [picker]);
+  useEffect(() => {
+    if (confirmation)
+      requestAnimationFrame(() => {
+        const panel = root.current?.querySelector<HTMLElement>(
+          ".variation-inline-confirm",
+        );
+        panel?.querySelector<HTMLButtonElement>("button")?.focus();
+        panel?.scrollIntoView({ block: "nearest" });
+      });
+  }, [confirmation]);
   const identities = p.rows
     .map((row) => row.id || combinationKey(row.optionValueIds ?? []))
     .join(";");
@@ -116,7 +125,8 @@ export function CustomVariationEditor(p: Props) {
     setSelected(new Set());
   }, [identities]);
   const count = combinationCount(p.groups);
-  const blocked = p.disabled || upload !== null || generating;
+  const blocked =
+    p.disabled || upload !== null || generating || confirmation !== null;
   const onBusy = p.onBusy;
   useEffect(() => {
     onBusy?.(blocked);
@@ -216,15 +226,17 @@ export function CustomVariationEditor(p: Props) {
         setUpload((current) => (current ? { ...current, progress } : current)),
       );
       if (image) {
-        setPicker((current) =>
-          current?.groupId === groupId && current.valueId === valueId
-            ? { ...current, photoId: image.id }
-            : current,
+        valueChange(groupId, valueId, { imageId: image.id });
+        setPicker(null);
+        requestAnimationFrame(() =>
+          root.current
+            ?.querySelector<HTMLButtonElement>(`[data-photo-for="${valueId}"]`)
+            ?.focus({ preventScroll: true }),
         );
         setUploadNotice(
           image.recovered
-            ? "Hasil upload dipulihkan. Klik Gunakan gambar untuk memasang foto."
-            : "Foto sementara siap. Klik Gunakan gambar untuk memasang foto.",
+            ? "Foto dipulihkan dan diterapkan ke draft variasi. Belum disimpan permanen."
+            : "Foto diterapkan ke draft variasi. Belum disimpan permanen.",
         );
         retry.current = null;
       } else
@@ -348,7 +360,7 @@ export function CustomVariationEditor(p: Props) {
         }
         setSelected(new Set());
         change(p.groups, rows);
-        p.onPrepared?.();
+        p.onPrepared?.(p.groups, rows);
       } catch (error) {
         setError(error instanceof Error ? error.message : "SKU gagal dibuat.");
       } finally {
@@ -378,6 +390,12 @@ export function CustomVariationEditor(p: Props) {
       ref={root}
       data-testid="custom-variation-editor"
       onKeyDown={(event) => {
+        if (event.key === "Escape" && (confirmation || picker)) {
+          event.preventDefault();
+          event.stopPropagation();
+          if (confirmation) setConfirmation(null);
+          else setPicker(null);
+        }
         if (event.key === "Enter" && event.target instanceof HTMLInputElement)
           event.preventDefault();
       }}
@@ -399,7 +417,7 @@ export function CustomVariationEditor(p: Props) {
             </div>
           )}
           {uploadNotice && <p role="status">{uploadNotice}</p>}
-          {!p.groups.length && (
+          {!p.groupId && !p.groups.length && (
             <div className="variation-empty">
               <Layers3 size={28} aria-hidden="true" />
               <h3>Satu produk, banyak pilihan</h3>
@@ -434,179 +452,310 @@ export function CustomVariationEditor(p: Props) {
             </p>
           )}
           <div className="variation-groups">
-            {p.groups.map((group, index) => (
-              <details
-                open={!collapsed.has(group.id)}
-                onInvalidCapture={() =>
-                  setCollapsed((current) => {
-                    const next = new Set(current);
-                    next.delete(group.id);
-                    return next;
-                  })
-                }
-                className="variation-card"
-                data-sort-scope="variation-groups"
-                data-sort-id={group.id}
-                key={group.id}
-                aria-labelledby={`group-summary-${group.id}`}
-              >
-                <summary
-                  id={`group-summary-${group.id}`}
-                  className="variation-group-summary"
-                  aria-expanded={!collapsed.has(group.id)}
-                  onClick={(event) => {
-                    event.preventDefault();
+            {p.groups.map((group, index) =>
+              p.groupId && p.groupId !== group.id ? null : (
+                <details
+                  open={!collapsed.has(group.id)}
+                  onInvalidCapture={() =>
                     setCollapsed((current) => {
                       const next = new Set(current);
-                      if (next.has(group.id)) next.delete(group.id);
-                      else next.add(group.id);
+                      next.delete(group.id);
                       return next;
-                    });
-                  }}
+                    })
+                  }
+                  className="variation-card"
+                  data-sort-scope="variation-groups"
+                  data-sort-id={group.id}
+                  key={group.id}
+                  aria-labelledby={`group-summary-${group.id}`}
                 >
-                  {p.reordering && (
-                    <SortableHandle
-                      scope="variation-groups"
-                      id={group.id}
-                      label={`variasi ${index + 1}`}
-                      disabled={blocked}
-                      onMove={(from, to) =>
-                        p.onChange(reorderById(p.groups, from, to), p.rows)
-                      }
-                    />
-                  )}
-                  <span className="variation-summary-name">
-                    {group.name || `Variasi ${index + 1}`}
-                  </span>
-                  <span className="variation-summary-count">
-                    {group.values.length} opsi
-                    {group.allowsImage ? " · Gambar aktif" : ""}
-                  </span>
-                  <ChevronDown size={18} aria-hidden="true" />
-                </summary>
-                <header className="variation-card-header">
-                  <div className="variation-field">
-                    <label htmlFor={`group-title-${group.id}`}>
-                      Nama variasi <span aria-hidden="true">*</span>
-                    </label>
-                    <input
-                      id={`group-title-${group.id}`}
-                      aria-label={`Nama variasi ${index + 1}`}
-                      required
-                      maxLength={80}
-                      value={group.name}
-                      aria-invalid={
-                        !!group.name &&
-                        p.groups.filter(
-                          (g) =>
-                            canonicalOption(g.name) ===
-                            canonicalOption(group.name),
-                        ).length > 1
-                      }
-                      disabled={blocked || p.reordering}
-                      placeholder="Contoh: Warna, Model, Motif, Kapasitas"
-                      onChange={(e) =>
-                        groupChange(group.id, { name: e.target.value })
-                      }
-                    />
-                    {p.fieldErrors?.[`group-title-${group.id}`] && (
-                      <p className="editor-field-error" role="alert">
-                        {p.fieldErrors[`group-title-${group.id}`]}
-                      </p>
-                    )}
-                  </div>
-                  <details
-                    className="variation-tools"
-                    open={p.reordering ? true : undefined}
+                  <summary
+                    id={`group-summary-${group.id}`}
+                    className="variation-group-summary"
+                    aria-expanded={!collapsed.has(group.id)}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      setCollapsed((current) => {
+                        const next = new Set(current);
+                        if (next.has(group.id)) next.delete(group.id);
+                        else next.add(group.id);
+                        return next;
+                      });
+                    }}
                   >
-                    <summary aria-label={`Aksi variasi ${index + 1}`}>
-                      <Ellipsis size={17} aria-hidden="true" />
-                    </summary>
-                    <div className="variation-tools-menu">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        aria-label={`Hapus variasi ${index + 1}`}
+                    {p.reordering && (
+                      <SortableHandle
+                        scope="variation-groups"
+                        id={group.id}
+                        label={`variasi ${index + 1}`}
                         disabled={blocked}
-                        onClick={() => {
-                          if (p.rows.some((v) => v.protected)) {
-                            setError(
-                              "Jenis variasi SKU berstok/bersejarah tidak dapat dihapus.",
-                            );
-                            return;
-                          }
-                          setConfirmation({
-                            title: "Hapus jenis variasi?",
-                            description:
-                              "Daftar SKU perlu dibuat ulang. Perubahan belum disimpan sampai Anda menyimpan produk.",
-                            confirm: "Hapus variasi",
-                            run: () =>
-                              change(p.groups.filter((g) => g.id !== group.id)),
-                          });
-                        }}
-                      >
-                        <Trash2 size={17} />
-                      </Button>
-                    </div>
-                  </details>
-                  <label className="variation-image-switch">
-                    <span>
-                      <strong>Tambahkan gambar</strong>
-                      <small>
-                        Foto dapat diaktifkan pada satu jenis variasi.
-                      </small>
+                        onMove={(from, to) =>
+                          p.onChange(reorderById(p.groups, from, to), p.rows)
+                        }
+                      />
+                    )}
+                    <span className="variation-summary-name">
+                      {group.name || `Variasi ${index + 1}`}
                     </span>
-                    <input
-                      type="checkbox"
-                      role="switch"
-                      aria-label={`Tambahkan gambar ${group.name || `variasi ${index + 1}`}`}
-                      checked={group.allowsImage}
-                      disabled={blocked}
-                      onChange={(e) => imageMode(group, e.target.checked)}
-                    />
-                  </label>
-                </header>
-                <div className="variation-values">
-                  {group.values.map((value, vi) => {
-                    const image = p.photos.find(
-                      (image) => image.id === value.imageId,
-                    );
-                    return (
-                      <div
-                        key={value.id}
-                        data-sort-scope={`variation-options-${group.id}`}
-                        data-sort-id={value.id}
-                        className={`variation-value-row ${group.allowsImage ? "with-image" : ""}`}
-                      >
-                        <div className="variation-reorder">
-                          <SortableHandle
-                            scope={`variation-options-${group.id}`}
-                            id={value.id}
-                            label={`opsi ${value.value || vi + 1}`}
-                            disabled={blocked || !p.reordering}
-                            onMove={(from, to) =>
-                              p.onChange(
-                                p.groups.map((g) =>
-                                  g.id === group.id
-                                    ? {
-                                        ...g,
-                                        values: reorderById(g.values, from, to),
-                                      }
-                                    : g,
-                                ),
-                                p.rows,
-                              )
+                    <span className="variation-summary-count">
+                      {group.values.length} opsi
+                      {group.allowsImage ? " · Gambar aktif" : ""}
+                    </span>
+                    <ChevronDown size={18} aria-hidden="true" />
+                  </summary>
+                  <header className="variation-card-header">
+                    <div className="variation-field">
+                      <label htmlFor={`group-title-${group.id}`}>
+                        Nama variasi <span aria-hidden="true">*</span>
+                      </label>
+                      <input
+                        id={`group-title-${group.id}`}
+                        aria-label={`Nama variasi ${index + 1}`}
+                        required
+                        maxLength={80}
+                        value={group.name}
+                        aria-describedby={
+                          p.fieldErrors?.[`group-title-${group.id}`]
+                            ? `group-title-${group.id}-error`
+                            : undefined
+                        }
+                        aria-invalid={
+                          Boolean(p.fieldErrors?.[`group-title-${group.id}`]) ||
+                          (!!group.name &&
+                            p.groups.filter(
+                              (g) =>
+                                canonicalOption(g.name) ===
+                                canonicalOption(group.name),
+                            ).length > 1)
+                        }
+                        disabled={blocked || p.reordering}
+                        placeholder="Contoh: Warna, Model, Motif, Kapasitas"
+                        onChange={(e) =>
+                          groupChange(group.id, { name: e.target.value })
+                        }
+                      />
+                      {p.fieldErrors?.[`group-title-${group.id}`] && (
+                        <p
+                          id={`group-title-${group.id}-error`}
+                          className="editor-field-error"
+                          role="alert"
+                        >
+                          {p.fieldErrors[`group-title-${group.id}`]}
+                        </p>
+                      )}
+                    </div>
+                    <details
+                      className="variation-tools"
+                      open={p.reordering ? true : undefined}
+                    >
+                      <summary aria-label={`Aksi variasi ${index + 1}`}>
+                        <Ellipsis size={17} aria-hidden="true" />
+                      </summary>
+                      <div className="variation-tools-menu">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          aria-label={`Hapus variasi ${index + 1}`}
+                          disabled={blocked}
+                          onClick={() => {
+                            if (p.rows.some((v) => v.protected)) {
+                              setError(
+                                "Jenis variasi SKU berstok/bersejarah tidak dapat dihapus.",
+                              );
+                              return;
                             }
-                          />
-                        </div>
-                        {group.allowsImage && (
-                          <div className="variation-photo">
+                            setConfirmation({
+                              title: "Hapus jenis variasi?",
+                              description:
+                                "Jenis ini dan kombinasi terkait akan dilepas setelah diterapkan dan produk disimpan. Jika jenis terakhir dihapus, produk kembali tanpa variasi; hanya SKU pertama dipertahankan, stok tidak digabungkan.",
+                              confirm: "Hapus variasi",
+                              run: () =>
+                                change(
+                                  p.groups.filter((g) => g.id !== group.id),
+                                ),
+                            });
+                          }}
+                        >
+                          <Trash2 size={17} />
+                        </Button>
+                      </div>
+                    </details>
+                    <label className="variation-image-switch">
+                      <span>
+                        <strong>Tambahkan gambar</strong>
+                        <small>
+                          Foto dapat diaktifkan pada satu jenis variasi.
+                        </small>
+                      </span>
+                      <input
+                        type="checkbox"
+                        role="switch"
+                        aria-label={`Tambahkan gambar ${group.name || `variasi ${index + 1}`}`}
+                        checked={group.allowsImage}
+                        disabled={blocked}
+                        onChange={(e) => imageMode(group, e.target.checked)}
+                      />
+                    </label>
+                  </header>
+                  <div className="variation-values">
+                    {group.values.map((value, vi) => {
+                      const image = p.photos.find(
+                        (image) => image.id === value.imageId,
+                      );
+                      return (
+                        <div
+                          key={value.id}
+                          data-sort-scope={`variation-options-${group.id}`}
+                          data-sort-id={value.id}
+                          className={`variation-value-row ${group.allowsImage ? "with-image" : ""}`}
+                        >
+                          <div className="variation-reorder">
+                            <SortableHandle
+                              scope={`variation-options-${group.id}`}
+                              id={value.id}
+                              label={`opsi ${value.value || vi + 1}`}
+                              disabled={
+                                blocked || (!p.groupId && !p.reordering)
+                              }
+                              onMove={(from, to) =>
+                                p.onChange(
+                                  p.groups.map((g) =>
+                                    g.id === group.id
+                                      ? {
+                                          ...g,
+                                          values: reorderById(
+                                            g.values,
+                                            from,
+                                            to,
+                                          ),
+                                        }
+                                      : g,
+                                  ),
+                                  p.rows,
+                                )
+                              }
+                            />
+                          </div>
+                          {group.allowsImage && (
+                            <div className="variation-photo">
+                              <button
+                                type="button"
+                                className="variation-photo-picker"
+                                data-photo-for={value.id}
+                                aria-expanded={picker?.valueId === value.id}
+                                aria-controls={`photo-options-${value.id}`}
+                                aria-label={`${image ? "Ganti" : "Unggah"} foto ${value.value || `opsi ${vi + 1}`}`}
+                                disabled={blocked}
+                                onClick={() =>
+                                  setPicker({
+                                    groupId: group.id,
+                                    valueId: value.id,
+                                    photoId: value.imageId ?? null,
+                                  })
+                                }
+                              >
+                                {image || upload?.id === value.id ? (
+                                  <Image
+                                    unoptimized
+                                    src={image?.url || upload!.preview}
+                                    alt={image?.alt || value.value}
+                                    width={56}
+                                    height={56}
+                                  />
+                                ) : (
+                                  <Camera size={21} aria-hidden="true" />
+                                )}
+                              </button>
+                              <input
+                                type="file"
+                                tabIndex={-1}
+                                className="sr-only"
+                                aria-label={`File foto ${value.value || vi + 1}`}
+                                data-upload-id={value.id}
+                                accept="image/jpeg,image/png,image/webp"
+                                disabled={blocked}
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) void send(group.id, value.id, file);
+                                  e.target.value = "";
+                                }}
+                              />
+                            </div>
+                          )}
+                          <div className="variation-field">
+                            <label htmlFor={`option-value-${value.id}`}>
+                              Opsi {vi + 1} <span aria-hidden="true">*</span>
+                            </label>
+                            <input
+                              id={`option-value-${value.id}`}
+                              aria-label={`Opsi ${group.name || index + 1} ${vi + 1}`}
+                              maxLength={80}
+                              required
+                              value={value.value}
+                              aria-describedby={
+                                p.fieldErrors?.[`option-value-${value.id}`]
+                                  ? `option-value-${value.id}-error`
+                                  : undefined
+                              }
+                              aria-invalid={
+                                Boolean(
+                                  p.fieldErrors?.[`option-value-${value.id}`],
+                                ) ||
+                                (!!value.value &&
+                                  group.values.filter(
+                                    (v) =>
+                                      canonicalOption(v.value) ===
+                                      canonicalOption(value.value),
+                                  ).length > 1)
+                              }
+                              placeholder="Nama pilihan"
+                              disabled={blocked || p.reordering}
+                              onChange={(e) =>
+                                valueChange(group.id, value.id, {
+                                  value: e.target.value,
+                                })
+                              }
+                            />
+                            {p.fieldErrors?.[`option-value-${value.id}`] && (
+                              <p
+                                id={`option-value-${value.id}-error`}
+                                className="editor-field-error"
+                                role="alert"
+                              >
+                                {p.fieldErrors[`option-value-${value.id}`]}
+                              </p>
+                            )}
+                            {upload?.id === value.id && (
+                              <span role="status">
+                                Mengunggah {upload.progress}%
+                                <progress value={upload.progress} max={100} />
+                              </span>
+                            )}
+                            {retry.current?.id === value.id &&
+                              upload === null && (
+                                <button
+                                  type="button"
+                                  className="variation-link"
+                                  disabled={blocked}
+                                  onClick={() =>
+                                    void send(
+                                      group.id,
+                                      value.id,
+                                      retry.current!.file,
+                                    )
+                                  }
+                                >
+                                  Coba unggah lagi
+                                </button>
+                              )}
+                          </div>
+                          {group.allowsImage && (
                             <button
                               type="button"
-                              className="variation-photo-picker"
-                              aria-label={`${image ? "Ganti" : "Unggah"} foto ${value.value || `opsi ${vi + 1}`}`}
+                              className="variation-photo-select variation-select-button"
                               disabled={blocked}
+                              aria-label={`Pilih gambar variasi untuk ${value.value || `opsi ${vi + 1}`}`}
                               onClick={() =>
                                 setPicker({
                                   groupId: group.id,
@@ -615,168 +764,239 @@ export function CustomVariationEditor(p: Props) {
                                 })
                               }
                             >
-                              {image || upload?.id === value.id ? (
-                                <Image
-                                  unoptimized
-                                  src={image?.url || upload!.preview}
-                                  alt={image?.alt || value.value}
-                                  width={56}
-                                  height={56}
-                                />
-                              ) : (
-                                <Camera size={21} aria-hidden="true" />
-                              )}
+                              <ImageIcon size={16} aria-hidden="true" />
+                              <span>
+                                {image
+                                  ? `Foto ${p.photos.findIndex((photo) => photo.id === image.id) + 1}: ${image.alt || "Produk"}`
+                                  : "Pilih gambar (opsional)"}
+                              </span>
+                              <ChevronDown size={14} aria-hidden="true" />
                             </button>
-                            <input
-                              type="file"
-                              tabIndex={-1}
-                              className="sr-only"
-                              aria-label={`File foto ${value.value || vi + 1}`}
-                              data-upload-id={value.id}
-                              accept="image/jpeg,image/png,image/webp"
-                              disabled={blocked}
-                              onChange={(e) => {
-                                const file = e.target.files?.[0];
-                                if (file) void send(group.id, value.id, file);
-                                e.target.value = "";
-                              }}
-                            />
-                            {image && (
+                          )}
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            aria-label={`Hapus opsi ${value.value || vi + 1}`}
+                            disabled={blocked}
+                            onClick={() => removeValue(group.id, value.id)}
+                          >
+                            <Trash2 size={17} />
+                          </Button>
+                          {image && (
+                            <div className="variation-photo-actions">
                               <button
                                 type="button"
-                                aria-label={`Lepaskan foto ${value.value}`}
                                 disabled={blocked}
+                                onClick={() =>
+                                  setPicker({
+                                    groupId: group.id,
+                                    valueId: value.id,
+                                    photoId: value.imageId ?? null,
+                                  })
+                                }
+                              >
+                                Ganti
+                              </button>
+                              <button
+                                type="button"
+                                disabled={blocked}
+                                aria-label={`Hapus foto ${value.value}`}
                                 onClick={() =>
                                   valueChange(group.id, value.id, {
                                     imageId: null,
                                   })
                                 }
                               >
-                                Lepas
+                                Hapus foto
                               </button>
-                            )}
-                          </div>
-                        )}
-                        <div className="variation-field">
-                          <label htmlFor={`option-value-${value.id}`}>
-                            Opsi {vi + 1} <span aria-hidden="true">*</span>
-                          </label>
-                          <input
-                            id={`option-value-${value.id}`}
-                            aria-label={`Opsi ${group.name || index + 1} ${vi + 1}`}
-                            maxLength={80}
-                            required
-                            value={value.value}
-                            aria-invalid={
-                              !!value.value &&
-                              group.values.filter(
-                                (v) =>
-                                  canonicalOption(v.value) ===
-                                  canonicalOption(value.value),
-                              ).length > 1
-                            }
-                            placeholder="Nama pilihan"
-                            disabled={blocked || p.reordering}
-                            onChange={(e) =>
-                              valueChange(group.id, value.id, {
-                                value: e.target.value,
-                              })
-                            }
-                          />
-                          {p.fieldErrors?.[`option-value-${value.id}`] && (
-                            <p className="editor-field-error" role="alert">
-                              {p.fieldErrors[`option-value-${value.id}`]}
-                            </p>
+                            </div>
                           )}
-                          {upload?.id === value.id && (
-                            <span role="status">
-                              Mengunggah {upload.progress}%
-                              <progress value={upload.progress} max={100} />
-                            </span>
-                          )}
-                          {retry.current?.id === value.id &&
-                            upload === null && (
-                              <button
-                                type="button"
-                                className="variation-link"
-                                disabled={blocked}
-                                onClick={() =>
-                                  void send(
-                                    group.id,
-                                    value.id,
-                                    retry.current!.file,
-                                  )
-                                }
+                          {picker?.groupId === group.id &&
+                            picker.valueId === value.id && (
+                              <section
+                                className="variation-photo-inline"
+                                id={`photo-options-${value.id}`}
+                                aria-label={`Foto untuk ${value.value || "opsi ini"}`}
                               >
-                                Coba unggah lagi
-                              </button>
+                                <header>
+                                  <h4>
+                                    Foto untuk {value.value || "opsi ini"}
+                                  </h4>
+                                  <button
+                                    type="button"
+                                    aria-label="Tutup pemilih foto"
+                                    disabled={blocked}
+                                    onClick={() => setPicker(null)}
+                                  >
+                                    <X size={18} />
+                                  </button>
+                                </header>
+                                <div className="variation-photo-inline-tabs">
+                                  <strong>Foto produk</strong>
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    disabled={blocked}
+                                    onClick={() =>
+                                      root.current
+                                        ?.querySelector<HTMLInputElement>(
+                                          `[data-upload-id="${value.id}"]`,
+                                        )
+                                        ?.click()
+                                    }
+                                  >
+                                    <ImagePlus size={16} />
+                                    Unggah baru
+                                  </Button>
+                                </div>
+                                {!(p.galleryPhotos ?? p.photos).length && (
+                                  <div className="variation-photo-inline-empty">
+                                    <ImageIcon size={28} aria-hidden="true" />
+                                    <strong>Belum ada foto produk</strong>
+                                    <p>
+                                      Unggah gambar untuk digunakan pada opsi
+                                      ini.
+                                    </p>
+                                  </div>
+                                )}
+                                <div className="seller-photo-grid">
+                                  {(p.galleryPhotos ?? p.photos).map(
+                                    (photo, pi) => (
+                                      <button
+                                        type="button"
+                                        key={photo.id}
+                                        disabled={blocked}
+                                        className={`seller-photo-tile ${value.imageId === photo.id ? "selected" : ""}`}
+                                        aria-label={`Pilih foto produk ${pi + 1}`}
+                                        aria-pressed={
+                                          value.imageId === photo.id
+                                        }
+                                        onClick={() => {
+                                          valueChange(group.id, value.id, {
+                                            imageId: photo.id,
+                                          });
+                                          setPicker(null);
+                                          requestAnimationFrame(() =>
+                                            root.current
+                                              ?.querySelector<HTMLButtonElement>(
+                                                `[data-photo-for="${value.id}"]`,
+                                              )
+                                              ?.focus({ preventScroll: true }),
+                                          );
+                                        }}
+                                      >
+                                        <Image
+                                          unoptimized
+                                          src={photo.url}
+                                          alt={
+                                            photo.alt || `Foto produk ${pi + 1}`
+                                          }
+                                          width={120}
+                                          height={120}
+                                        />
+                                        {value.imageId === photo.id && (
+                                          <Check
+                                            size={18}
+                                            className="seller-photo-check"
+                                            aria-hidden="true"
+                                          />
+                                        )}
+                                      </button>
+                                    ),
+                                  )}
+                                </div>
+                                {p.optionPhotos.length > 0 && (
+                                  <>
+                                    <p>Foto variasi tersedia</p>
+                                    <div className="seller-photo-grid">
+                                      {p.optionPhotos.map((photo, pi) => (
+                                        <button
+                                          type="button"
+                                          key={photo.id}
+                                          disabled={blocked}
+                                          className={`seller-photo-tile ${value.imageId === photo.id ? "selected" : ""}`}
+                                          aria-label={`Pilih foto variasi ${pi + 1}`}
+                                          aria-pressed={
+                                            value.imageId === photo.id
+                                          }
+                                          onClick={() => {
+                                            valueChange(group.id, value.id, {
+                                              imageId: photo.id,
+                                            });
+                                            setPicker(null);
+                                            requestAnimationFrame(() =>
+                                              root.current
+                                                ?.querySelector<HTMLButtonElement>(
+                                                  `[data-photo-for="${value.id}"]`,
+                                                )
+                                                ?.focus({
+                                                  preventScroll: true,
+                                                }),
+                                            );
+                                          }}
+                                        >
+                                          <Image
+                                            unoptimized
+                                            src={photo.url}
+                                            alt={
+                                              photo.alt ||
+                                              `Foto variasi ${pi + 1}`
+                                            }
+                                            width={120}
+                                            height={120}
+                                          />
+                                          {value.imageId === photo.id && (
+                                            <Check
+                                              size={18}
+                                              className="seller-photo-check"
+                                              aria-hidden="true"
+                                            />
+                                          )}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  </>
+                                )}
+                                <p className="variation-photo-inline-note">
+                                  Foto hanya berlaku untuk opsi ini. Belum
+                                  disimpan permanen.
+                                </p>
+                              </section>
                             )}
                         </div>
-                        {group.allowsImage && (
-                          <button
-                            type="button"
-                            className="variation-photo-select variation-select-button"
-                            disabled={blocked}
-                            aria-label={`Pilih gambar variasi untuk ${value.value || `opsi ${vi + 1}`}`}
-                            onClick={() =>
-                              setPicker({
-                                groupId: group.id,
-                                valueId: value.id,
-                                photoId: value.imageId ?? null,
-                              })
-                            }
-                          >
-                            <ImageIcon size={16} aria-hidden="true" />
-                            <span>
-                              {image
-                                ? `Foto ${p.photos.findIndex((photo) => photo.id === image.id) + 1}: ${image.alt || "Produk"}`
-                                : "Pilih gambar (opsional)"}
-                            </span>
-                            <ChevronDown size={14} aria-hidden="true" />
-                          </button>
-                        )}
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          aria-label={`Hapus opsi ${value.value || vi + 1}`}
-                          disabled={blocked}
-                          onClick={() => removeValue(group.id, value.id)}
-                        >
-                          <Trash2 size={17} />
-                        </Button>
-                      </div>
-                    );
-                  })}
-                </div>
-                <footer className="variation-card-footer">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    disabled={blocked || group.values.length >= 50}
-                    onClick={() =>
-                      groupChange(group.id, {
-                        values: [
-                          ...group.values,
-                          {
-                            id: crypto.randomUUID(),
-                            value: "",
-                            imageId: null,
-                          },
-                        ],
-                      })
-                    }
-                  >
-                    <Plus size={17} /> Tambahkan opsi
-                  </Button>
-                  <span className="variation-option-count">
-                    {group.values.length} / 50 opsi
-                  </span>
-                </footer>
-              </details>
-            ))}
+                      );
+                    })}
+                  </div>
+                  <footer className="variation-card-footer">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      disabled={blocked || group.values.length >= 50}
+                      onClick={() =>
+                        groupChange(group.id, {
+                          values: [
+                            ...group.values,
+                            {
+                              id: crypto.randomUUID(),
+                              value: "",
+                              imageId: null,
+                            },
+                          ],
+                        })
+                      }
+                    >
+                      <Plus size={17} /> Tambahkan opsi
+                    </Button>
+                    <span className="variation-option-count">
+                      {group.values.length} / 50 opsi
+                    </span>
+                  </footer>
+                </details>
+              ),
+            )}
           </div>
-          {p.groups.length > 0 && (
+          {!p.groupId && p.groups.length > 0 && (
             <Button
               type="button"
               variant="outline"
@@ -914,7 +1134,7 @@ export function CustomVariationEditor(p: Props) {
         {p.rows.some((row) => row.optionValueIds?.length) && (
           <>
             <div className="variation-bulk-disclosure">
-              <details open>
+              <details>
                 <summary>
                   Atur massal <span>(opsional)</span>
                 </summary>
@@ -931,474 +1151,73 @@ export function CustomVariationEditor(p: Props) {
                 />
               </details>
             </div>
-            <section className="variation-skus" aria-label="Harga dan stok SKU">
-              <div className="variation-section-title">
-                <h3>Harga &amp; Stok</h3>
-                <span>
-                  {p.rows.filter((r) => r.sku).length} / {p.rows.length} SKU
-                </span>
-              </div>
-              <p>
-                {p.basePrice > 0
-                  ? `Harga kosong mengikuti harga tersimpan Rp${p.basePrice.toLocaleString("id-ID")}.`
-                  : "Isi harga normal setiap kombinasi melalui Input Massal atau masing-masing SKU."}{" "}
-                Stok diubah hanya oleh operator berizin.
-              </p>
-              <div className="variation-table-heading" aria-hidden="true">
-                <span>Opsi variasi</span>
-                <span>SKU</span>
-                <span>Harga normal</span>
-                <span>Harga diskon</span>
-                <span>Stok fisik</span>
-                <span />
-              </div>
-              {p.rows.map((row, index) => (
-                <details
-                  key={
-                    row.id ||
-                    combinationKey(row.optionValueIds ?? []) ||
-                    "default"
-                  }
-                  open={desktop || index === 0}
-                  className="variation-sku"
-                  onInvalidCapture={(e) => {
-                    e.currentTarget.open = true;
-                  }}
-                >
-                  <summary
-                    onClick={(event) => {
-                      if (
-                        desktop &&
-                        !(event.target instanceof HTMLInputElement)
-                      )
-                        event.preventDefault();
-                    }}
-                  >
-                    {selectedOnly && (
-                      <input
-                        type="checkbox"
-                        aria-label={`Pilih SKU ${index + 1}`}
-                        checked={selected.has(index)}
-                        disabled={blocked}
-                        onClick={(e) => e.stopPropagation()}
-                        onChange={(e) =>
-                          setSelected((current) => {
-                            const next = new Set(current);
-                            if (e.target.checked) next.add(index);
-                            else next.delete(index);
-                            return next;
-                          })
-                        }
-                      />
-                    )}
-                    {(() => {
-                      const imageId = p.groups
-                        .find((g) => g.allowsImage)
-                        ?.values.find((v) =>
-                          row.optionValueIds?.includes(v.id),
-                        )?.imageId;
-                      const image = p.photos.find(
-                        (photo) => photo.id === imageId,
-                      );
-                      return image ? (
-                        <Image
-                          unoptimized
-                          src={image.url}
-                          alt=""
-                          width={40}
-                          height={40}
-                          className="variation-sku-photo"
-                        />
-                      ) : null;
-                    })()}
-                    <span>
-                      {optionLabel(p.groups, row.optionValueIds ?? []) ||
-                        "SKU dasar"}
-                      <small>{row.sku || "Buat kombinasi atau isi SKU"}</small>
-                    </span>
-                    <span className="variation-pill">
-                      {row.protected ? "Dilindungi" : "SKU"}
-                    </span>
-                    <ChevronDown size={18} aria-hidden="true" />
-                  </summary>
-                  <div className="variation-sku-fields">
-                    <div className="variation-field">
-                      <label htmlFor={`sku-${index}`}>
-                        SKU <span aria-hidden="true">*</span>
-                      </label>
-                      <input
-                        id={`sku-${index}`}
-                        aria-invalid={Boolean(p.fieldErrors?.[`sku-${index}`])}
-                        aria-describedby={
-                          p.fieldErrors?.[`sku-${index}`]
-                            ? `sku-${index}-error`
-                            : undefined
-                        }
-                        aria-label={`SKU kombinasi ${index + 1}`}
-                        required
-                        maxLength={80}
-                        value={row.sku}
-                        readOnly={row.protected}
-                        title={
-                          row.protected
-                            ? "SKU dikunci karena memiliki stok atau riwayat."
-                            : undefined
-                        }
-                        disabled={blocked}
-                        onChange={(e) =>
-                          rowChange(index, { sku: e.target.value })
-                        }
-                      />
-                      {p.fieldErrors?.[`sku-${index}`] && (
-                        <p
-                          id={`sku-${index}-error`}
-                          className="editor-field-error"
-                          role="alert"
-                        >
-                          {p.fieldErrors[`sku-${index}`]}
-                        </p>
-                      )}
-                    </div>
-                    <div className="variation-field">
-                      <label htmlFor={`sku-price-${index}`}>Harga (Rp)</label>
-                      <input
-                        id={`sku-price-${index}`}
-                        aria-invalid={Boolean(
-                          p.fieldErrors?.[`sku-price-${index}`],
-                        )}
-                        aria-describedby={
-                          p.fieldErrors?.[`sku-price-${index}`]
-                            ? `sku-price-${index}-error`
-                            : undefined
-                        }
-                        type="number"
-                        inputMode="numeric"
-                        min={1}
-                        step={1}
-                        max={2147483647}
-                        value={row.price ?? ""}
-                        placeholder="Ikuti harga utama"
-                        disabled={blocked}
-                        onChange={(e) =>
-                          rowChange(index, {
-                            price: e.target.value
-                              ? Number(e.target.value)
-                              : null,
-                          })
-                        }
-                      />
-                      {p.fieldErrors?.[`sku-price-${index}`] && (
-                        <p
-                          id={`sku-price-${index}-error`}
-                          className="editor-field-error"
-                          role="alert"
-                        >
-                          {p.fieldErrors[`sku-price-${index}`]}
-                        </p>
-                      )}
-                    </div>
-                    <div className="variation-field">
-                      <label htmlFor={`sku-sale-${index}`}>
-                        Harga diskon (Rp)
-                      </label>
-                      <input
-                        id={`sku-sale-${index}`}
-                        aria-invalid={Boolean(
-                          p.fieldErrors?.[`sku-sale-${index}`],
-                        )}
-                        aria-describedby={
-                          p.fieldErrors?.[`sku-sale-${index}`]
-                            ? `sku-sale-${index}-error`
-                            : undefined
-                        }
-                        type="number"
-                        inputMode="numeric"
-                        min={1}
-                        step={1}
-                        max={(row.price ?? p.basePrice) - 1}
-                        value={row.salePrice ?? ""}
-                        placeholder="Opsional"
-                        disabled={blocked}
-                        onChange={(e) =>
-                          rowChange(index, {
-                            salePrice: e.target.value
-                              ? Number(e.target.value)
-                              : null,
-                            ...(e.target.value && row.price == null
-                              ? { price: p.basePrice }
-                              : {}),
-                          })
-                        }
-                      />
-                      {p.fieldErrors?.[`sku-sale-${index}`] && (
-                        <p
-                          id={`sku-sale-${index}-error`}
-                          className="editor-field-error"
-                          role="alert"
-                        >
-                          {p.fieldErrors[`sku-sale-${index}`]}
-                        </p>
-                      )}
-                    </div>
-                    {row.onHand !== undefined && (
-                      <div className="variation-field">
-                        <label htmlFor={`sku-stock-${index}`}>Stok fisik</label>
-                        <input
-                          id={`sku-stock-${index}`}
-                          aria-invalid={Boolean(
-                            p.fieldErrors?.[`sku-stock-${index}`],
-                          )}
-                          aria-describedby={
-                            p.fieldErrors?.[`sku-stock-${index}`]
-                              ? `sku-stock-${index}-error`
-                              : undefined
-                          }
-                          type="number"
-                          inputMode="numeric"
-                          min={row.reserved ?? 0}
-                          step={1}
-                          max={2147483647}
-                          value={row.onHand}
-                          disabled={blocked || !p.canStock}
-                          onChange={(e) =>
-                            rowChange(index, {
-                              onHand: Number(e.target.value),
-                            })
-                          }
-                        />
-                        {p.fieldErrors?.[`sku-stock-${index}`] && (
-                          <p
-                            id={`sku-stock-${index}-error`}
-                            className="editor-field-error"
-                            role="alert"
-                          >
-                            {p.fieldErrors[`sku-stock-${index}`]}
-                          </p>
-                        )}
-                        <small>
-                          {row.reserved ?? 0} direservasi ·{" "}
-                          {Math.max(0, row.onHand - (row.reserved ?? 0))}{" "}
-                          tersedia
-                        </small>
-                      </div>
-                    )}
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      className="variation-remove-sku"
-                      disabled={blocked || p.rows.length <= 1 || row.protected}
-                      onClick={() =>
-                        setConfirmation({
-                          title: "Hapus SKU?",
-                          description:
-                            "Kombinasi ini tidak lagi tersedia untuk pembelian. Server tetap memeriksa stok dan referensi sebelum menghapus.",
-                          confirm: "Hapus SKU",
-                          run: () =>
-                            change(
-                              p.groups,
-                              p.rows.filter((_, i) => i !== index),
-                            ),
-                        })
-                      }
-                    >
-                      <Trash2 size={16} /> Hapus SKU
-                    </Button>
-                  </div>
-                </details>
-              ))}
-            </section>
+            <VariationSkuGrid
+              rows={p.rows}
+              groups={p.groups}
+              photos={p.photos}
+              selected={selected}
+              selectedOnly={selectedOnly}
+              disabled={blocked}
+              canStock={p.canStock}
+              basePrice={p.basePrice}
+              errors={p.fieldErrors}
+              onSelect={(index, checked) =>
+                setSelected((current) => {
+                  const next = new Set(current);
+                  if (checked) next.add(index);
+                  else next.delete(index);
+                  return next;
+                })
+              }
+              onChange={rowChange}
+              onRemove={(index) =>
+                setConfirmation({
+                  title: "Hapus SKU?",
+                  description:
+                    "Kombinasi ini dilepas setelah diterapkan dan produk disimpan. Server tetap melindungi SKU dengan stok atau riwayat.",
+                  confirm: "Hapus SKU",
+                  run: () =>
+                    change(
+                      p.groups,
+                      p.rows.filter((_, i) => i !== index),
+                    ),
+                })
+              }
+            />
           </>
         )}
       </div>
-      <Dialog.Root
-        open={picker !== null}
-        onOpenChange={(open) => {
-          if (!open) setPicker(null);
-        }}
-      >
-        <Dialog.Portal>
-          <Dialog.Overlay className="seller-image-overlay" />
-          <Dialog.Content
-            className="seller-image-dialog"
-            aria-describedby="seller-picker-desc"
-          >
-            <span className="seller-sheet-handle" aria-hidden="true" />
-            <header className="seller-image-dialog-header">
-              <div>
-                <Dialog.Title>Pilih gambar variasi</Dialog.Title>
-                <Dialog.Description id="seller-picker-desc">
-                  Pilih dari foto produk utama atau unggah gambar baru.
-                </Dialog.Description>
-              </div>
-              <Dialog.Close asChild>
-                <button type="button" aria-label="Tutup pilih gambar">
-                  <X size={22} />
-                </button>
-              </Dialog.Close>
-            </header>
-            <strong className="seller-photo-group-title">
-              Foto produk utama
-            </strong>
-            <div className="seller-photo-grid">
-              {(p.galleryPhotos ?? p.photos).map((photo, index) => (
-                <button
-                  type="button"
-                  key={photo.id}
-                  className={`seller-photo-tile ${picker?.photoId === photo.id ? "selected" : ""}`}
-                  onClick={() =>
-                    setPicker((current) =>
-                      current ? { ...current, photoId: photo.id } : current,
-                    )
-                  }
-                  aria-label={`Pilih foto ${index + 1}`}
-                  aria-pressed={picker?.photoId === photo.id}
-                >
-                  <Image
-                    unoptimized
-                    src={photo.url}
-                    alt={photo.alt || `Foto ${index + 1}`}
-                    width={160}
-                    height={160}
-                  />
-                  {picker?.photoId === photo.id && (
-                    <Check
-                      size={18}
-                      className="seller-photo-check"
-                      aria-hidden="true"
-                    />
-                  )}
-                </button>
-              ))}
-              <button
-                type="button"
-                disabled={blocked}
-                className="seller-photo-upload"
-                onClick={() => {
-                  if (!picker) return;
-                  root.current
-                    ?.querySelector<HTMLInputElement>(
-                      `[data-upload-id="${picker.valueId}"]`,
-                    )
-                    ?.click();
-                }}
-              >
-                <Plus size={27} aria-hidden="true" />
-                <span>Unggah baru</span>
-              </button>
-            </div>
-            {p.optionPhotos.length > 0 && (
-              <>
-                <strong className="seller-photo-group-title">
-                  Foto variasi tersimpan
-                </strong>
-                <div className="seller-photo-grid">
-                  {p.optionPhotos.map((photo, index) => (
-                    <button
-                      type="button"
-                      key={photo.id}
-                      className={`seller-photo-tile ${picker?.photoId === photo.id ? "selected" : ""}`}
-                      onClick={() =>
-                        setPicker((current) =>
-                          current ? { ...current, photoId: photo.id } : current,
-                        )
-                      }
-                      aria-label={`Pilih foto variasi ${index + 1}`}
-                      aria-pressed={picker?.photoId === photo.id}
-                    >
-                      <Image
-                        unoptimized
-                        src={photo.url}
-                        alt={photo.alt || `Foto variasi ${index + 1}`}
-                        width={160}
-                        height={160}
-                      />
-                      {picker?.photoId === photo.id && (
-                        <Check
-                          size={18}
-                          className="seller-photo-check"
-                          aria-hidden="true"
-                        />
-                      )}
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
-            <p className="seller-photo-helper">
-              <ImagePlus size={15} aria-hidden="true" /> Gambar yang dipilih
-              akan digunakan untuk opsi variasi ini.
-            </p>
-            <footer className="seller-image-actions">
-              <button type="button" onClick={() => setPicker(null)}>
-                Batal
-              </button>
-              <button
-                type="button"
-                disabled={!picker?.photoId || blocked}
-                onClick={() => {
-                  if (!picker?.photoId) return;
-                  valueChange(picker.groupId, picker.valueId, {
-                    imageId: picker.photoId,
-                  });
-                  setPicker(null);
-                }}
-              >
-                Gunakan gambar
-              </button>
-            </footer>
-          </Dialog.Content>
-        </Dialog.Portal>
-      </Dialog.Root>
-      <Dialog.Root
-        open={confirmation !== null}
-        onOpenChange={(open) => {
-          if (!open) setConfirmation(null);
-        }}
-      >
-        <Dialog.Portal>
-          <Dialog.Overlay className="variation-overlay" />
-          <Dialog.Content
-            onCloseAutoFocus={(event) => {
-              if (focusAfterConfirm.current) {
-                event.preventDefault();
-                focusAfterConfirm.current = false;
-                requestAnimationFrame(() =>
-                  root.current
-                    ?.querySelector<HTMLElement>(
-                      "input:not(:disabled),button:not(:disabled)",
-                    )
-                    ?.focus(),
-                );
-              }
-            }}
-            className="variation-confirm"
-            aria-describedby="variation-confirm-description"
-          >
-            <Dialog.Title>{confirmation?.title}</Dialog.Title>
-            <Dialog.Description id="variation-confirm-description">
-              {confirmation?.description}
-            </Dialog.Description>
-            <div className="variation-confirm-actions">
-              <Dialog.Close asChild>
-                <Button type="button" variant="outline" autoFocus>
-                  Batal
-                </Button>
-              </Dialog.Close>
-              <Button
-                type="button"
-                onClick={() => {
-                  const run = confirmation?.run;
-                  focusAfterConfirm.current = true;
-                  setConfirmation(null);
-                  run?.();
-                }}
-              >
-                {confirmation?.confirm}
-              </Button>
-            </div>
-          </Dialog.Content>
-        </Dialog.Portal>
-      </Dialog.Root>
+      {confirmation && (
+        <section
+          className="variation-inline-confirm"
+          role="alert"
+          aria-label={confirmation.title}
+        >
+          <h3>{confirmation.title}</h3>
+          <p>{confirmation.description}</p>
+          <div>
+            <Button
+              type="button"
+              variant="outline"
+              autoFocus
+              onClick={() => setConfirmation(null)}
+            >
+              Batal
+            </Button>
+            <Button
+              type="button"
+              className="variation-confirm-action"
+              onClick={() => {
+                const run = confirmation.run;
+                setConfirmation(null);
+                run();
+              }}
+            >
+              {confirmation.confirm}
+            </Button>
+          </div>
+        </section>
+      )}
     </div>
   );
 }

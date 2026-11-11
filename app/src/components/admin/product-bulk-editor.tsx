@@ -156,6 +156,20 @@ export function ProductBulkEditor({
           {message}
         </p>
       )}
+      <Button
+        type="button"
+        variant="ghost"
+        disabled={disabled}
+        onClick={() => {
+          const empty = { price: "", salePrice: "", onHand: "" };
+          setFields(empty);
+          setAppliedFields(empty);
+          setMessage("");
+          setFailed(false);
+        }}
+      >
+        Reset isian massal
+      </Button>
     </section>
   );
 }
