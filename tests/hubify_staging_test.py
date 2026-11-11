@@ -13,6 +13,32 @@ spec.loader.exec_module(hubify)
 
 
 class StagingSafetyTests(unittest.TestCase):
+    def test_preserves_live_integrations_and_changes_only_release_builds(self):
+        live = {'services': {
+            'app': {'image': 'old', 'build': {'context': '/old'},
+                    'environment': {'STORE_INSTALLED_VERSION': '1.7.2', 'STORE_WHATSAPP_ENABLED': '1', 'STORE_UPDATER_ENABLED': '1'},
+                    'volumes': ['/media:/media', '/run/updater:/run/updater:ro', '/private/token:/run/token:ro'],
+                    'env_file': ['/etc/runtime.env'], 'mem_limit': '768m'},
+            'tools': {'image': 'old-tools', 'env_file': ['/etc/migration.env']},
+            'db': {'image': 'postgres:16', 'volumes': ['/data:/var/lib/postgresql/data']}}}
+        with patch.object(hubify.core, 'read_json', return_value=live):
+            result = hubify.deployment_compose(Path('/reviewed'), 'a'*40, '1.7.3')
+        self.assertEqual(result['services']['db'], live['services']['db'])
+        for key in ('volumes', 'env_file', 'mem_limit'):
+            self.assertEqual(result['services']['app'][key], live['services']['app'][key])
+        self.assertEqual(result['services']['app']['environment']['STORE_WHATSAPP_ENABLED'], '1')
+        self.assertEqual(result['services']['app']['environment']['STORE_UPDATER_ENABLED'], '1')
+        self.assertEqual(result['services']['app']['environment']['STORE_INSTALLED_VERSION'], '1.7.3')
+        self.assertEqual(result['services']['app']['environment']['STORE_BUILD_SHA'], 'a'*40)
+        self.assertEqual(result['services']['app']['build'], {'context': '/reviewed/app', 'target': 'runtime'})
+        self.assertEqual(live['services']['app']['image'], 'old')
+        self.assertEqual(live['services']['app']['environment']['STORE_INSTALLED_VERSION'], '1.7.2')
+
+    def test_refuses_unknown_live_environment_format_before_downtime(self):
+        with patch.object(hubify.core, 'read_json', return_value={'services': {'app': {'environment': ['A=B']}, 'tools': {}}}):
+            with self.assertRaises(hubify.core.StoreError):
+                hubify.deployment_compose(Path('/reviewed'), 'a'*40, '1.7.3')
+
     def test_rejects_legacy_or_invalid_arguments(self):
         for args in (['3', 'a'*40], ['invalid'], ['A'*40], [], ['--rollback', 'extra']):
             with patch.object(sys, 'argv', ['hubify-staging-deploy', *args]), \

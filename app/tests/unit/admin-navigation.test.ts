@@ -69,7 +69,7 @@ it("groups configuration under settings and categories under products without du
   render(createElement(AdminNav, { permissions: ALL_PERMISSIONS }));
   expect(
     screen.getByRole("link", { name: /Pengaturan/ }).getAttribute("href"),
-  ).toBe("/admin/settings");
+  ).toBe("/admin/settings/seller");
   for (const href of [
     "/admin/shipping",
     "/admin/audit",

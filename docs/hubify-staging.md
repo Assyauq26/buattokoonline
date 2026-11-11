@@ -83,3 +83,9 @@ Backup database, media, dan konfigurasi tersimpan privat. Rollback kode
 mempertahankan migrasi yang sudah diterapkan. Jika pemulihan memerlukan
 perbaikan database, periksa journal dan backup sesuai [panduan update](updates.md).
 Gunakan data sintetis untuk pengujian dan biarkan akses J&T Production dinonaktifkan.
+
+## Pemeliharaan integrasi saat remediasi editor v1.7.3
+
+Helper sebelumnya membangun Compose dari template instalasi lama, sehingga mount token/socket dan flag integrasi yang dipasang operator bisa hilang. Helper v1.7.3 menyalin konfigurasi Compose aktif milik root, mempertahankan seluruh service, environment, env_file, volume, dan batas resource, lalu hanya mengganti build/image aplikasi serta STORE_INSTALLED_VERSION/STORE_BUILD_SHA. Versi pada metadata juga diperbarui bersama SHA setelah health lulus. Konfigurasi platform pusat tidak diubah.
+
+Sebelum menjalankan workflow untuk rilis ini, pasang helper yang sudah direview dari commit main hasil merge dengan prosedur pemasangan di atas. Simpan salinan helper sebelumnya. Workflow tetap memakai exact SHA main, lock operasi, backup, validasi migrasi, dan rollback yang sama. Jangan menjalankan helper lama untuk kandidat ini.

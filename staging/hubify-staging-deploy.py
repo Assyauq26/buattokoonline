@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Root-owned, Hubify-only staging deployment helper. Install from reviewed main."""
 import fcntl
+import copy
 import json
 import os
 from pathlib import Path
@@ -123,6 +124,23 @@ def recover_code(journal, approved_inventory):
     core.atomic_json(core.CONFIG / 'version.json', {**journal['from'], 'migrations': actual})
 
 
+def deployment_compose(source, sha, version):
+    # The live root-owned Compose includes operator-installed updater/WhatsApp
+    # sockets, tokens and feature switches. A historical base template can omit
+    # them. Preserve every service setting and change only application builds
+    # and public release identity. Never read or print token/env-file contents.
+    config = copy.deepcopy(core.read_json(core.COMPOSE))
+    for name, target in [('app', 'runtime'), ('tools', 'tools')]:
+        service = config['services'][name]
+        service['build'] = {'context': str(source / 'app'), 'target': target}
+        service['image'] = 'single-store-' + name + ':hubify-' + sha[:12]
+    environment = config['services']['app'].setdefault('environment', {})
+    if not isinstance(environment, dict):
+        raise core.StoreError('Format environment Compose perlu ditinjau sebelum deployment.')
+    environment.update(STORE_INSTALLED_VERSION=version, STORE_BUILD_SHA=sha)
+    return config
+
+
 def deploy(sha):
     state, installed = preflight()
     verify_repository()
@@ -136,7 +154,7 @@ def deploy(sha):
         print('STAGING_ALREADY_DEPLOYED: https://' + HOST + '/ @ ' + sha, flush=True)
         return
     compose = source / 'compose.json'
-    core.atomic_json(compose, core.compose_for(source, 'hubify-' + sha[:12]))
+    core.atomic_json(compose, deployment_compose(source, sha, candidate_version))
     previous_manager = source / 'previous-manager'
     shutil.copytree(core.ROOT / 'manager', previous_manager, ignore=shutil.ignore_patterns('__pycache__'))
     journal = {
@@ -163,7 +181,7 @@ def deploy(sha):
         core.write_caddy(state, live=True)
         core.public_health(state)
         core.atomic_json(core.CONFIG / 'version.json', {
-            **installed, 'source_sha': sha, 'migrations': inventory,
+            **installed, 'version': candidate_version, 'source_sha': sha, 'migrations': inventory,
             'channel': 'hubify-staging', 'candidate_version': candidate_version})
         core.atomic_json(STAGING_STATE, {
             'branch': 'main', 'sha': sha,

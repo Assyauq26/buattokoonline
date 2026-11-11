@@ -9,18 +9,31 @@ import {
   combinationKey,
   combinationCount,
 } from "./variation-domain";
-const optionId = z.string().regex(/^[a-zA-Z0-9_-]{1,64}$/);
+const optionId = z
+  .string()
+  .regex(
+    /^[a-zA-Z0-9_-]{1,64}$/,
+    "Pilihan variasi tidak valid. Muat ulang editor.",
+  );
 const optionGroups = z
   .array(
     z.object({
       id: optionId,
-      name: z.string().trim().min(1).max(80),
+      name: z
+        .string()
+        .trim()
+        .min(1, "Isi nama jenis variasi.")
+        .max(80, "Nama variasi maksimal 80 karakter."),
       allowsImage: z.boolean().default(false),
       values: z
         .array(
           z.object({
             id: optionId,
-            value: z.string().trim().min(1).max(80),
+            value: z
+              .string()
+              .trim()
+              .min(1, "Isi nama opsi variasi.")
+              .max(80, "Nama opsi maksimal 80 karakter."),
             imageId: z.string().max(64).nullable().optional(),
           }),
         )
@@ -30,13 +43,17 @@ const optionGroups = z
   )
   .max(3);
 
-const money = z.number().int().min(1).max(2_147_483_647);
+const money = z
+  .number({ error: "Isi harga dengan angka yang valid." })
+  .int("Harga harus berupa rupiah bulat.")
+  .min(1, "Harga minimal Rp1.")
+  .max(2_147_483_647, "Harga melebihi batas yang didukung.");
 const optionalMoney = money.nullable().optional();
 const slug = z
   .string()
   .trim()
-  .min(1)
-  .max(120)
+  .min(1, "Isi alamat produk.")
+  .max(120, "Alamat produk maksimal 120 karakter.")
   .regex(
     /^[a-z0-9]+(?:-[a-z0-9]+)*$/,
     "Slug hanya huruf kecil, angka, dan tanda hubung",
@@ -44,24 +61,40 @@ const slug = z
 const variant = z
   .object({
     id: z.string().min(1).max(64).optional(),
-    sku: z.string().trim().min(1, "SKU wajib diisi").max(80),
+    sku: z
+      .string()
+      .trim()
+      .min(1, "SKU belum tersedia. Buat SKU otomatis atau isi kode SKU.")
+      .max(80, "SKU maksimal 80 karakter."),
     color: z.string().trim().max(80).optional().default(""),
     size: z.string().trim().max(40).optional().default(""),
     price: optionalMoney,
     salePrice: optionalMoney,
     optionValueIds: z.array(optionId).max(3).optional(),
-    onHand: z.number().int().min(0).max(2_147_483_647).optional(),
+    onHand: z
+      .number({ error: "Isi stok dengan angka yang valid." })
+      .int("Stok harus berupa bilangan bulat.")
+      .min(0, "Stok tidak boleh negatif.")
+      .max(2_147_483_647, "Stok melebihi batas yang didukung.")
+      .optional(),
     expectedOnHand: z.number().int().min(0).optional(),
   })
   .refine(
     (v) => v.salePrice == null || (v.price != null && v.salePrice < v.price),
-    "Harga diskon varian harus lebih kecil dari harga varian",
+    {
+      message: "Harga diskon harus lebih rendah daripada harga normal SKU.",
+      path: ["salePrice"],
+    },
   );
 
 const productObjectSchema = z
   .object({
     ...shippingMetadataShape,
-    name: z.string().trim().min(2, "Nama produk minimal 2 karakter").max(160),
+    name: z
+      .string()
+      .trim()
+      .min(2, "Nama produk minimal 2 karakter")
+      .max(160, "Nama produk maksimal 160 karakter."),
     slug,
     description: z.string().trim().max(10_000).default(""),
     material: z.string().trim().max(2_000).default(""),
@@ -75,6 +108,7 @@ const productObjectSchema = z
     isFeatured: z.boolean().default(false),
 
     optionsEnabled: z.boolean().optional(),
+    variantMode: z.enum(["simple", "variable"]).optional(),
     optionGroups: optionGroups.optional(),
     optionImages: z
       .array(
@@ -85,7 +119,10 @@ const productObjectSchema = z
       )
       .max(50)
       .optional(),
-    variants: z.array(variant).min(1, "Tambahkan minimal satu varian").max(50),
+    variants: z
+      .array(variant)
+      .min(1, "Buat minimal satu SKU untuk produk.")
+      .max(50, "Maksimal 50 kombinasi SKU per produk."),
     images: z
       .array(
         z.object({
@@ -97,9 +134,35 @@ const productObjectSchema = z
       .default([]),
   })
   .superRefine((v, ctx) => {
+    if (
+      v.variantMode === "simple" &&
+      (v.optionsEnabled ||
+        v.optionGroups?.length ||
+        v.variants.length !== 1 ||
+        v.variants.some(
+          (row) => row.color || row.size || row.optionValueIds?.length,
+        ))
+    )
+      ctx.addIssue({
+        code: "custom",
+        path: ["variants"],
+        message:
+          "Produk tanpa variasi harus memiliki tepat satu SKU tanpa pilihan variasi.",
+      });
+    if (v.variantMode === "variable" && v.optionsEnabled !== true)
+      ctx.addIssue({
+        code: "custom",
+        path: ["optionGroups"],
+        message: "Aktifkan dan lengkapi variasi produk sebelum menyimpan.",
+      });
     const shipping = shippingMetadataSchema.safeParse(v);
     if (!shipping.success)
-      for (const issue of shipping.error.issues) ctx.addIssue({ code: "custom", path: issue.path, message: issue.message });
+      for (const issue of shipping.error.issues)
+        ctx.addIssue({
+          code: "custom",
+          path: issue.path,
+          message: issue.message,
+        });
     if (v.salePrice != null && v.salePrice >= v.basePrice)
       ctx.addIssue({
         code: "custom",
@@ -157,8 +220,18 @@ const productObjectSchema = z
       )
         issue("Kombinasi SKU tidak boleh duplikat");
     }
+    const seenSku = new Set<string>();
+    v.variants.forEach((row, index) => {
+      const sku = row.sku.toUpperCase();
+      if (seenSku.has(sku))
+        ctx.addIssue({
+          code: "custom",
+          path: ["variants", index, "sku"],
+          message: "SKU ini sudah digunakan pada kombinasi lain.",
+        });
+      seenSku.add(sku);
+    });
     for (const [key, values] of [
-      ["SKU", v.variants.map((x) => x.sku)],
       ["ID varian", v.variants.flatMap((x) => (x.id ? [x.id] : []))],
       ["ID gambar", [...v.images, ...(v.optionImages ?? [])].map((x) => x.id)],
     ] as const) {
