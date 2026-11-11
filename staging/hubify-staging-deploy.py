@@ -128,6 +128,13 @@ def recover_code(journal, approved_inventory):
 def deploy(sha):
     state, installed = preflight()
     verify_repository()
+    if installed.get('source_sha') == sha:
+        active = Path(core.read_json(core.COMPOSE)['services']['app']['build']['context']).parent
+        check_schema(active, installed)
+        core.healthy()
+        core.public_health(state)
+        print('STAGING_ALREADY_DEPLOYED: https://' + HOST + '/ @ ' + sha, flush=True)
+        return
     source = prepare_source(sha)
     inventory, candidate_version = check_schema(source, installed)
     if read_db_inventory() != installed['migrations']:
@@ -137,6 +144,9 @@ def deploy(sha):
         core.public_health(state)
         print('STAGING_ALREADY_DEPLOYED: https://' + HOST + '/ @ ' + sha, flush=True)
         return
+    from historical_migrations import prepare_runtime_projection
+    for record in prepare_runtime_projection(source, installed):
+        print('HISTORICAL_RUNTIME_PROJECTION ' + json.dumps(record, sort_keys=True), flush=True)
     compose = source / 'compose.json'
     core.atomic_json(compose, core.compose_for(source, 'hubify-' + sha[:12]))
     previous_manager = source / 'previous-manager'
