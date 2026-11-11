@@ -91,3 +91,5 @@ Tidak membuat transaksi pelanggan, order J&T, pembayaran atau refund nyata. Rest
 Persetujuan terpisah diperlukan sebelum mengembangkan atau menerapkan **prosedur kompatibilitas resmi untuk representasi akhir baris migrasi historis**. Rancangan tersebut harus mempertahankan file historis dan ledger, mengikat bukti pada pasangan hash spesifik serta identitas instalasi, tetap menolak perubahan SQL lain, mencakup installer/updater/helper dan rollback, serta diuji pada salinan terisolasi. Persetujuan desain tidak berarti izin melewati guard saat ini; implementasi tetap harus melalui review dan gate resmi.
 
 Opsi mengedit SQL historis, mengganti checksum ledger/metadata, mengubah tag/asset v1.7.2, atau memaksa helper agar lolos **tidak dilakukan dan tidak direkomendasikan**. Jika kebijakan tetap mensyaratkan byte-exact equality tanpa prosedur kompatibilitas resmi, tidak tersedia jalur rilis aman dalam batas instruksi saat ini.
+
+Latest status: see [v1.7.3 release gates](v1.7.3-release-status.md). The historical checksum NO-GO below was resolved through reviewed PRs #41/#42; deployment now awaits the existing GitHub Environment reviewer approval.
