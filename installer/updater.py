@@ -245,9 +245,12 @@ def installed_version():
 def apply_release(release, package, installed):
     target = core.ROOT / 'releases' / (release['version'] + '-' + release['sha'][:12] + '-' + secrets.token_hex(3))
     target.mkdir(parents=True, mode=0o700)
-    manifest = extract_package(package, target, release, installed)
+    from update_service.package import extract
+    config_path = core.CONFIG / "updater/config.json"
+    config = core.read_json(config_path) if config_path.exists() else {}
+    manifest = extract(package, target, release, installed, config)
     pending = json.loads(core.sql('SELECT coalesce(json_agg(json_build_object(\'name\',migration_name,\'checksum\',checksum)),\'[]\') FROM "_prisma_migrations" WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL;'))
-    if {row['name']: row['checksum'] for row in pending} != installed['migrations']:
+    if len(pending) != len({row['name'] for row in pending}) or {row['name']: row['checksum'] for row in pending} != installed['migrations']:
         raise core.StoreError('Riwayat database berbeda dengan versi terpasang; review operator diperlukan.')
     unfinished = core.sql('SELECT count(*) FROM "_prisma_migrations" WHERE finished_at IS NULL AND rolled_back_at IS NULL;')
     if unfinished != '0':

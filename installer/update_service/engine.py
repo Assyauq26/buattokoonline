@@ -11,7 +11,10 @@ class Engine:
  def pending(self,folder,kind):core.atomic_json(folder/'external-work.json',{'kind':kind,'startedAt':int(time.time())})
  def settled(self,folder):(folder/'external-work.json').unlink(missing_ok=True)
  def mark(self,job,state,**details):self.state.set(job['id'],state,**details)
- def ledger(self):return json.loads(core.sql('SELECT coalesce(json_object_agg(migration_name,checksum),\'{}\') FROM "_prisma_migrations" WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL;'))
+ def ledger(self):
+  rows=json.loads(core.sql("SELECT coalesce(json_agg(json_build_object('name',migration_name,'checksum',checksum)),'[]') FROM \"_prisma_migrations\" WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL;"))
+  if len(rows)!=len({r['name'] for r in rows}):raise Rejected('migration_history')
+  return {r['name']:r['checksum'] for r in rows}
  def resources(self):
   memory={line.split(':')[0]:int(line.split()[1]) for line in Path('/proc/meminfo').read_text().splitlines() if ':' in line}
   if (os.cpu_count() or 0)<2 or memory.get('MemTotal',0)<1900000 or memory.get('MemAvailable',0)+memory.get('SwapFree',0)<1800000:raise Rejected('insufficient_resources')

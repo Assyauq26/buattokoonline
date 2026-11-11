@@ -72,11 +72,11 @@ def check_schema(source, installed):
             policy.get('db_contract') != installed['db_contract'] or
             policy.get('rollback_compatible') is not True):
         raise core.StoreError('Kontrak database atau rollback tidak kompatibel.')
-    candidate = core.inventory(source)
+    from historical_migrations import validate_source
+    candidate, compatibility = validate_source(source, installed)
+    for record in compatibility:
+        print('HISTORICAL_MIGRATION_COMPATIBILITY ' + json.dumps(record, sort_keys=True), flush=True)
     existing = installed['migrations']
-    for name, digest in existing.items():
-        if candidate.get(name) != digest:
-            raise core.StoreError('Migrasi existing berubah atau hilang: ' + name)
     for name in sorted(set(candidate) - set(existing)):
         if not re.fullmatch(r'[0-9]{14}_[a-z0-9_]+', name) or name <= max(existing, default=''):
             raise core.StoreError('Urutan migrasi baru tidak kompatibel.')
@@ -111,6 +111,8 @@ def read_db_inventory():
            FROM "_prisma_migrations" WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL;"""))
     if core.sql('SELECT count(*) FROM "_prisma_migrations" WHERE finished_at IS NULL AND rolled_back_at IS NULL;') != '0':
         raise core.StoreError('Terdapat migrasi gagal atau belum selesai.')
+    if len(rows) != len({row['name'] for row in rows}):
+        raise core.StoreError('Duplikat riwayat migrasi tidak diizinkan.')
     return {row['name']: row['checksum'] for row in rows}
 
 

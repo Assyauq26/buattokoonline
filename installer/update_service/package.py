@@ -48,6 +48,11 @@ def extract(package, destination, release, installed, config):
                 or hashlib.sha256(fresh).hexdigest() != new_digest
                 or old.replace(b'\r\n', b'\n') != fresh.replace(b'\r\n', b'\n')):
                 raise Rejected('migration_history')
+            from historical_migrations import authorize
+            record = authorize(name, old, fresh, installed,
+                {'installation': config.get('installation'), 'origin': config.get('origin')},
+                core.CONFIG / 'migration-compatibility/v1.7.2.tar.gz', release['version'])
+            print('HISTORICAL_MIGRATION_COMPATIBILITY ' + json.dumps(record, sort_keys=True), flush=True)
             compatible['migrations'][name] = new_digest
             preserved[relative] = (name, old, old_digest, new_digest)
     manifest = updater.extract_package(package, destination, release, compatible)
