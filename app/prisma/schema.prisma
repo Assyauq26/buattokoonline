@@ -972,6 +972,16 @@ model ProductEditorSave {
 }
 
 // Store customization is independent of catalog, cart, payment and order models.
+model StoreMailBrandSync {
+  id          Int      @id
+  revision    Int
+  name        String
+  attempts    Int      @default(0)
+  nextAttempt DateTime @default(now())
+  syncedAt    DateTime?
+  status      String   @default("pending")
+}
+
 model StoreAppearance {
   key              String   @id @default("primary") @db.VarChar(16)
   draft            Json

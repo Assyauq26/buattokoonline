@@ -3,7 +3,6 @@ import {
   registrationMailConfig,
   sendStoreMail,
   storeMailStatus,
-  checkMailBrandChange,
 } from "@/modules/auth/registration-otp-email";
 import {
   OTP_ADDRESS,
@@ -85,6 +84,7 @@ it("uses persisted branding for customer mail and only sends the store token to 
     configured: true,
     state: "active",
     brand: "Gheverhan",
+    desiredBrand: "Gheverhan",
     sender: `Gheverhan <${OTP_ADDRESS}>`,
   });
 });
@@ -173,23 +173,15 @@ it("fails closed on quota exhaustion and provider rejection", async () => {
   ).toBe(503);
 });
 
-it("checks a renamed sender with the existing relay before publishing, without sending mail", async () => {
-  vi.stubEnv("STORE_MAIL_RELAY_TOKEN", token);
-  vi.stubEnv("APP_ORIGIN", origin);
-  const request = vi
-    .fn()
-    .mockResolvedValue(new Response(null, { status: 409 }));
-  vi.stubGlobal("fetch", request);
-  await expect(checkMailBrandChange("Brand Baru")).rejects.toMatchObject({
-    status: 409,
-  });
-  expect(request.mock.calls[0][0]).toBe(
-    "https://buattokosendiri.web.id/api/platform/store-mail/status",
-  );
-  expect(JSON.parse(request.mock.calls[0][1].body)).toEqual({
-    origin,
-    brand: "Brand Baru",
-  });
-  request.mockResolvedValue(new Response(null, { status: 200 }));
-  await expect(checkMailBrandChange("Brand Baru")).resolves.toBeUndefined();
+it("uses the registered sender while a dynamic tenant's new name is pending", async () => {
+  const dynamicStores = new Map(stores);
+  const key = hashRelayValue(token);
+  dynamicStores.set(key, { ...dynamicStores.get(key)!, brandSync: true });
+  const deliver = vi.fn();
+  const request = { authorization: "Bearer " + token, payload: { ...payload, brand: "Brand Baru" } };
+  await expect(relayMail(request, { stores: dynamicStores, reserve: () => true, deliver })).resolves.toBe(202);
+  expect(deliver.mock.calls[0][0].from).toBe(`Gheverhan <${OTP_ADDRESS}>`);
+  await expect(relayMail({ ...request, payload: { ...request.payload, origin: "https://other.example" } },
+    { stores: dynamicStores, reserve: () => true, deliver })).resolves.toBe(403);
+  expect(deliver).toHaveBeenCalledOnce();
 });

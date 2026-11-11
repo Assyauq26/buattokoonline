@@ -1,4 +1,4 @@
-import { checkMailBrandChange } from "@/modules/auth/registration-otp-email";
+import { mailBrandSyncPending } from "@/modules/auth/mail-brand-sync";
 import { z } from "zod";
 import { handle, ok, HttpError } from "@/lib/response";
 import { assertSameOrigin } from "@/lib/mutation-origin";
@@ -58,7 +58,6 @@ export async function POST(req: Request) {
         "Selesaikan atau batalkan draft Dekorasi Toko sebelum menerbitkan informasi toko.",
         409,
       );
-    await checkMailBrandChange(identity.name);
     const saved = await executeAppearanceCommand({
       kind: "save",
       draftVersion: state.draftVersion,
@@ -71,6 +70,7 @@ export async function POST(req: Request) {
       publishedVersion: saved.publishedVersion,
     });
     return ok({
+      mailBrandPending: await mailBrandSyncPending().catch(() => true),
       identity: published.publishedConfig.identity,
       draftVersion: published.draftVersion,
       publishedVersion: published.publishedVersion,

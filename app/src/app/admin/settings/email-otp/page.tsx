@@ -2,10 +2,14 @@ import { requireBackofficeUser } from "@/modules/admin/backoffice-access";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { storeMailStatus } from "@/modules/auth/registration-otp-email";
 import { EmailOtpTest } from "@/components/admin/email-otp-test";
+import { mailBrandSyncPending } from "@/modules/auth/mail-brand-sync";
 
 export default async function EmailOtpPage() {
   await requireBackofficeUser(PERMISSIONS.STORE_CUSTOMIZE_PUBLISH);
-  const status = await storeMailStatus().catch(() => null);
+  const [status, pending] = await Promise.all([
+    storeMailStatus().catch(() => null),
+    mailBrandSyncPending().catch(() => false),
+  ]);
   return (
     <section className="mx-auto w-full max-w-2xl space-y-5 pb-20">
       <header>
@@ -17,9 +21,9 @@ export default async function EmailOtpPage() {
       <dl className="divide-y divide-zinc-200 rounded-2xl border border-zinc-200 bg-white px-4 sm:px-6">
         {[
           ["Status layanan", ({ active: "Aktif", preparing: "Sedang disiapkan", action: "Perlu tindakan", unavailable: "Gangguan layanan" })[status?.state ?? "unavailable"]],
-          ["Konfigurasi pengiriman", status?.state === "active" ? "Identitas toko dan relay terverifikasi" : "Belum terverifikasi"],
-          ["Nama toko dalam email", status?.brand ?? "Belum dapat dimuat"],
-          ["Pengirim customer", status?.sender ?? "Belum dapat dimuat"],
+          ["Identitas pengirim", pending ? "Sedang disinkronkan" : status?.state === "active" ? "Terverifikasi" : "Belum terverifikasi"],
+          ["Nama tampilan toko", status?.desiredBrand ?? "Belum dapat dimuat"],
+          ["Pengirim customer", status?.configured ? status.sender : "Belum dapat diverifikasi"],
         ].map(([label, value]) => (
           <div key={label} className="grid gap-1 py-4 sm:grid-cols-[11rem_minmax(0,1fr)]">
             <dt className="text-sm text-zinc-600">{label}</dt>
