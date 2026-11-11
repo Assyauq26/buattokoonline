@@ -1,0 +1,73 @@
+{
+  "release_archive_sha256": "dd7d400a3821e4fc20b6886f688ee48c46300a440344b0e06978e32313dad938",
+  "verified_release_files": 730,
+  "all_release_files_equal_git": true,
+  "vps_source_audit": {
+    "root": "/opt/single-store/development-sources/5145bdcd7cd84f93f49a066aa669560e858db0ac",
+    "checked": 730,
+    "missing": [],
+    "different": [
+      {
+        "path": "app/prisma/migrations/20261109120000_order_resolution_workflow/migration.sql",
+        "expected": "865ec38af4482060322ba0dc89becc9132881d7bbb7f7e633b669af30e0444ec",
+        "actual": "789ef757b2cb2fb6f6d38f710c6a50cfcb371d9b61e18e4154120930e02107ac",
+        "normalized_sha256": "865ec38af4482060322ba0dc89becc9132881d7bbb7f7e633b669af30e0444ec"
+      },
+      {
+        "path": "app/prisma/migrations/20261109121500_resolution_transfer_review/migration.sql",
+        "expected": "22cb34b1d3840926b42356fb333c0678f5a0ea850ee3c3b8b1f9373cc92a885b",
+        "actual": "d67b0094191575be2f28c7968e41eabad5bf9a9ab84676d8c66b7e7c01313483",
+        "normalized_sha256": "22cb34b1d3840926b42356fb333c0678f5a0ea850ee3c3b8b1f9373cc92a885b"
+      }
+    ]
+  },
+  "migration_comparison": [
+    {
+      "migration": "20261109120000_order_resolution_workflow",
+      "git_artifact_candidate_byte_identical": true,
+      "vps_current_historical_byte_identical": true,
+      "vps_ledger_metadata_hash_match": true,
+      "only_difference_CR_before_LF": true,
+      "CR_byte_offsets_in_VPS": [
+        108,
+        142,
+        236,
+        362,
+        569,
+        689,
+        886,
+        1037,
+        1148,
+        1337,
+        1341,
+        1489,
+        1588,
+        1683,
+        1956,
+        2075,
+        2561,
+        2715,
+        3114
+      ],
+      "git_artifact_bytes": 3097,
+      "vps_bytes": 3116,
+      "canonical_sha256": "865ec38af4482060322ba0dc89becc9132881d7bbb7f7e633b669af30e0444ec",
+      "vps_ledger_sha256": "789ef757b2cb2fb6f6d38f710c6a50cfcb371d9b61e18e4154120930e02107ac"
+    },
+    {
+      "migration": "20261109121500_resolution_transfer_review",
+      "git_artifact_candidate_byte_identical": true,
+      "vps_current_historical_byte_identical": true,
+      "vps_ledger_metadata_hash_match": true,
+      "only_difference_CR_before_LF": true,
+      "CR_byte_offsets_in_VPS": [
+        76,
+        354
+      ],
+      "git_artifact_bytes": 354,
+      "vps_bytes": 356,
+      "canonical_sha256": "22cb34b1d3840926b42356fb333c0678f5a0ea850ee3c3b8b1f9373cc92a885b",
+      "vps_ledger_sha256": "d67b0094191575be2f28c7968e41eabad5bf9a9ab84676d8c66b7e7c01313483"
+    }
+  ]
+}

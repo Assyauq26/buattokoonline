@@ -54,7 +54,13 @@ export function ProductBulkEditor({
             <input
               id={`bulk-${key}`}
               inputMode="numeric"
-              placeholder={key === "price" ? "Contoh: 20000" : key === "salePrice" ? "Contoh: 17000" : "Contoh: 10"}
+              placeholder={
+                key === "price"
+                  ? "Contoh: 20000"
+                  : key === "salePrice"
+                    ? "Contoh: 17000"
+                    : "Contoh: 10"
+              }
               value={fields[key]}
               disabled={disabled || (key === "onHand" && !canStock)}
               onChange={(e) =>
@@ -119,7 +125,7 @@ export function ProductBulkEditor({
             );
             setFailed(false);
             setMessage(
-              "Perubahan massal diterapkan pada formulir. Klik Simpan untuk menyimpannya.",
+              `${selectedOnly ? selected.size : rows.length} SKU diperbarui pada formulir. Belum tersimpan; klik Simpan produk untuk menyimpannya.`,
             );
           } catch (error) {
             setFailed(true);
@@ -129,9 +135,12 @@ export function ProductBulkEditor({
           }
         }}
       >
-        <Settings2 size={16} aria-hidden="true" /> Terapkan Massal
+        <Settings2 size={16} aria-hidden="true" /> Terapkan ke SKU
       </Button>
-      <p className="variation-bulk-hint"><Info size={14} aria-hidden="true" /> Data harga dan stok diperbarui pada kombinasi SKU sesuai pilihan di atas setelah produk disimpan.</p>
+      <p className="variation-bulk-hint">
+        <Info size={14} aria-hidden="true" /> Data harga dan stok diperbarui
+        pada kombinasi SKU sesuai pilihan di atas setelah produk disimpan.
+      </p>
       {message && (
         <p className="mt-3" role={failed ? "alert" : "status"}>
           {message}

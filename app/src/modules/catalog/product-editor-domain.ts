@@ -4,6 +4,32 @@ type Row = ProductInput["variants"][number] & {
   reserved?: number;
   protected?: boolean;
 };
+export function isSimpleProduct(value: {
+  optionsEnabled?: boolean;
+  variants: { color?: string | null; size?: string | null }[];
+}) {
+  return (
+    !value.optionsEnabled &&
+    value.variants.length === 1 &&
+    !value.variants[0].color?.trim() &&
+    !value.variants[0].size?.trim()
+  );
+}
+
+/** A draft survivor keeps its stable ID and stock snapshot during a safe conversion. */
+export function simpleProductRow(rows: Row[]): Row {
+  const row = rows[0];
+  return row
+    ? {
+        ...row,
+        color: "",
+        size: "",
+        optionValueIds: [],
+        price: null,
+        salePrice: null,
+      }
+    : { sku: "", color: "", size: "", price: null, salePrice: null, onHand: 0 };
+}
 const limit = 2_147_483_647;
 function ascii(value: string) {
   return value

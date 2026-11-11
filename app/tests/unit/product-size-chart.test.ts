@@ -23,10 +23,11 @@ describe("bounded size-chart contract", () => {
   });
 });
 describe("canonical variant pricing and publish readiness", () => {
-  it("selects cheapest effective SKU without rewriting any SKU prices", () => {
+  it("preserves explicit fallback and only bootstraps legacy missing prices", () => {
     const input = { optionsEnabled: true, optionGroups: [{}], basePrice: 999, salePrice: null, variants: [{ price: 200, salePrice: 100 }, { price: 150, salePrice: 120 }] };
     const result = canonicalProductPricing(input);
-    expect(result.basePrice).toBe(200); expect(result.salePrice).toBe(100); expect(result.variants).toBe(input.variants);
+    expect(result.basePrice).toBe(999); expect(result.salePrice).toBeNull();
+    expect(canonicalProductPricing({ ...input, basePrice: 0 }).basePrice).toBe(200); expect(result.variants).toBe(input.variants);
     expect(canonicalProductPricing({ ...input, variants: [{ price: null }] }).basePrice).toBe(999);
     expect(canonicalProductPricing({ ...input, optionsEnabled: false }).basePrice).toBe(999);
   });

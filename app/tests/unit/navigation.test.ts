@@ -49,6 +49,9 @@ describe('navigation controls', () => {
     actions.saveProductAction.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; })).mockResolvedValue({ ok: false, error: 'Periksa nama produk' });
     render(React.createElement(ProductEditor, { categories: [], brands: [], canEdit: true, canStock: true, canArchive: true }));
     const form = screen.getByTestId('product-editor');
+    fireEvent.change(screen.getByLabelText(/Nama produk/i), { target: { value: "Produk Uji" } });
+    fireEvent.change(screen.getByLabelText("Harga normal (Rp)"), { target: { value: "10000" } });
+    fireEvent.change(screen.getByLabelText("Kode SKU"), { target: { value: "TEST-SAVE" } });
     fireEvent.submit(form); fireEvent.submit(form);
     expect(actions.saveProductAction).toHaveBeenCalledOnce();
     finish({ ok: false, error: 'Periksa nama produk' });

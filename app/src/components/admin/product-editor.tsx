@@ -1,10 +1,15 @@
 "use client";
 import { DeleteProductButton } from "./delete-product-button";
 
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  useTransition,
+  type FormEvent,
+} from "react";
 import Link from "@/components/ui/navigation";
 import { useRouter } from "next/navigation";
-import * as Dialog from "@radix-ui/react-dialog";
 import {
   Plus,
   Trash2,
@@ -16,12 +21,12 @@ import {
   Check,
   Save,
   Sparkles,
-  ChevronRight,
-  SlidersHorizontal,
 } from "lucide-react";
 import {
   canonicalProductForm,
   suggestSku,
+  isSimpleProduct,
+  simpleProductRow,
 } from "@/modules/catalog/product-editor-domain";
 import {
   cmToMm,
@@ -45,7 +50,10 @@ import { SizeChartEditor } from "./size-chart-editor";
 import { ProductPhotoEditor } from "./product-photo-editor";
 import { canonicalProductPricing } from "@/modules/catalog/product-canonical-pricing";
 import { productPublishReadiness } from "@/modules/catalog/product-publish-readiness";
-import type { ProductInput } from "@/modules/catalog/product-management.validation";
+import {
+  productInputSchema,
+  type ProductInput,
+} from "@/modules/catalog/product-management.validation";
 import type { ProductEditorData } from "@/modules/catalog/product-management.service";
 import type { ProductStatus } from "@prisma/client";
 
@@ -157,17 +165,11 @@ export function ProductEditor({
   const [productId, setProductId] = useState(initial?.id || "");
   const [bulkSelected, setBulkSelected] = useState(new Set<number>());
   const [bulkSelectedOnly, setBulkSelectedOnly] = useState(false);
-  const [custom, setCustom] = useState(initial?.optionsEnabled ?? !initial);
-  const [sellerPanel, setSellerPanel] = useState<"groups" | "stock" | null>(
-    null,
-  );
+  const [custom, setCustom] = useState(initial?.optionsEnabled ?? false);
   const [reordering, setReordering] = useState(false);
   const [queueBusy, setQueueBusy] = useState(false);
-  const panelBaseline = useRef("");
-  const panelSnapshot = useRef<Values | null>(null);
   const restoreBack = useRef(false);
-  const backState = useRef({ dirty: false, panel: false, uploading: false });
-  const closePanelRef = useRef<() => void>();
+  const backState = useRef({ dirty: false, uploading: false });
   const busy = useRef(false);
   const persistedSnapshot = useRef<ProductEditorData | undefined>(initial);
   const [values, setValues] = useState<Values>(() => valuesFor(initial));
@@ -179,10 +181,12 @@ export function ProductEditor({
   const [baseline, setBaseline] = useState(() =>
     formSnapshot(
       valuesFor(initial),
-      initial?.optionsEnabled ?? !initial,
+      initial?.optionsEnabled ?? false,
       shippingFor(initial),
     ),
   );
+  const simple =
+    !custom && isSimpleProduct({ ...values, optionsEnabled: false });
   const dirty = formSnapshot(values, custom, shipping) !== baseline;
   const saveRequest = useRef<{ payload: string; id: string }>();
   const uploadRequests = useRef(new WeakMap<File, string>());
@@ -265,8 +269,21 @@ export function ProductEditor({
       /* optional */
     }
   }, [values.images, values.optionImages, productId, mediaRecovered]);
-  const [pending, setPending] = useState<string | null>(null);
+  const [navigating, startNavigation] = useTransition();
+  const [operation, setPending] = useState<string | null>(null);
+  const pending = operation || (navigating ? "navigation" : null);
   const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const fieldError = (id: string) =>
+    fieldErrors[id] ? (
+      <p id={`${id}-error`} className="editor-field-error" role="alert">
+        {fieldErrors[id]}
+      </p>
+    ) : null;
+  const validationProps = (id: string) => ({
+    "aria-invalid": Boolean(fieldErrors[id]),
+    "aria-describedby": fieldErrors[id] ? `${id}-error` : undefined,
+  });
   const [notice, setNotice] = useState("");
   const feedback = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -293,17 +310,30 @@ export function ProductEditor({
   }
   async function save(event: FormEvent<HTMLFormElement>, publish = false) {
     event.preventDefault();
-    if (busy.current || queueBusy) return;
+    if (busy.current || queueBusy || navigating) return;
     busy.current = true;
     setPending("save");
     setError("");
     setNotice("");
     try {
+      let saveValues = values;
+      if (simple && !values.variants[0].sku.trim()) {
+        const allocated = await allocateProductSkusAction([
+          { key: "simple", sku: suggestSku(values.name, [], [], new Set()) },
+        ]);
+        if (!allocated.ok || !allocated.data?.[0])
+          throw new Error(allocated.error || "SKU gagal dibuat. Coba lagi.");
+        saveValues = {
+          ...values,
+          variants: [{ ...values.variants[0], sku: allocated.data[0].sku }],
+        };
+        setValues(saveValues);
+      }
       const form = new FormData();
       form.set("id", productId);
       form.set("updatedAt", version);
       const payload =
-        formSnapshot(values, custom, shipping) + productId + version;
+        formSnapshot(saveValues, custom, shipping) + productId + version;
       if (saveRequest.current?.payload !== payload)
         saveRequest.current = { payload, id: crypto.randomUUID() };
       form.set("requestId", saveRequest.current.id);
@@ -311,7 +341,8 @@ export function ProductEditor({
         "product",
         JSON.stringify(
           canonicalProductPricing({
-            ...values,
+            ...saveValues,
+            variantMode: simple ? "simple" : custom ? "variable" : undefined,
             ...shippingData(shipping),
             // Persist accessible photo names even after recovering an upload from session.
             images: values.images.map((image, index) => ({
@@ -344,6 +375,62 @@ export function ProductEditor({
           }),
         ),
       );
+      const parsed = productInputSchema.safeParse(
+        JSON.parse(String(form.get("product"))),
+      );
+      if (!parsed.success) {
+        const issues: Record<string, string> = {};
+        for (const issue of parsed.error.issues) {
+          const [field, index, key, valueIndex] = issue.path;
+          let id =
+            (
+              {
+                name: "product-name",
+                slug: "product-slug",
+                basePrice: "product-price",
+                salePrice: "product-sale-price",
+              } as Record<string, string>
+            )[String(field)] || "product-pricing";
+          if (field === "variants" && typeof index === "number")
+            id = simple
+              ? key === "sku"
+                ? "simple-sku"
+                : key === "onHand"
+                  ? "simple-stock"
+                  : key === "salePrice"
+                    ? "product-sale-price"
+                    : "product-price"
+              : custom
+                ? key === "sku"
+                  ? `sku-${index}`
+                  : `sku-${key === "onHand" ? "stock" : key === "salePrice" ? "sale" : "price"}-${index}`
+                : `variant-${index}-${key === "onHand" ? "stock" : String(key)}`;
+          if (field === "optionGroups" && typeof index === "number") {
+            const group = values.optionGroups?.[index];
+            if (group)
+              id =
+                key === "values" && typeof valueIndex === "number"
+                  ? `option-value-${group.values[valueIndex]?.id}`
+                  : `group-title-${group.id}`;
+          }
+          issues[id] = /^(Invalid|Too |Expected|Unrecognized)/.test(
+            issue.message,
+          )
+            ? "Periksa isian ini. Nilai belum sesuai batas yang diizinkan."
+            : issue.message;
+        }
+        setFieldErrors(issues);
+        setNotice("Periksa kolom yang ditandai sebelum menyimpan produk.");
+        const target = document.getElementById(Object.keys(issues)[0]);
+        const details = target?.closest("details");
+        if (details) details.open = true;
+        requestAnimationFrame(() => {
+          target?.focus();
+          target?.scrollIntoView({ block: "center" });
+        });
+        return;
+      }
+      setFieldErrors({});
       const result = await saveProductAction(form);
       if (!result.ok || !result.data) {
         setError(result.error || "Produk gagal disimpan");
@@ -373,8 +460,11 @@ export function ProductEditor({
       setNotice(
         publish ? "Produk berhasil diterbitkan." : "Produk berhasil disimpan.",
       );
-      if (!initial) router.push(`/admin/products/${result.data.id}`);
-      else router.refresh();
+      const savedId = result.data.id;
+      startNavigation(() => {
+        if (!initial) router.push(`/admin/products/${savedId}`);
+        else router.refresh();
+      });
     } catch (error) {
       setError(
         error instanceof Error
@@ -548,8 +638,7 @@ export function ProductEditor({
     );
   }
   useEffect(() => {
-    if (!dirty && !queueBusy && !sellerPanel && !pending?.startsWith("upload-"))
-      return;
+    if (!dirty && !queueBusy && !pending?.startsWith("upload-")) return;
     const unload = (event: BeforeUnloadEvent) => {
       event.preventDefault();
       event.returnValue = "";
@@ -579,7 +668,7 @@ export function ProductEditor({
       window.removeEventListener("beforeunload", unload);
       document.removeEventListener("click", navigate, true);
     };
-  }, [dirty, pending, queueBusy, sellerPanel]);
+  }, [dirty, pending, queueBusy]);
   useEffect(() => {
     // Navigation.currentEntry.index identifies the direction of a browser
     // traverse even when it was initiated by Forward or history.go(n).
@@ -606,9 +695,8 @@ export function ProductEditor({
         return;
       }
       const current = backState.current;
-      if (!current.dirty && !current.panel && !current.uploading) return;
+      if (!current.dirty && !current.uploading) return;
       if (
-        current.panel ||
         !window.confirm(
           "Ada perubahan produk yang belum disimpan. Tinggalkan halaman?",
         )
@@ -618,7 +706,6 @@ export function ProductEditor({
           restoreBack.current = true;
           window.history.go(returnOffset);
         }
-        if (current.panel) closePanelRef.current?.();
       }
     };
     window.addEventListener("popstate", pop, true);
@@ -717,39 +804,25 @@ export function ProductEditor({
     payload = canonicalProductPricing({
       ...values,
       ...shippingData(shipping),
+      variants: simple
+        ? [
+            {
+              ...values.variants[0],
+              sku:
+                values.variants[0].sku ||
+                suggestSku(values.name, [], [], new Set()),
+            },
+          ]
+        : values.variants,
+      variantMode: simple ? "simple" : custom ? "variable" : undefined,
       optionsEnabled: custom && Boolean(values.optionGroups?.length),
     });
   } catch {
     payload = null;
   }
   const readiness = productPublishReadiness(payload);
-  function openPanel(panel: "groups" | "stock") {
-    panelBaseline.current = canonicalProductForm(values);
-    panelSnapshot.current = values;
-    setReordering(false);
-    setSellerPanel(panel);
-  }
-  const panelDirty =
-    sellerPanel !== null &&
-    canonicalProductForm(values) !== panelBaseline.current;
-  function closePanel(apply = false) {
-    if (pending || queueBusy) return;
-    if (!apply && panelDirty) {
-      if (!window.confirm("Buang perubahan variasi sejak editor ini dibuka?"))
-        return;
-      if (panelSnapshot.current) setValues(panelSnapshot.current);
-    }
-    setSellerPanel(null);
-    setReordering(false);
-    if (apply && panelDirty)
-      setNotice(
-        "Perubahan variasi ada dalam formulir. Simpan produk untuk menyimpan ke database.",
-      );
-  }
-  closePanelRef.current = () => closePanel();
   backState.current = {
     dirty,
-    panel: sellerPanel !== null,
     uploading: queueBusy || Boolean(pending?.startsWith("upload-")),
   };
   return (
@@ -811,8 +884,26 @@ export function ProductEditor({
             {notice}
           </p>
         )}
+        {Object.entries(fieldErrors)
+          .filter(
+            ([id]) =>
+              ![
+                "product-name",
+                "product-slug",
+                "product-price",
+                "product-sale-price",
+                "simple-stock",
+                "simple-sku",
+              ].includes(id),
+          )
+          .map(([id, message]) => (
+            <p key={id} className="editor-field-error">
+              <a href={`#${id}`}>{message}</a>
+            </p>
+          ))}
       </div>
       <form
+        noValidate
         onSubmit={(event) =>
           void save(
             event,
@@ -824,7 +915,7 @@ export function ProductEditor({
         data-testid="product-editor"
         className="space-y-5"
       >
-        <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_260px] xl:grid-cols-[minmax(0,1fr)_300px]">
+        <div className="grid items-start gap-5 2xl:grid-cols-[minmax(0,1fr)_260px]">
           <fieldset
             disabled={!canEdit || !!pending || queueBusy}
             className="min-w-0 space-y-5"
@@ -875,6 +966,7 @@ export function ProductEditor({
                 </div>
                 <Input
                   id="product-name"
+                  {...validationProps("product-name")}
                   aria-label="Nama produk"
                   value={values.name}
                   required
@@ -891,6 +983,7 @@ export function ProductEditor({
                       change("slug", suggestSlug(name));
                   }}
                 />
+                {fieldError("product-name")}
               </div>
               <div>
                 <Label htmlFor="product-category">Kategori</Label>
@@ -939,6 +1032,7 @@ export function ProductEditor({
                 </Label>
                 <Input
                   id="product-slug"
+                  {...validationProps("product-slug")}
                   aria-label="Alamat produk (slug)"
                   value={values.slug}
                   required
@@ -946,6 +1040,7 @@ export function ProductEditor({
                   onChange={(e) => change("slug", e.target.value)}
                   placeholder="nama-produk"
                 />
+                {fieldError("product-slug")}
                 <p className="mt-1.5 break-all text-xs text-zinc-500">
                   /product/{values.slug || "nama-produk"}
                 </p>
@@ -1037,113 +1132,50 @@ export function ProductEditor({
                     checked={custom}
                     disabled={!canEdit || !!pending}
                     onChange={(event) => {
-                      if (event.target.checked) {
-                        if (values.variants.some((row) => row.id)) {
-                          setError(
-                            "SKU produk lama perlu konversi terkontrol. Gunakan pengaturan SKU yang sudah ada agar pesanan dan stok tetap aman.",
-                          );
-                          return;
-                        }
-                        setCustom(true);
-                        openPanel("groups");
-                        setError("");
-                      } else {
-                        if (
-                          values.variants.some((row) => row.id) ||
-                          values.variants.some((row) => row.protected)
-                        ) {
-                          setError(
-                            "Variasi produk yang sudah mempunyai SKU tersimpan tidak dapat dinonaktifkan tanpa migrasi SKU terkontrol.",
-                          );
-                          return;
-                        }
-                        if (
-                          values.optionGroups?.length &&
-                          !window.confirm(
-                            "Nonaktifkan variasi? Opsi dan kombinasi SKU dalam draft akan dihapus.",
-                          )
+                      const enabled = event.target.checked;
+                      if (
+                        values.variants.some(
+                          (row) =>
+                            row.protected ||
+                            (row.id && (row.onHand || row.reserved)),
                         )
-                          return;
+                      ) {
+                        setError(
+                          "Mode variasi tidak dapat diubah karena SKU memiliki stok atau riwayat. Harga dan stok tetap dapat diedit. Buat produk baru untuk susunan variasi berbeda.",
+                        );
+                        return;
+                      }
+                      if (
+                        (values.variants.some((row) => row.id) || !enabled) &&
+                        !window.confirm(
+                          enabled
+                            ? "Aktifkan variasi? SKU yang ada dipertahankan pada kombinasi pertama. Tinjau pilihan sebelum menyimpan produk."
+                            : "Nonaktifkan variasi? Hanya SKU pertama dipertahankan. Kombinasi lain dilepas setelah Simpan produk. Stok tidak digabungkan.",
+                        )
+                      )
+                        return;
+                      if (!enabled) {
+                        const first = values.variants[0];
                         setValues((current) => ({
                           ...current,
+                          basePrice: first?.price ?? current.basePrice,
+                          salePrice:
+                            first?.price != null
+                              ? first.salePrice
+                              : current.salePrice,
                           optionGroups: [],
-                          variants: [
-                            {
-                              sku: "",
-                              color: "",
-                              size: "",
-                              price: null,
-                              salePrice: null,
-                              ...(canStock ? { onHand: 0 } : {}),
-                            },
-                          ],
+                          variants: [simpleProductRow(current.variants)],
                         }));
-                        setCustom(false);
-                        setSellerPanel(null);
-                        setError("");
                       }
+                      setCustom(enabled);
+                      setError("");
+                      setNotice("");
                     }}
                   />
                   <span aria-hidden="true" className="seller-toggle-track" />
                 </label>
               </div>
-              {custom && (
-                <div className="seller-sales-links">
-                  <button type="button" onClick={() => openPanel("groups")}>
-                    <span>
-                      Variasi <b aria-hidden="true">*</b>
-                    </span>
-                    <span>
-                      {values.optionGroups?.length
-                        ? `${values.optionGroups.length} jenis`
-                        : "Tambah"}{" "}
-                      <ChevronRight size={18} />
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (!values.optionGroups?.length) {
-                        setNotice(
-                          "Tambahkan jenis variasi terlebih dahulu sebelum mengatur Harga/Stok.",
-                        );
-                        openPanel("groups");
-                      } else openPanel("stock");
-                    }}
-                  >
-                    <span>
-                      Harga/Stok <b aria-hidden="true">*</b>
-                    </span>
-                    <span>
-                      {values.variants.some((row) => row.sku)
-                        ? `${values.variants.length} SKU`
-                        : "Tambah"}{" "}
-                      <ChevronRight size={18} />
-                    </span>
-                  </button>
-                </div>
-              )}
-              {!custom && !initial && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="seller-enable-legacy"
-                  onClick={() => setCustom(true)}
-                >
-                  Gunakan editor variasi kustom
-                </Button>
-              )}
-              {custom && !values.optionGroups?.length && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="seller-enable-legacy"
-                  onClick={() => setCustom(false)}
-                >
-                  Gunakan varian sederhana
-                </Button>
-              )}
-              {!custom && (
+              {
                 <>
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div>
@@ -1155,6 +1187,7 @@ export function ProductEditor({
                       </Label>
                       <Input
                         id="product-price"
+                        {...validationProps("product-price")}
                         aria-label="Harga normal (Rp)"
                         type="number"
                         inputMode="numeric"
@@ -1162,12 +1195,29 @@ export function ProductEditor({
                         max={2147483647}
                         step={1}
                         required
-                        value={values.basePrice || ""}
+                        value={
+                          (simple
+                            ? (values.variants[0].price ?? values.basePrice)
+                            : values.basePrice) || ""
+                        }
                         onChange={(e) =>
-                          change("basePrice", Number(e.target.value))
+                          setValues((current) => ({
+                            ...current,
+                            basePrice: Number(e.target.value),
+                            variants: simple
+                              ? current.variants.map((row) => ({
+                                  ...row,
+                                  price:
+                                    row.price == null
+                                      ? null
+                                      : Number(e.target.value),
+                                }))
+                              : current.variants,
+                          }))
                         }
                         placeholder="0"
                       />
+                      {fieldError("product-price")}
                     </div>
                     <div>
                       <Label htmlFor="product-sale-price">
@@ -1175,19 +1225,38 @@ export function ProductEditor({
                       </Label>
                       <Input
                         id="product-sale-price"
+                        {...validationProps("product-sale-price")}
                         type="number"
                         inputMode="numeric"
                         min={1}
                         step={1}
-                        value={values.salePrice ?? ""}
+                        value={
+                          (simple && values.variants[0].price != null
+                            ? values.variants[0].salePrice
+                            : values.salePrice) ?? ""
+                        }
                         onChange={(e) =>
-                          change(
-                            "salePrice",
-                            e.target.value ? Number(e.target.value) : null,
-                          )
+                          setValues((current) => ({
+                            ...current,
+                            salePrice: e.target.value
+                              ? Number(e.target.value)
+                              : null,
+                            variants: simple
+                              ? current.variants.map((row) => ({
+                                  ...row,
+                                  salePrice:
+                                    row.price == null
+                                      ? null
+                                      : e.target.value
+                                        ? Number(e.target.value)
+                                        : null,
+                                }))
+                              : current.variants,
+                          }))
                         }
                         placeholder="Opsional"
                       />
+                      {fieldError("product-sale-price")}
                     </div>
                   </div>
                   <p className="text-xs leading-relaxed text-zinc-500">
@@ -1195,119 +1264,103 @@ export function ProductEditor({
                     diskon harus lebih rendah dari harga normal.
                   </p>
                 </>
+              }
+              {simple && (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <Label htmlFor="simple-stock">Stok fisik</Label>
+                    <Input
+                      id="simple-stock"
+                      {...validationProps("simple-stock")}
+                      type="number"
+                      inputMode="numeric"
+                      min={values.variants[0].reserved ?? 0}
+                      step={1}
+                      disabled={!canStock}
+                      value={values.variants[0].onHand ?? ""}
+                      placeholder={canStock ? "0" : "Akses stok dibatasi"}
+                      onChange={(e) =>
+                        variantChange(0, { onHand: Number(e.target.value) })
+                      }
+                    />
+                    {fieldError("simple-stock")}
+                    <p className="mt-1 text-xs text-zinc-500">
+                      {values.variants[0].reserved ?? 0} unit direservasi.
+                    </p>
+                  </div>
+                  <div>
+                    <Label htmlFor="simple-sku">Kode SKU</Label>
+                    <Input
+                      id="simple-sku"
+                      {...validationProps("simple-sku")}
+                      maxLength={80}
+                      value={values.variants[0].sku}
+                      readOnly={values.variants[0].protected}
+                      placeholder="Otomatis saat produk disimpan"
+                      onChange={(e) =>
+                        variantChange(0, { sku: e.target.value })
+                      }
+                    />
+                    {fieldError("simple-sku")}
+                    <p className="mt-1 text-xs text-zinc-500">
+                      {values.variants[0].protected
+                        ? "SKU dikunci karena memiliki stok atau riwayat."
+                        : "Isi kode sendiri atau biarkan kosong untuk dibuat otomatis."}
+                    </p>
+                  </div>
+                </div>
               )}
             </section>
 
             {custom ? (
-              <section id="product-variants" className="min-w-0">
-                <Dialog.Root
-                  open={sellerPanel !== null}
-                  onOpenChange={(open) => {
-                    if (!open) closePanel();
-                  }}
+              <section id="product-variants" className="min-w-0 space-y-4">
+                <Button
+                  type="button"
+                  variant="outline"
+                  aria-pressed={reordering}
+                  onClick={() => setReordering((value) => !value)}
                 >
-                  <Dialog.Portal>
-                    <Dialog.Overlay className="seller-editor-overlay" />
-                    <Dialog.Content
-                      className={`seller-editor-dialog ${reordering ? "seller-reordering" : ""}`}
-                      aria-describedby="seller-editor-desc"
-                    >
-                      <header className="seller-editor-toolbar">
-                        <Dialog.Close asChild>
-                          <button
-                            type="button"
-                            className="seller-editor-back"
-                            aria-label="Kembali ke produk"
-                          >
-                            <ArrowLeft size={22} />
-                          </button>
-                        </Dialog.Close>
-                        <Dialog.Title>
-                          {sellerPanel === "groups" ? "Varian" : "Harga/Stok"}
-                        </Dialog.Title>
-                        {sellerPanel === "groups" ? (
-                          <button
-                            type="button"
-                            className="seller-editor-toolbar-action"
-                            aria-pressed={reordering}
-                            onClick={() => setReordering((current) => !current)}
-                          >
-                            {reordering ? "Selesai" : "Urutkan"}
-                          </button>
-                        ) : (
-                          <span className="seller-editor-toolbar-action">
-                            <SlidersHorizontal size={18} aria-hidden="true" />
-                          </span>
-                        )}
-                      </header>
-                      <Dialog.Description
-                        id="seller-editor-desc"
-                        className="sr-only"
-                      >
-                        {sellerPanel === "groups"
-                          ? "Kelola pilihan warna, ukuran, foto, dan opsi variasi produk."
-                          : "Kelola kombinasi SKU, harga, dan stok."}
-                      </Dialog.Description>
-                      <div className="seller-editor-scroll">
-                        {sellerPanel && (
-                          <CustomVariationEditor
-                            mode={sellerPanel}
-                            reordering={reordering}
-                            groups={values.optionGroups ?? []}
-                            rows={values.variants}
-                            photos={[...values.images, ...values.optionImages]}
-                            galleryPhotos={values.images}
-                            optionPhotos={values.optionImages}
-                            canUndoPhotos={Boolean(
-                              persistedSnapshot.current?.optionImages.some(
-                                (i) =>
-                                  !values.optionImages.some(
-                                    (current) => current.id === i.id,
-                                  ),
-                              ),
-                            )}
-                            onRemovePhoto={(id) =>
-                              removePhoto(id, "optionImages")
-                            }
-                            onUndoPhotos={() => restorePhotos("optionImages")}
-                            disabled={!canEdit || !!pending || !mediaRecovered}
-                            canStock={canStock}
-                            productName={values.name}
-                            basePrice={values.basePrice}
-                            onUpload={uploadOption}
-                            onChange={(optionGroups, variants) => {
-                              setError("");
-                              setValues((current) => {
-                                const next = {
-                                  ...current,
-                                  optionGroups,
-                                  variants,
-                                };
-                                return next;
-                              });
-                              setNotice("");
-                            }}
-                          />
-                        )}
-                      </div>
-                      <footer className="seller-editor-actions">
-                        <button
-                          type="button"
-                          disabled={!!pending || queueBusy}
-                          onClick={() => closePanel(true)}
-                        >
-                          Simpan
-                        </button>
-                        <span>
-                          Perubahan belum tersimpan permanen. Simpan produk
-                          untuk menyimpannya.
-                        </span>
-                      </footer>
-                    </Dialog.Content>
-                  </Dialog.Portal>
-                </Dialog.Root>
+                  {reordering ? "Selesai mengurutkan" : "Urutkan variasi"}
+                </Button>
+                <CustomVariationEditor
+                  mode="all"
+                  fieldErrors={fieldErrors}
+                  reordering={reordering}
+                  groups={values.optionGroups ?? []}
+                  rows={values.variants}
+                  photos={[...values.images, ...values.optionImages]}
+                  galleryPhotos={values.images}
+                  optionPhotos={values.optionImages}
+                  canUndoPhotos={Boolean(
+                    persistedSnapshot.current?.optionImages.some(
+                      (i) =>
+                        !values.optionImages.some(
+                          (current) => current.id === i.id,
+                        ),
+                    ),
+                  )}
+                  onRemovePhoto={(id) => removePhoto(id, "optionImages")}
+                  onUndoPhotos={() => restorePhotos("optionImages")}
+                  disabled={!canEdit || !!pending || !mediaRecovered}
+                  canStock={canStock}
+                  productName={values.name}
+                  basePrice={values.basePrice}
+                  onUpload={uploadOption}
+                  onChange={(optionGroups, variants) => {
+                    setError("");
+                    setValues((current) => {
+                      const next = {
+                        ...current,
+                        optionGroups,
+                        variants,
+                      };
+                      return next;
+                    });
+                    setNotice("");
+                  }}
+                />
               </section>
-            ) : (
+            ) : !simple ? (
               <section
                 id="product-variants"
                 className="min-w-0 space-y-4 rounded-2xl border border-zinc-200 bg-white p-4 shadow-[0_3px_14px_rgba(0,0,0,.025)] sm:p-6"
@@ -1341,7 +1394,11 @@ export function ProductEditor({
                       return;
                     }
                     setCustom(true);
-                    openPanel("groups");
+                    requestAnimationFrame(() =>
+                      document
+                        .getElementById("product-variants")
+                        ?.scrollIntoView({ block: "start" }),
+                    );
                   }}
                 >
                   Gunakan variasi kustom
@@ -1466,6 +1523,7 @@ export function ProductEditor({
                                 id={`variant-${index}-${key}`}
                                 aria-label={label}
                                 value={v[key] || ""}
+                                readOnly={v.protected}
                                 required={key === "sku"}
                                 maxLength={
                                   key === "sku" ? 80 : key === "color" ? 80 : 40
@@ -1567,7 +1625,7 @@ export function ProductEditor({
                   ))}
                 </div>
               </section>
-            )}
+            ) : null}
 
             <section
               id="product-shipping"
@@ -1675,7 +1733,7 @@ export function ProductEditor({
               </p>
             </section>
           </fieldset>
-          <aside className="hidden space-y-4 lg:block">
+          <aside className="hidden space-y-4 2xl:block">
             <div className="sticky top-24 space-y-4">
               <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-[0_3px_14px_rgba(0,0,0,.025)]">
                 <h2 className="text-sm font-bold text-zinc-950">
@@ -1691,7 +1749,7 @@ export function ProductEditor({
                       ["product-basic", "Informasi dasar"],
                       ["product-detail", "Detail produk"],
                       ["product-pricing", "Harga"],
-                      ...(!custom
+                      ...(!simple
                         ? [["product-variants", "Varian & stok"] as const]
                         : []),
                       ["product-shipping", "Pengiriman"],

@@ -13,6 +13,8 @@ export default defineConfig({
     hmr: false,
     fs: { strict: true },
   },
+  // Unit tests check component behavior; production CSS is verified by build/browser tests.
+  css: { postcss: { plugins: [] } },
   test: {
     environment: "node",
     include: ["tests/unit/**/*.test.ts", ...(process.env.TEST_DATABASE_ENABLED === "yes" ? ["tests/database/**/*.test.ts"] : [])],

@@ -116,13 +116,34 @@ async function lockProduct(
 }
 function parseProduct(value: unknown) {
   if (hasFlashSaleMutation(value))
-    throw new HttpError("Pengaturan Flash Sale hanya dapat diubah melalui Marketing.",422);
-  if (value && typeof value === "object" && "variants" in value && Array.isArray(value.variants) && value.variants.every(v => v && typeof v === "object") && "basePrice" in value) {
-    value = canonicalProductPricing(value as Parameters<typeof canonicalProductPricing>[0]);
+    throw new HttpError(
+      "Pengaturan Flash Sale hanya dapat diubah melalui Marketing.",
+      422,
+    );
+  if (
+    value &&
+    typeof value === "object" &&
+    "variants" in value &&
+    Array.isArray(value.variants) &&
+    value.variants.every((v) => v && typeof v === "object") &&
+    "basePrice" in value
+  ) {
+    value = canonicalProductPricing(
+      value as Parameters<typeof canonicalProductPricing>[0],
+    );
   }
   const parsed = productInputSchema.safeParse(value);
-  if (!parsed.success) throw new HttpError(parsed.error.issues[0].message, 422);
-  if (parsed.data.optionsEnabled === false)
+  if (!parsed.success) {
+    const message = parsed.error.issues[0].message;
+    throw new HttpError(
+      /^(Invalid|Too |Expected|Unrecognized)/.test(message)
+        ? "Periksa isian produk. Ada nilai yang belum sesuai format atau batas yang diizinkan."
+        : message,
+      422,
+    );
+  }
+  if (parsed.data.variantMode === "simple") parsed.data.optionGroups = [];
+  else if (parsed.data.optionsEnabled === false)
     parsed.data.optionGroups = undefined;
   return parsed.data;
 }
@@ -155,24 +176,79 @@ function fields(input: ReturnType<typeof parseProduct>) {
     optionGroups: _groups,
     optionImages: _optionImages,
     optionsEnabled: _mode,
+    variantMode: _variantMode,
     sizeChart,
     ...data
   } = input;
   return {
     ...data,
-    ...(sizeChart !== undefined ? { sizeChart: sizeChart === null ? Prisma.DbNull : sizeChart as Prisma.InputJsonValue } : {}),
+    ...(sizeChart !== undefined
+      ? {
+          sizeChart:
+            sizeChart === null
+              ? Prisma.DbNull
+              : (sizeChart as Prisma.InputJsonValue),
+        }
+      : {}),
     salePrice: data.salePrice ?? null,
     categoryId: data.categoryId || null,
     brandId: data.brandId || null,
   };
 }
-function assertSizeChartImage(input: ReturnType<typeof parseProduct>, imageIds: string[]) {
-  if (input.sizeChart?.mode === "image" && !imageIds.includes(input.sizeChart.imageId))
-    throw new HttpError("Foto tabel ukuran harus milik produk ini dan disertakan dalam penyimpanan.", 422);
+function assertSizeChartImage(
+  input: ReturnType<typeof parseProduct>,
+  imageIds: string[],
+) {
+  if (
+    input.sizeChart?.mode === "image" &&
+    !imageIds.includes(input.sizeChart.imageId)
+  )
+    throw new HttpError(
+      "Foto tabel ukuran harus milik produk ini dan disertakan dalam penyimpanan.",
+      422,
+    );
 }
 function requireStockEdit(actor: CatalogActor) {
   assertCatalogPermission(actor, PERMISSIONS.INVENTORY_READ);
   assertCatalogPermission(actor, PERMISSIONS.INVENTORY_ADJUST);
+}
+
+function protectedSku(row: ManagedProduct["variants"][number]) {
+  return Boolean(
+    row.inventory?.onHand ||
+      row.inventory?.reserved ||
+      row._count.orderItems ||
+      row._count.cartItems ||
+      row._count.movements,
+  );
+}
+
+/** Serializable predicate read also covers case-only collisions between concurrent saves. */
+async function assertUniqueSkus(
+  tx: Prisma.TransactionClient,
+  input: ReturnType<typeof parseProduct>,
+) {
+  const matches = await tx.productVariant.findMany({
+    where: {
+      OR: input.variants.map((row) => ({
+        sku: { equals: row.sku, mode: "insensitive" as const },
+      })),
+    },
+    select: { id: true, sku: true },
+  });
+  if (
+    input.variants.some((row) =>
+      matches.some(
+        (match) =>
+          match.sku.toUpperCase() === row.sku.toUpperCase() &&
+          match.id !== row.id,
+      ),
+    )
+  )
+    throw new HttpError(
+      "SKU sudah digunakan. Ubah kode SKU atau buat kode otomatis yang baru.",
+      409,
+    );
 }
 
 type WriteResult = {
@@ -204,6 +280,7 @@ export async function createManagedProduct(
   return transaction(async (tx) => {
     const receipt = await readSaveReceipt(tx, actor, ctx, payloadHash);
     if (receipt) return receipt as WriteResult;
+    await assertUniqueSkus(tx, input);
     await validateRelations(tx, input.categoryId, input.brandId);
     const p = await tx.product.create({
       data: { ...fields(input), status: "DRAFT" },
@@ -224,7 +301,10 @@ export async function createManagedProduct(
         "Produk baru hanya dapat memakai foto sementara milik sesi ini",
         422,
       );
-    assertSizeChartImage(input, stagedImages.map(i => i.id));
+    assertSizeChartImage(
+      input,
+      stagedImages.map((i) => i.id),
+    );
     if (input.optionGroups)
       await writeOptionGroups(
         tx,
@@ -304,7 +384,28 @@ export async function updateManagedProduct(
     const receipt = await readSaveReceipt(tx, actor, ctx, payloadHash);
     if (receipt) return receipt as WriteResult;
     const { p, updatedAt } = await lockProduct(tx, id, expected);
-    await assertCampaignProductEdit(tx,id,input);
+    await assertUniqueSkus(tx, input);
+    const wasVariable =
+      p.optionsEnabled ||
+      p.variants.length !== 1 ||
+      p.variants.some((row) => row.color || row.size);
+    const modeTransition =
+      input.variantMode !== undefined &&
+      (input.variantMode === "variable") !== wasVariable;
+    if (modeTransition && p.variants.some(protectedSku))
+      throw new HttpError(
+        "Mode variasi tidak dapat diubah karena SKU memiliki stok, reservasi, keranjang, atau riwayat. Pertahankan produk ini dan buat produk baru untuk susunan variasi berbeda.",
+        409,
+      );
+    if (
+      modeTransition &&
+      !input.variants.some((row) => p.variants.some((old) => old.id === row.id))
+    )
+      throw new HttpError(
+        "Pertahankan satu SKU lama saat mengubah mode produk agar identitas produk tetap terjaga.",
+        409,
+      );
+    await assertCampaignProductEdit(tx, id, input);
     const shippingKeys = [
       "weightGrams",
       "packageLengthMm",
@@ -334,7 +435,11 @@ export async function updateManagedProduct(
       input.optionImages ?? [],
     );
     p.images.push(...finalized);
-    if (p.optionsEnabled && !input.optionGroups?.length)
+    if (
+      p.optionsEnabled &&
+      !input.optionGroups?.length &&
+      !(modeTransition && input.variantMode === "simple")
+    )
       throw new HttpError(
         "Produk memakai variasi kustom. Gunakan editor yang mendukung pilihan SKU.",
         409,
@@ -345,7 +450,16 @@ export async function updateManagedProduct(
         .filter((i) => i.isVariation)
         .map((i) => ({ id: i.id, alt: i.alt }));
     const allImages = [...input.images, ...keptOptionImages];
-    assertSizeChartImage({ ...input, sizeChart: input.sizeChart === undefined ? readSizeChart(p.sizeChart) : input.sizeChart }, allImages.map(i => i.id));
+    assertSizeChartImage(
+      {
+        ...input,
+        sizeChart:
+          input.sizeChart === undefined
+            ? readSizeChart(p.sizeChart)
+            : input.sizeChart,
+      },
+      allImages.map((i) => i.id),
+    );
     for (const image of input.images)
       if (!p.images.some((i) => i.id === image.id && !i.isVariation))
         throw new HttpError("Gambar galeri bukan milik produk ini", 422);
@@ -355,7 +469,7 @@ export async function updateManagedProduct(
     if (input.optionGroups)
       for (const v of input.variants) {
         const old = p.variants.find((row) => row.id === v.id);
-        if (old)
+        if (old && !modeTransition)
           assertStableSelection(
             id,
             p.optionsEnabled,
@@ -442,6 +556,17 @@ export async function updateManagedProduct(
             reference: id,
           });
       } else {
+        if (
+          protectedSku(old) &&
+          (old.sku !== v.sku ||
+            (!p.optionsEnabled &&
+              (old.color !== (v.color || null) ||
+                old.size !== (v.size || null))))
+        )
+          throw new HttpError(
+            "Kode dan identitas SKU dengan stok atau riwayat tidak dapat diubah. Harga dan stok tetap dapat diperbarui sesuai izin.",
+            409,
+          );
         await tx.productVariant.update({
           where: { id: old.id },
           data: {
@@ -731,7 +856,9 @@ export async function listManagedProducts(
         basePrice: true,
         salePrice: true,
         updatedAt: true,
-        variants: { select: { inventory: { select: { onHand: true, reserved: true } } } },
+        variants: {
+          select: { inventory: { select: { onHand: true, reserved: true } } },
+        },
         category: { select: { name: true } },
         images: {
           where: { isVariation: false },
