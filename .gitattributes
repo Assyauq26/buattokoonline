@@ -2,4 +2,4 @@
 *.gz binary
 *.png binary
 *.webp binary
-/tests/fixtures/historical-eol/* -text
+/tests/fixtures/historical-eol/* binary
