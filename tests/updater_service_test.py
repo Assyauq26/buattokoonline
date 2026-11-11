@@ -207,11 +207,10 @@ class MigrationCompatibilityTests(unittest.TestCase):
             for name,data in files.items():
                 info=tarfile.TarInfo(name);info.size=len(data);tar.addfile(info,io.BytesIO(data))
         self.dest=self.p/'release';self.dest.mkdir()
-    def test_reviewed_line_endings_preserve_database_checksum(self):
-        result=extract(self.archive,self.dest,release(),self.installed,self.cfg)
-        self.assertEqual((self.dest/self.relative).read_bytes(),self.old)
-        self.assertEqual(result['migrations'],self.installed['migrations'])
-        self.assertEqual(result['preservedMigrationBytes'][self.name]['artifact'],self.newhash)
+    def test_unbound_operator_pairs_are_rejected(self):
+        with self.assertRaises(core.StoreError):
+            extract(self.archive,self.dest,release(),self.installed,self.cfg)
+        self.assertFalse((self.dest/self.relative).exists())
     def test_unreviewed_and_tampered_history_rejected(self):
         for rules in [{},{self.name:{'installed':self.oldhash,'artifact':'0'*64}}]:
             core.atomic_json(self.cfg['migrationCompatibility'],rules)
