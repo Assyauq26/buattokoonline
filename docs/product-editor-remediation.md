@@ -133,3 +133,7 @@ Rekomendasi **NO-GO untuk merge, tag, publikasi dan deployment v1.7.3** sampai r
 Pengguna mengotorisasi pengalihan Hubify ke mode uji. Kedua flag `JNT_PRODUCTION_ORDER_APPROVED` dan `JNT_PRODUCTION_API_APPROVED` kini `no`, diverifikasi dalam container aplikasi. Aplikasi v1.7.2 SHA 5145bdc tetap aktif dan sehat. Konfigurasi sebelum perubahan disimpan root-only di `/etc/single-store/runtime.env.before-editor-test-mode-20261111`. Tidak mengubah konfigurasi platform pusat, DNS, kredensial, atau konfigurasi WhatsApp/updater.
 
 Backup `/var/backups/single-store/20261111-033438-9d2f6c1c` berhasil dipulihkan ke database scratch oleh `restore.sh --check`; 4 produk, 3 user dan 1 identitas pada backup diperiksa tanpa menimpa live. Deployment kandidat belum terjadi, sehingga tidak ada rollback kode kandidat. Setelah gate lulus, workflow resmi membuat backup baru dan mendukung `sudo /usr/local/sbin/hubify-staging-deploy --rollback`. Jangan memulihkan konfigurasi J&T lama tanpa otorisasi untuk mengaktifkan kembali Production.
+
+## Audit lanjutan read-only PR #39
+
+Perbandingan empat sumber dan audit seluruh 730 file kini lengkap. [Laporan rekonsiliasi](pr39-reconciliation.md) membuktikan selisih hanya CRLF/LF, menjelaskan ancestry 19 commit baseline yang sudah dirilis, merinci pengujian ulang, serta mempertahankan keputusan NO-GO tanpa mengubah ledger, migrasi historis, atau helper keamanan.

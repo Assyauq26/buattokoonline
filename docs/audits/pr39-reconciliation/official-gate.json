@@ -1,0 +1,10 @@
+{
+  "installed_helper_sha256": "cf9e431cd46dcbef22389729311546d13ac8ddb5c1c99adbc7b97dfa49378a97",
+  "preflight": "PASS",
+  "ledger_matches_metadata": true,
+  "live_version": "1.7.2",
+  "live_sha": "5145bdcd7cd84f93f49a066aa669560e858db0ac",
+  "existing_vps_source_schema_guard": "PASS",
+  "git_lf_candidate_schema_guard": "FAIL",
+  "reason": "Migrasi existing berubah atau hilang: 20261109120000_order_resolution_workflow"
+}
