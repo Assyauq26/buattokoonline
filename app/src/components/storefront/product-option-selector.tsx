@@ -1,6 +1,5 @@
 "use client";
 import Image from "next/image";
-import { Check } from "lucide-react";
 import {
   canChoose,
   type PurchaseProduct,
@@ -75,7 +74,6 @@ export function ProductOptionSelector({
                     </span>
                   )}
                   <span>{value.value}</span>
-                  {selected && <Check size={16} aria-hidden="true" />}
                   {!available && !selected && (
                     <span className="sr-only"> — tidak tersedia</span>
                   )}

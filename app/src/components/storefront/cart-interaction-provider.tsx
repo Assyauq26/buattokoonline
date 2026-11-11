@@ -16,6 +16,7 @@ import type { PurchaseProduct } from "@/modules/catalog/purchase-options";
 import { Button } from "@/components/ui/button";
 import { QuickAddVariantSheet } from "./quick-add-variant-sheet";
 import { CartSuccessSheet, type AddedProduct } from "./cart-success-sheet";
+import { ProductPurchaseMotion, useProductSheetPresence } from "./product-purchase-motion";
 
 type Interaction = {
   busy: boolean;
@@ -35,6 +36,20 @@ export function CartInteractionProvider({ children }: { children: ReactNode }) {
   const [phase, setPhase] = useState<
     "closed" | "loading" | "options" | "error" | "success"
   >("closed");
+  const productPage = pathname.startsWith("/product/");
+  const lastPhase = useRef(phase);
+  if (phase !== "closed") lastPhase.current = phase;
+  const displayPhase = phase === "closed" && productPage ? lastPhase.current : phase;
+  const [keyboardInput, setKeyboardInput] = useState(false);
+  const { present, visible } = useProductSheetPresence(phase !== "closed", productPage, keyboardInput);
+  useEffect(() => {
+    if (!productPage) return;
+    const keyboard = () => setKeyboardInput(true);
+    const pointer = () => setKeyboardInput(false);
+    document.addEventListener("keydown", keyboard);
+    document.addEventListener("pointerdown", pointer);
+    return () => { document.removeEventListener("keydown", keyboard); document.removeEventListener("pointerdown", pointer); };
+  }, [productPage]);
   const [product, setProduct] = useState<PurchaseProduct | null>(null),
     [added, setAdded] = useState<AddedProduct | null>(null);
   const [error, setError] = useState<string | null>(null),
@@ -268,11 +283,15 @@ export function CartInteractionProvider({ children }: { children: ReactNode }) {
           if (!open) close();
         }}
       >
-        {container && (
-          <Dialog.Portal container={container}>
-            <Dialog.Overlay className="purchase-backdrop" />
+        {container && (!productPage || present) && (
+          <Dialog.Portal container={container} forceMount={productPage ? true : undefined}>
+            <Dialog.Overlay forceMount={productPage ? true : undefined} className="purchase-backdrop" data-product-motion={productPage || undefined} data-visible={visible} data-instant={keyboardInput} />
             <Dialog.Content
+              forceMount={productPage ? true : undefined}
               className="purchase-sheet"
+              data-product-motion={productPage || undefined}
+              data-visible={visible}
+              data-instant={keyboardInput}
               data-testid="purchase-dialog"
               aria-describedby="purchase-description"
               onEscapeKeyDown={(e) => {
@@ -287,24 +306,25 @@ export function CartInteractionProvider({ children }: { children: ReactNode }) {
                   trigger.current.focus({ preventScroll: true });
               }}
             >
+              <ProductPurchaseMotion enabled={productPage} phase={displayPhase} instant={!productPage || keyboardInput}>
               <span className="purchase-drag-handle" aria-hidden="true" />
               <Dialog.Title
                 className={
-                  phase === "success"
+                  displayPhase === "success"
                     ? "sr-only"
                     : "mb-5 pr-8 text-base font-semibold"
                 }
               >
-                {phase === "success"
+                {displayPhase === "success"
                   ? "Berhasil ditambahkan ke keranjang"
                   : "Pilih produk"}
               </Dialog.Title>
               <Dialog.Description id="purchase-description" className="sr-only">
-                {phase === "success"
+                {displayPhase === "success"
                   ? "Produk sudah dikonfirmasi server. Pilih lanjut belanja atau lihat keranjang."
                   : "Pilih variasi dan jumlah yang tersedia sebelum menambahkan produk."}
               </Dialog.Description>
-              {phase !== "success" && (
+              {displayPhase !== "success" && (
                 <button
                   type="button"
                   className="purchase-close"
@@ -315,7 +335,7 @@ export function CartInteractionProvider({ children }: { children: ReactNode }) {
                   <X size={20} />
                 </button>
               )}
-              {phase === "loading" && (
+              {displayPhase === "loading" && (
                 <p role="status" className="flex items-center gap-3 py-8">
                   <Loader2
                     className="animate-spin motion-reduce:animate-none"
@@ -324,7 +344,7 @@ export function CartInteractionProvider({ children }: { children: ReactNode }) {
                   Memuat pilihan…
                 </p>
               )}
-              {phase === "error" && (
+              {displayPhase === "error" && (
                 <div className="space-y-5">
                   <p role="alert">{error}</p>
                   <Button onClick={() => void load(slugRef.current)}>
@@ -332,7 +352,7 @@ export function CartInteractionProvider({ children }: { children: ReactNode }) {
                   </Button>
                 </div>
               )}
-              {phase === "options" && product && (
+              {displayPhase === "options" && product && (
                 <QuickAddVariantSheet
                   key={product.id}
                   product={product}
@@ -345,13 +365,14 @@ export function CartInteractionProvider({ children }: { children: ReactNode }) {
                   onCart={cart}
                 />
               )}
-              {phase === "success" && added && (
+              {displayPhase === "success" && added && (
                 <CartSuccessSheet
                   item={added}
                   onContinue={close}
                   onCart={cart}
                 />
               )}
+              </ProductPurchaseMotion>
             </Dialog.Content>
           </Dialog.Portal>
         )}

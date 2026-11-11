@@ -26,9 +26,22 @@ export function createRelayServer({ registry, reserve, deliver, dispatch, ready 
           try { payload = JSON.parse(Buffer.concat(chunks).toString("utf8")); }
           catch { /* Malformed JSON stays a 400. */ }
           if (payload) {
-            const stores = await registry(hashRelayValue(token));
+            const tokenHash = hashRelayValue(token);
+            const stores = await registry(tokenHash);
             if (req.url.endsWith('/status')) {
-              const tenant = stores.get(hashRelayValue(token));
+              const tenant = stores.get(tokenHash);
+              if (payload.action === 'sync-brand') {
+                const result = !tenant ? { status: 401 } :
+                  payload.origin !== tenant.origin || !tenant.brandSync || !registry.syncBrand ? { status: 409 } :
+                  await registry.syncBrand(tokenHash, payload);
+                res.writeHead(result.status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+                return res.end(JSON.stringify(result.brand ? { brand: result.brand } : {}));
+              }
+              if (tenant?.brandSync && payload.origin === tenant.origin && payload.action === 'sender-status') {
+                status = await ready() ? 200 : 503;
+                res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+                return res.end(JSON.stringify({ brand: tenant.brand }));
+              }
               status = !tenant ? 401 : payload.origin !== tenant.origin || payload.brand !== tenant.brand ? 409 :
                 await ready() ? 200 : 503;
               if (status === 200 && receipt) {

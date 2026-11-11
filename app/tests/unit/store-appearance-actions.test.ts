@@ -10,8 +10,8 @@ const mocks = vi.hoisted(() => ({
 vi.mock("server-only", () => ({}));
 // Sender-registry checks have their own integration/command tests; this suite
 // exercises authorization and post-commit cache invalidation.
-vi.mock("@/modules/auth/registration-otp-email", () => ({
-  checkMailBrandChange: vi.fn().mockResolvedValue(undefined),
+vi.mock("@/modules/auth/mail-brand-sync", () => ({
+  syncPendingMailBrand: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock("@/lib/auth/session", () => ({ requirePermission: mocks.permission }));
 vi.mock("@/lib/prisma", () => ({

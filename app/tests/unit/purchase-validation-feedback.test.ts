@@ -6,7 +6,7 @@ import "@testing-library/jest-dom/vitest";
 vi.mock("@/components/appearance/context", () => ({
   useAppearance: () => ({ config: { identity: { name: "Store" } } }),
 }));
-vi.mock("next/image", () => ({ default: () => null }));
+vi.mock("next/image", () => ({ default: ({ src, alt }: { src: string; alt: string }) => React.createElement("img", { src, alt }) }));
 import { QuickAddVariantSheet } from "@/components/storefront/quick-add-variant-sheet";
 const product = {
   id: "p",
@@ -18,9 +18,9 @@ const product = {
     {
       id: "color",
       name: "Warna",
-      allowsImage: false,
+      allowsImage: true,
       values: [
-        { id: "blue", value: "Biru", image: null },
+        { id: "blue", value: "Biru", image: { url: "/blue.webp", alt: "Biru" } },
         { id: "red", value: "Merah", image: null },
       ],
     },
@@ -70,6 +70,8 @@ it("announces incomplete attributes, focuses the missing group and never dispatc
     }),
   );
   const button = screen.getByRole("button", { name: "Masukkan ke Keranjang" });
+  // Thumbnail remains present before and after selecting an image-backed option.
+  expect(screen.getByRole("button", { name: "Biru" }).querySelector("img")).toHaveAttribute("src", "/blue.webp");
   expect(button).toHaveAttribute("aria-disabled", "true");
   fireEvent.click(button);
   expect(submit).not.toHaveBeenCalled();
@@ -80,6 +82,7 @@ it("announces incomplete attributes, focuses the missing group and never dispatc
     screen.getByRole("button", { name: "Biru" }),
   );
   fireEvent.click(screen.getByRole("button", { name: "Biru" }));
+  expect(screen.getByRole("button", { name: "Biru" }).querySelector("img")).toHaveAttribute("src", "/blue.webp");
   fireEvent.click(button);
   expect(screen.getByText("Pilih ukuran terlebih dahulu.")).toBeVisible();
   expect(submit).not.toHaveBeenCalled();

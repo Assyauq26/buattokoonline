@@ -189,6 +189,21 @@ export async function changeAppearance(
             ? { published: asJson(config), publishedVersion: { increment: 1 } }
             : { draft: asJson(config), draftVersion: { increment: 1 } },
         });
+        if (publishing && config.identity.name !== parseAppearance(row.published).identity.name) {
+          const pending = {
+            revision: updated.publishedVersion,
+            name: config.identity.name,
+            attempts: 0,
+            nextAttempt: new Date(),
+            syncedAt: null,
+            status: "pending",
+          };
+          await tx.storeMailBrandSync.upsert({
+            where: { id: 1 },
+            create: { id: 1, ...pending },
+            update: pending,
+          });
+        }
         if (publishing)
           await tx.storeAppearanceRevision.create({
             data: {
