@@ -70,6 +70,8 @@ it("announces incomplete attributes, focuses the missing group and never dispatc
     }),
   );
   const button = screen.getByRole("button", { name: "Masukkan ke Keranjang" });
+  // Quick-add can mount on Shop before product-route styles have ever loaded.
+  expect(screen.getByRole("button", { name: "Biru" }).querySelector(".pdp-option-check")).toHaveStyle({ opacity: "0" });
   expect(button).toHaveAttribute("aria-disabled", "true");
   fireEvent.click(button);
   expect(submit).not.toHaveBeenCalled();
@@ -80,6 +82,7 @@ it("announces incomplete attributes, focuses the missing group and never dispatc
     screen.getByRole("button", { name: "Biru" }),
   );
   fireEvent.click(screen.getByRole("button", { name: "Biru" }));
+  expect(screen.getByRole("button", { name: "Biru" }).querySelector(".pdp-option-check")).toHaveStyle({ opacity: "1" });
   fireEvent.click(button);
   expect(screen.getByText("Pilih ukuran terlebih dahulu.")).toBeVisible();
   expect(submit).not.toHaveBeenCalled();

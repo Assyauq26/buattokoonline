@@ -75,7 +75,7 @@ export function ProductOptionSelector({
                     </span>
                   )}
                   <span>{value.value}</span>
-                  {selected && <Check size={16} aria-hidden="true" />}
+                  <Check size={16} aria-hidden="true" className="pdp-option-check shrink-0" data-selected={selected} style={{ opacity: selected ? 1 : 0 }} />
                   {!available && !selected && (
                     <span className="sr-only"> — tidak tersedia</span>
                   )}

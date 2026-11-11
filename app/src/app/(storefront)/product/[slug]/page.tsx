@@ -11,7 +11,6 @@ import { notFound } from "next/navigation";
 
 import {
   ArrowLeft,
-  ChevronRight,
   FileText,
   Package,
   Truck,
@@ -60,7 +59,7 @@ import { ShareButton } from "@/components/storefront/share-button";
 
 import { WishlistButton } from "@/components/storefront/wishlist-button";
 
-import { QnaForm } from "@/components/storefront/qna-form";
+import { ProductDisclosure } from "@/components/storefront/product-disclosure";
 
 import { SectionHeader } from "@/components/storefront/section-header";
 
@@ -313,68 +312,20 @@ export default async function ProductPage({ params }: ProductRouteProps) {
 
                 name={product.name}
               />
-              <div className="mt-6 border-t border-zinc-100">
-                <details className="pdp-detail-row group py-4" open>
-                  <summary className="flex min-h-11 cursor-pointer items-center justify-between gap-3 text-sm font-bold text-zinc-900">
-                    <FileText
-                      size={19}
-
-                      className="shrink-0"
-
-                      aria-hidden="true"
-                    />
-                    <span className="flex-1">Deskripsi</span>{" "}
-                    <ChevronRight
-                      className="pdp-detail-chevron shrink-0 text-zinc-500 transition-transform"
-
-                      size={19}
-                    />
-                  </summary>
-
+              <div className="pdp-information-rows">
+                <ProductDisclosure title="Deskripsi" icon={<FileText size={19} aria-hidden="true" />} defaultOpen>
                   <ProductDescription text={product.description} />
-                </details>
-
-                <details className="pdp-detail-row group py-4">
-                  <summary className="flex min-h-11 cursor-pointer items-center gap-3 text-sm font-semibold text-zinc-800">
-                    <Package size={19} className="shrink-0" />
-
-                    <span className="flex-1">Material &amp; Perawatan</span>
-
-                    <ChevronRight
-                      className="pdp-detail-chevron shrink-0 text-zinc-500 transition-transform"
-
-                      size={19}
-                    />
-                  </summary>
-
-                  <p className="mt-3 whitespace-pre-line pl-8 text-sm leading-relaxed text-zinc-500">
-                    {[product.material, product.careInstruction]
-
-                      .filter(Boolean)
-
-                      .join("\n") ||
-                      "Informasi material dan perawatan belum tersedia."}
+                </ProductDisclosure>
+                <ProductDisclosure title="Material & Perawatan" icon={<Package size={19} aria-hidden="true" />}>
+                  <p className="whitespace-pre-line text-sm leading-relaxed text-ink-soft">
+                    {[product.material, product.careInstruction].filter(Boolean).join("\n") || "Informasi material dan perawatan belum tersedia."}
                   </p>
-                </details>
-
-                <details className="pdp-detail-row group py-4">
-                  <summary className="flex min-h-11 cursor-pointer items-center gap-3 text-sm font-semibold text-zinc-800">
-                    <Truck size={19} className="shrink-0" />
-
-                    <span className="flex-1">Pengiriman &amp; Retur</span>
-
-                    <ChevronRight
-                      className="pdp-detail-chevron shrink-0 text-zinc-500 transition-transform"
-
-                      size={19}
-                    />
-                  </summary>
-
-                  <p className="mt-3 whitespace-pre-line pl-8 text-sm leading-relaxed text-zinc-500">
-                    {product.shippingReturn ||
-                      "Informasi pengiriman dan retur belum tersedia."}
+                </ProductDisclosure>
+                <ProductDisclosure title="Pengiriman & Retur" icon={<Truck size={19} aria-hidden="true" />}>
+                  <p className="whitespace-pre-line text-sm leading-relaxed text-ink-soft">
+                    {product.shippingReturn || "Informasi pengiriman dan retur belum tersedia."}
                   </p>
-                </details>
+                </ProductDisclosure>
               </div>
             </div>
 
@@ -429,56 +380,6 @@ export default async function ProductPage({ params }: ProductRouteProps) {
                       <p className="mt-1 text-sm text-ink-soft">{r.body}</p>
                     </div>
                   ))}
-                </div>
-              </section>
-
-              <section>
-                <SectionHeader title="Tanya Jawab Produk" />
-
-                <div className="grid gap-6 md:grid-cols-2">
-                  <div className="space-y-4">
-                    {product.questions.length === 0 && (
-                      <p className="text-sm text-ink-soft">
-                        Belum ada pertanyaan.
-                      </p>
-                    )}
-
-                    {product.questions.map((q) => (
-                      <div
-                        key={q.id}
-
-                        className="rounded-2xl border border-line p-4"
-
-                        data-testid={`question-${q.id}`}
-                      >
-                        <p className="text-sm font-semibold text-ink">
-                          T: {q.body}
-                        </p>
-
-                        {q.answers.map((a) => (
-                          <p key={a.id} className="mt-2 text-sm text-ink-soft">
-                            J: {a.body}{" "}
-                            {a.isOfficial && (
-                              <Badge variant="info" className="ml-1">
-                                Penjual
-                              </Badge>
-                            )}
-                          </p>
-                        ))}
-                      </div>
-                    ))}
-                  </div>
-
-                  <div>
-                    <details>
-                      <summary className="min-h-11 cursor-pointer py-3 font-semibold">
-                        Ajukan pertanyaan
-                      </summary>
-                      <h3 className="sr-only">Ajukan Pertanyaan</h3>
-
-                      <QnaForm productId={product.id} slug={product.slug} />
-                    </details>
-                  </div>
                 </div>
               </section>
 

@@ -37,62 +37,33 @@ afterEach(() => {
   cleanup();
   selection.image = null;
 });
-it("preserves focus when Home/End move the bounded dot window", () => {
-  const images = Array.from({ length: 12 }, (_, i) => ({
-    url: `/photo-${i}.webp`,
-    alt: `Photo ${i}`,
-  }));
-  const view = render(
-    React.createElement(ProductGallery, { images, name: "Gallery" }),
-  );
-  const start = view.getByRole("button", {
-    name: "Lihat foto produk 1 dari 12",
-  });
-  start.focus();
-  fireEvent.keyDown(start, { key: "End" });
-  const end = view.getByRole("button", {
-    name: "Lihat foto produk 12 dari 12",
-  });
-  expect(end).toHaveFocus();
-  expect(end).toHaveAttribute("aria-current", "true");
-  expect(
-    view.container.querySelectorAll(".pdp-gallery-dots button"),
-  ).toHaveLength(5);
-  fireEvent.keyDown(end, { key: "Home" });
-  expect(
-    view.getByRole("button", {
-      name: "Lihat foto produk 1 dari 12",
-    }),
-  ).toHaveFocus();
+it("supports Home/End and arrows on the single progress control without losing focus", () => {
+  const images = Array.from({ length: 12 }, (_, i) => ({ url: `/photo-${i}.webp`, alt: `Photo ${i}` }));
+  const view = render(React.createElement(ProductGallery, { images, name: "Gallery" }));
+  const control = view.getByRole("slider", { name: "Pilih foto produk" });
+  control.focus();
+  fireEvent.keyDown(control, { key: "End" });
+  expect(control).toHaveFocus();
+  expect(control).toHaveAttribute("aria-valuenow", "12");
+  fireEvent.keyDown(control, { key: "ArrowRight" });
+  expect(control).toHaveAttribute("aria-valuenow", "12");
+  fireEvent.keyDown(control, { key: "Home" });
+  expect(control).toHaveAttribute("aria-valuenow", "1");
+  expect(view.container.querySelectorAll(".pdp-gallery-progress-thumb")).toHaveLength(1);
 });
 
-it("does not steal option-control focus after repeated boundary keys", () => {
-  const images = Array.from({ length: 12 }, (_, i) => ({
-    url: `/photo-${i}.webp`,
-    alt: `Photo ${i}`,
-  }));
-  const view = render(
-    React.createElement(ProductGallery, { images, name: "Gallery" }),
-  );
-  fireEvent.keyDown(
-    view.getByRole("button", { name: "Lihat foto produk 1 dari 12" }),
-    { key: "End" },
-  );
-  fireEvent.keyDown(
-    view.getByRole("button", { name: "Lihat foto produk 12 dari 12" }),
-    { key: "End" },
-  );
+it("does not steal variant focus when its photo replaces the active gallery photo", () => {
+  const images = [{ url: "/cover.webp", alt: "Cover" }, { url: "/second.webp", alt: "Second" }];
+  const view = render(React.createElement(ProductGallery, { images, name: "Gallery" }));
+  fireEvent.keyDown(view.getByRole("slider"), { key: "End" });
   const option = document.createElement("button");
-  document.body.appendChild(option);
-  option.focus();
+  document.body.appendChild(option); option.focus();
   selection.image = { url: "/option.webp", alt: "Selected option" };
-  view.rerender(
-    React.createElement(ProductGallery, { images, name: "Gallery" }),
-  );
+  view.rerender(React.createElement(ProductGallery, { images, name: "Gallery" }));
   expect(option).toHaveFocus();
+  expect(view.getByRole("slider")).toHaveAttribute("aria-valuenow", "1");
   option.remove();
 });
-
 it("shows the first valid cover and a loading state until the image loads", () => {
   const view = render(
     React.createElement(ProductGallery, {
