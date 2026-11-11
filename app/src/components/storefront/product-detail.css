@@ -27,16 +27,12 @@
 .pdp-gallery-image { object-fit: contain; user-select: none; }
 .pdp-gallery-loading, .pdp-gallery-empty { position: absolute; inset: 0; display: grid; place-items: center; padding: 1rem; background: var(--store-surface, #f5f3f1); color: var(--store-secondaryText, #595959); text-align: center; font-size: .875rem; pointer-events: none; }
 .pdp-gallery-loading { background: linear-gradient(100deg, transparent 20%, rgb(255 255 255 / .45) 50%, transparent 80%), var(--store-surface, #f5f3f1); background-size: 220% 100%; }
-.pdp-count, .pdp-zoom-hint { position: absolute; bottom: 12px; z-index: 1; display: flex; align-items: center; gap: 6px; padding: 6px 9px; border-radius: 999px; background: rgb(0 0 0 / .6); color: #fff; font-size: 11px; pointer-events: none; }
+.pdp-count { position: absolute; bottom: 12px; z-index: 1; display: flex; align-items: center; gap: 6px; padding: 6px 9px; border-radius: 999px; background: rgb(0 0 0 / .6); color: #fff; font-size: 11px; pointer-events: none; }
 .pdp-count { right: 12px; font-variant-numeric: tabular-nums; }
-.pdp-zoom-hint { left: 12px; }
-.pdp-gallery-navigation { display: flex; height: 44px; align-items: center; justify-content: center; gap: 12px; }
-.pdp-gallery-progress { display: grid; place-items: center; width: 64px; min-height: 44px; border-radius: 4px; }
-.pdp-gallery-progress-track { display: block; width: 48px; height: 4px; border-radius: 99px; overflow: hidden; background: color-mix(in srgb, var(--store-text, #181818) 15%, transparent); }
-.pdp-gallery-progress-thumb { display: block; height: 100%; border-radius: inherit; background: var(--store-text, #181818); }
-.pdp-gallery-arrow { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 8px; color: var(--store-secondaryText, #595959); }
-.pdp-gallery-arrow:disabled { opacity: .25; }
-.pdp-gallery-progress:focus-visible, .pdp-gallery-arrow:focus-visible, .pdp-gallery-thumb:focus-visible { outline: 2px solid var(--store-focus, #171717); outline-offset: 2px; }
+.pdp-gallery-progress { position: absolute; left: 4px; bottom: 4px; z-index: 2; display: grid; place-items: center; width: 64px; min-height: 44px; border-radius: 4px; cursor: pointer; }
+.pdp-gallery-progress-track { display: block; width: 48px; height: 4px; border-radius: 99px; overflow: hidden; background: rgb(0 0 0 / .3); box-shadow: 0 0 0 1px rgb(255 255 255 / .3); }
+.pdp-gallery-progress-thumb { display: block; height: 100%; border-radius: inherit; background: #fff; }
+.pdp-gallery-progress:focus-visible, .pdp-gallery-thumb:focus-visible { outline: 2px solid var(--store-focus, #171717); outline-offset: 2px; }
 .pdp-thumb-bar { display: flex; max-width: 100%; overflow-x: auto; gap: .7rem; padding: 4px 2px; }
 .pdp-gallery-thumb { position: relative; height: 64px; width: 64px; flex-shrink: 0; border-radius: 10px; overflow: hidden; border: 2px solid transparent; background: var(--store-surface, #f5f5f5); }
 .pdp-gallery-thumb[aria-pressed="true"] { border-color: var(--store-primary, #242424); }
@@ -62,8 +58,8 @@
 .pdp-option-check { flex-shrink: 0; opacity: 0; }
 .pdp-option-check[data-selected="true"] { opacity: 1; }
 .storefront-root .pdp-page .purchase-option[aria-pressed="true"] { border-width: 1px; box-shadow: inset 0 0 0 1px var(--store-selected, #171717); }
-.pdp-page fieldset[data-image-options="true"] > div { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.pdp-page fieldset[data-image-options="true"] .purchase-option { justify-content: flex-start; border-radius: 10px; }
+.pdp-page fieldset[data-image-options="true"] > div { display: flex; flex-wrap: wrap; gap: 8px; }
+.pdp-page fieldset[data-image-options="true"] .purchase-option { flex: 0 1 auto; width: auto; max-width: 100%; justify-content: flex-start; border-radius: 10px; }
 .pdp-page .purchase-option > span:not(.purchase-swatch) { min-width: 0; overflow-wrap: anywhere; }
 .pdp-page .purchase-option .pdp-option-check { margin-left: auto; }
 [data-option-group] { scroll-margin-top: 100px; }
@@ -89,14 +85,14 @@
 .pdp-whatsapp { display: grid; place-items: center; min-width: 44px; height: 52px; border: 1px solid var(--store-border, #ddd); border-radius: 10px; color: var(--store-icon, #222); }
 .pdp-header-action { color: inherit; border-radius: 10px; }
 .pdp-purchase-actions :focus-visible, .pdp-choice-pill:focus-visible { outline: 2px solid var(--store-focus, #171717); outline-offset: 3px; }
-.pdp-page :is(.pdp-choice-pill, .quantity-stepper button, .pdp-cart-pill, .pdp-buy-pill, .pdp-header-action, .pdp-whatsapp, .pdp-gallery-arrow) { transition: transform 140ms var(--pdp-ease), background-color 180ms ease, color 180ms ease, border-color 180ms ease, opacity 160ms ease; }
-.pdp-page :is(.pdp-choice-pill, .quantity-stepper button, .pdp-cart-pill, .pdp-buy-pill, .pdp-header-action, .pdp-whatsapp, .pdp-gallery-arrow):active:not(:disabled):not(:focus-visible) { transform: scale(.97); }
+.pdp-page :is(.pdp-choice-pill, .quantity-stepper button, .pdp-cart-pill, .pdp-buy-pill, .pdp-header-action, .pdp-whatsapp) { transition: transform 140ms var(--pdp-ease), background-color 180ms ease, color 180ms ease, border-color 180ms ease, opacity 160ms ease; }
+.pdp-page :is(.pdp-choice-pill, .quantity-stepper button, .pdp-cart-pill, .pdp-buy-pill, .pdp-header-action, .pdp-whatsapp):active:not(:disabled):not(:focus-visible) { transform: scale(.97); }
 .pdp-page :focus-visible { transition: none; }
 .pdp-option-check { transition: opacity 150ms ease; }
 .storefront-root .pdp-page .pdp-related-grid.grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .storefront-root .pdp-page .pdp-related-grid.grid > .product-card { grid-column: auto; }
 @media (hover: hover) and (pointer: fine) {
-  .pdp-header-action:hover, .pdp-gallery-arrow:hover:not(:disabled) { background: color-mix(in srgb, currentColor 7%, transparent); }
+  .pdp-header-action:hover { background: color-mix(in srgb, currentColor 7%, transparent); }
   .pdp-choice-pill:hover:not(:disabled) { border-color: var(--store-text, #666); }
 }
 @media (max-width: 767px) {
@@ -136,8 +132,6 @@
 /* Structural separators and gallery surfaces are decorative, not form controls. */
 .storefront-root[data-theme-active="true"] .pdp-page .pdp-detail-row { border-color: var(--store-decorative-border, #ececec); }
 .storefront-root[data-theme-active="true"] .pdp-page .pdp-gallery-slide { border-radius: 0; background: transparent; }
-.storefront-root[data-theme-active="true"] .pdp-page .pdp-gallery-arrow { border-radius: 8px; background: transparent; }
-.storefront-root[data-theme-active="true"] .pdp-page .pdp-gallery-arrow:disabled { background: transparent; color: var(--store-secondaryText, #595959); }
 .storefront-root[data-theme-active="true"] .pdp-page .pdp-gallery-thumb { border-radius: 10px; border-color: transparent; }
 .storefront-root[data-theme-active="true"] .pdp-page .pdp-gallery-thumb[aria-pressed="true"] { border-color: var(--store-primary, #242424); }
 .pdp-detail-row summary:focus-visible .pdp-detail-chevron { transition: none; }

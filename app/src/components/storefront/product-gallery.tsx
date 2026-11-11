@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type UIEvent } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import Image from "next/image";
-import { ArrowLeft, ArrowRight, Expand, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, X } from "lucide-react";
 import { useProductSelection } from "./product-selection";
 
 type Photo = { url: string; alt: string };
@@ -123,18 +123,15 @@ export function ProductGallery({ images, name }: { images: Photo[]; name: string
       </div>
       {!count && <div className="pdp-gallery-empty">Foto produk belum tersedia</div>}
       {Boolean(count) && <>
-        <span className="pdp-zoom-hint" aria-hidden="true"><Expand size={16} /> Perbesar</span>
         <span className="pdp-count" aria-live="polite">{index + 1}/{count}</span>
         {!loaded.includes(list[index].url) && <span role="status" className="sr-only">Memuat foto produk…</span>}
       </>}
-    </div>
-    {count > 1 && <div className="pdp-gallery-navigation">
-      <button type="button" className="pdp-gallery-arrow" aria-label="Foto sebelumnya" disabled={index === 0} onClick={(e) => navigate(index - 1, e.detail === 0)}><ArrowLeft size={17} /></button>
+    {count > 1 &&
       <div className="pdp-gallery-progress" role="slider" tabIndex={0} aria-label="Pilih foto produk" aria-valuemin={1} aria-valuemax={count} aria-valuenow={index + 1} aria-valuetext={`Foto ${index + 1} dari ${count}`} onKeyDown={onKeys} onClick={(event) => { const bounds = event.currentTarget.getBoundingClientRect(); navigate(Math.round(Math.max(0, Math.min(1, (event.clientX - bounds.left) / bounds.width)) * (count - 1))); }}>
         <span className="pdp-gallery-progress-track"><span ref={thumb} className="pdp-gallery-progress-thumb" style={{ width: `${100 / count}%`, transform: `translateX(${index * 100}%)` }} /></span>
       </div>
-      <button type="button" className="pdp-gallery-arrow" aria-label="Foto berikutnya" disabled={index === count - 1} onClick={(e) => navigate(index + 1, e.detail === 0)}><ArrowRight size={17} /></button>
-    </div>}
+    }
+    </div>
     {count > 1 && <div className="pdp-thumb-bar no-scrollbar" aria-label="Foto produk lainnya">{list.map((image, i) => <button type="button" key={image.url} onClick={(e) => navigate(i, e.detail === 0)} aria-label={`Lihat foto produk ${i + 1} dari ${count}`} aria-pressed={index === i} className="pdp-gallery-thumb"><Image src={image.url} alt="" fill sizes="64px" className="object-cover" unoptimized={image.url.startsWith("/api/v1/product-images/")} /></button>)}</div>}
     <Dialog.Root open={zoom} onOpenChange={setZoom}>
       <Dialog.Portal>

@@ -58,8 +58,16 @@ try {
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false,`overflow ${width}`);
     if(width<768){const bounds=await page.getByTestId('product-gallery').boundingBox();assert.ok(Math.abs(bounds.x)<1&&Math.abs(bounds.width-width)<1,`edge-to-edge ${width}: ${JSON.stringify(bounds)}`);}
     assert.equal(await page.getByText('Tanya Jawab Produk',{exact:true}).count(),0);
+    assert.equal(await page.getByTestId('product-gallery').getByRole('button',{name:/Foto sebelumnya|Foto berikutnya/}).count(),0);
+    assert.equal(await page.getByText('Perbesar',{exact:true}).count(),0);
+    const frame=await page.locator('.pdp-gallery-frame').boundingBox();
+    const indicator=await page.getByRole('slider',{name:'Pilih foto produk'}).boundingBox();
+    assert.ok(indicator.x>=frame.x&&indicator.x<frame.x+20&&indicator.y>frame.y+frame.height-60&&indicator.y+indicator.height<=frame.y+frame.height,'indicator overlays lower-left photo');
+    const colorWidth=await page.getByRole('button',{name:'Biru',exact:true}).evaluate(el=>({button:el.getBoundingClientRect().width,row:el.parentElement.getBoundingClientRect().width,display:getComputedStyle(el.parentElement).display}));
+    assert.equal(colorWidth.display,'flex');assert.ok(colorWidth.button<colorWidth.row/2,'color option follows content width');
     await page.screenshot({path:resolve(out,`product-${width}.png`),fullPage:true});
-    checks.push(`${width}px: no overflow, mobile edge-to-edge, Q&A removed`);
+    if(width===390)await page.screenshot({path:resolve(out,'product-mobile-preview.png')});
+    checks.push(`${width}px: no overflow, edge-to-edge mobile gallery, lower-left indicator without arrows/zoom label, content-width colors, Q&A removed`);
   }
   await page.setViewportSize({width:390,height:844});
   const progress=page.getByRole('slider',{name:'Pilih foto produk'});

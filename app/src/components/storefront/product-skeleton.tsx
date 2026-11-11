@@ -6,7 +6,7 @@ export function ProductSkeleton() {
     <span className="sr-only">Memuat informasi produk…</span>
     <div className="pdp-main" aria-hidden="true">
       <div className="pdp-topbar"><span className="pdp-skeleton-block pdp-skeleton-icon" /><span className="pdp-skeleton-block pdp-skeleton-logo" /><span className="pdp-skeleton-block pdp-skeleton-icon" /></div>
-      <div className="pdp-hero"><div className="pdp-media"><div className="pdp-gallery-frame pdp-skeleton-block" /><div className="pdp-gallery-navigation"><span className="pdp-skeleton-block pdp-skeleton-indicator" /></div></div></div>
+      <div className="pdp-hero"><div className="pdp-media"><div className="pdp-gallery-frame pdp-skeleton-block"><span className="pdp-gallery-progress"><span className="pdp-skeleton-indicator" /></span></div></div></div>
       <div className="pdp-sheet"><div className="pdp-info">
         <div className="pdp-skeleton-block pdp-skeleton-brand" />
         <div className="pdp-skeleton-block pdp-skeleton-title" />
