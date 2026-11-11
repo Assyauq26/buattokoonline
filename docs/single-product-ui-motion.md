@@ -41,3 +41,4 @@ Verified locally: 39 tests across gallery keyboard/fallback/variant handling, ca
 
 Hubify follow-up: main images use an explicit centered contain fit inside the square frame. The lower-left indicator uses a 70% opaque white track and solid black thumb. Product headers use a thin, soft shadow; the loading frame inherits the same square geometry.
 
+The product-page Add button now remains pending while the server confirms the mutation, instead of opening a taller options panel before success. The successful mobile sheet enters from below the viewport over 260ms. Existing open panels reveal success content upward without downward height interpolation. Stock failures still expose recovery options, keyboard opening remains immediate, and reduced motion avoids translation. Verified with animation-frame samples on mobile and desktop, real local cart success and stock rejection, and regression coverage for pending direct product adds.

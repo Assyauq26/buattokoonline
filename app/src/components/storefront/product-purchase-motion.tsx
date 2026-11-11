@@ -36,7 +36,14 @@ export function ProductPurchaseMotion({ children, phase, instant, enabled }: { c
     transition.current?.cancel();
     const next = node.getBoundingClientRect().height;
     previousHeight.current = next;
-    if (!previous || Math.abs(previous - next) < 1 || instant || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches || !node.animate) return;
+    if (!previous || instant || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches || !node.animate) return;
+    // A shorter success panel must not shrink downward from the options panel.
+    // Set its final height immediately, then reveal its content upward.
+    if (phase === "success") {
+      transition.current = node.animate([{ transform: "translateY(16px)", opacity: 0 }, { transform: "translateY(0)", opacity: 1 }], { duration: 220, easing: "cubic-bezier(.23, 1, .32, 1)" });
+      return;
+    }
+    if (Math.abs(previous - next) < 1) return;
     transition.current = node.animate([{ height: `${previous}px`, opacity: .7 }, { height: `${next}px`, opacity: 1 }], { duration: 220, easing: "cubic-bezier(.23, 1, .32, 1)" });
   }, [phase, instant]);
   useEffect(() => () => transition.current?.cancel(), []);

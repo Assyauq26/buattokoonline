@@ -321,7 +321,7 @@
 /* PDP-only motion: preserve portal content through closing; no overlay flash. */
 .storefront-root .purchase-backdrop[data-product-motion] { animation: none; opacity: 0; transition: opacity 180ms ease; }
 .storefront-root .purchase-backdrop[data-product-motion][data-visible="true"] { opacity: 1; }
-.storefront-root .purchase-sheet[data-product-motion] { animation: none; opacity: 0; transform: translateY(16px); transition: transform 220ms cubic-bezier(.23,1,.32,1), opacity 180ms ease; }
+.storefront-root .purchase-sheet[data-product-motion] { animation: none; opacity: 0; transform: translateY(100%); transition: transform 260ms cubic-bezier(.23,1,.32,1), opacity 180ms ease; }
 .storefront-root .purchase-sheet[data-product-motion][data-visible="true"] { opacity: 1; transform: translateY(0); }
 .storefront-root .purchase-sheet[data-product-motion][data-visible="false"] { transition-duration: 180ms; }
 .pdp-purchase-motion { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
