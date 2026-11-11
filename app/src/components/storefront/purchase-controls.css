@@ -317,3 +317,28 @@
 :is(.storefront-root,.storefront-checkout-root) :is(.region-trigger,.region-close,.region-option,.region-steps button):focus-visible {outline:2px solid var(--store-focus,#171717);outline-offset:2px;}
 
 .purchase-submit[data-incomplete="true"] {opacity:.55;filter:saturate(.5);cursor:help} .purchase-submit[data-incomplete="true"]:active {transform:none}
+
+/* PDP-only motion: preserve portal content through closing; no overlay flash. */
+.storefront-root .purchase-backdrop[data-product-motion] { animation: none; opacity: 0; transition: opacity 180ms ease; }
+.storefront-root .purchase-backdrop[data-product-motion][data-visible="true"] { opacity: 1; }
+.storefront-root .purchase-sheet[data-product-motion] { animation: none; opacity: 0; transform: translateY(16px); transition: transform 220ms cubic-bezier(.23,1,.32,1), opacity 180ms ease; }
+.storefront-root .purchase-sheet[data-product-motion][data-visible="true"] { opacity: 1; transform: translateY(0); }
+.storefront-root .purchase-sheet[data-product-motion][data-visible="false"] { transition-duration: 180ms; }
+.pdp-purchase-motion { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+.pdp-purchase-motion > [data-testid="quick-add-variant-sheet"] { min-height: 0; overflow: hidden; }
+.storefront-root .purchase-sheet[data-product-motion] button { transition: transform 140ms cubic-bezier(.23,1,.32,1), background-color 180ms ease, opacity 160ms ease; }
+.storefront-root .purchase-sheet[data-product-motion] button:active:not(:disabled):not(:focus-visible) { transform: scale(.97); }
+@media(min-width:768px) {
+  .storefront-root .purchase-sheet[data-product-motion] { transform: translate(-50%, calc(-50% + 8px)) scale(.985); }
+  .storefront-root .purchase-sheet[data-product-motion][data-visible="true"] { transform: translate(-50%, -50%) scale(1); }
+}
+.storefront-root :is(.purchase-sheet,.purchase-backdrop)[data-product-motion][data-instant="true"] { transition: none; }
+@media(prefers-reduced-motion:reduce) {
+  .storefront-root :is(.purchase-sheet,.purchase-backdrop)[data-product-motion] { transition: opacity 100ms ease; }
+  .storefront-root .purchase-sheet[data-product-motion] { transform: none; }
+  .storefront-root .purchase-sheet[data-product-motion] button { transition: none; }
+  .storefront-root .purchase-sheet[data-product-motion] button:active { transform: none; }
+}
+@media(prefers-reduced-motion:reduce) and (min-width:768px) {
+  .storefront-root .purchase-sheet[data-product-motion] { transform: translate(-50%,-50%); }
+}
