@@ -90,4 +90,22 @@ class HistoricalCompatibilityTests(unittest.TestCase):
    self.assertEqual(h.digest(package.read_bytes()),package_hash)
    for n in h.PAIRS:
     relative='app/prisma/migrations/'+n+'/migration.sql';self.assertEqual((destination/relative).read_bytes(),(baseline/relative).read_bytes())
+ def test_runtime_projection_is_confined_and_idempotent(self):
+  with tempfile.TemporaryDirectory() as d:
+   root=Path(d);source=root/'staging-sources/candidate';source.mkdir(parents=True)
+   with tarfile.open(ARCHIVE) as tar:
+    for member in tar.getmembers():
+     if member.name.startswith('app/prisma/migrations/') and member.name.endswith('/migration.sql'):
+      target=source/member.name;target.parent.mkdir(parents=True,exist_ok=True);target.write_bytes(tar.extractfile(member).read())
+   (source/'VERSION').write_text('1.7.3')
+   evidence=root/'config/migration-compatibility/v1.7.2.tar.gz';evidence.parent.mkdir(parents=True);evidence.write_bytes(ARCHIVE.read_bytes())
+   for n in h.PAIRS:
+    old,new=self.material(n);original=root/'development-sources'/h.BASE_SHA/'app/prisma/migrations'/n/'migration.sql';original.parent.mkdir(parents=True);original.write_bytes(old)
+   with patch.object(core,'ROOT',root),patch.object(core,'CONFIG',root/'config'),patch.object(h,'runtime_context',return_value=self.context):
+    with self.assertRaises(core.StoreError):h.prepare_runtime_projection(root/'development-sources'/h.BASE_SHA,self.installed)
+    self.assertEqual(len(h.prepare_runtime_projection(source,self.installed)),2)
+    self.assertEqual(h.prepare_runtime_projection(source,self.installed),[])
+    self.assertEqual(core.inventory(source),self.installed['migrations'])
+   for n in h.PAIRS:
+    self.assertEqual((root/'development-sources'/h.BASE_SHA/'app/prisma/migrations'/n/'migration.sql').read_bytes(),self.material(n)[0])
 if __name__=='__main__':unittest.main()
