@@ -78,6 +78,15 @@ def prepare(source, root_bundle, address, channel='stable', migration_compatibil
         if config['origin'] != env['APP_ORIGIN']: raise Rejected('installation_mismatch')
         return config # Explicit separate updater upgrade required; never overwrite running worker.
     installation = secrets.token_hex(16)
+    agent_config = Path('/etc/btos-agent/config.json')
+    if agent_config.is_file() and not agent_config.is_symlink():
+        enrolled = core.read_json(agent_config)
+        agent_id = enrolled.get('installationId', '')
+        if (re.fullmatch(r'[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}', agent_id)
+                and enrolled.get('storeOrigin') == env['APP_ORIGIN']):
+            # New installations share the agent identity in the updater's
+            # existing hex representation. Existing updater state is retained above.
+            installation = agent_id.replace('-', '')
     candidate, route = plan(core.read_json(core.COMPOSE), env['APP_ORIGIN'], installation, address)
     for path in [core.DATA/'updater', core.DATA/'updater/jobs', Path('/var/backups/single-store')]: path.mkdir(mode=0o700, parents=True, exist_ok=True)
     config = {'installation':installation,'origin':env['APP_ORIGIN'],'channel':channel,'catalog':CATALOG,'statusAddress':address,

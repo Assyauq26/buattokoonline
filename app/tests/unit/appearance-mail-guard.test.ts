@@ -1,6 +1,6 @@
 import { it, expect, vi, beforeEach } from "vitest";
 const m = vi.hoisted(() => ({
-  approve: vi.fn(),
+  sync: vi.fn(),
   change: vi.fn(),
   actor: vi.fn(),
 }));
@@ -12,8 +12,8 @@ vi.mock("next/cache", () => ({
 vi.mock("@/modules/appearance/authorization", () => ({
   requireCustomizePermission: m.actor,
 }));
-vi.mock("@/modules/auth/registration-otp-email", () => ({
-  checkMailBrandChange: m.approve,
+vi.mock("@/modules/auth/mail-brand-sync", () => ({
+  syncPendingMailBrand: m.sync,
 }));
 vi.mock("@/modules/appearance/service", () => ({
   changeAppearance: m.change,
@@ -31,25 +31,26 @@ beforeEach(() => {
   vi.clearAllMocks();
   m.actor.mockResolvedValue({ id: "seller" });
   m.change.mockResolvedValue({ ok: true });
-  m.approve.mockResolvedValue(undefined);
+  m.sync.mockResolvedValue(undefined);
 });
-it("all publishing paths check the persisted candidate brand before writing", async () => {
+it("publishes before attempting sender synchronization", async () => {
   await executeAppearanceCommand({
     kind: "publish",
     draftVersion: 1,
     publishedVersion: 0,
   });
-  expect(m.approve).toHaveBeenCalledWith("New Brand");
   expect(m.change).toHaveBeenCalledOnce();
+  expect(m.sync).toHaveBeenCalledOnce();
+  expect(m.change.mock.invocationCallOrder[0]).toBeLessThan(m.sync.mock.invocationCallOrder[0]);
 });
-it("a relay refusal prevents publishing from the legacy appearance API too", async () => {
-  m.approve.mockRejectedValue(new Error("not approved"));
+it("a central outage does not undo a committed change", async () => {
+  m.sync.mockRejectedValue(new Error("relay unavailable"));
   await expect(
     executeAppearanceCommand({
       kind: "publish",
       draftVersion: 1,
       publishedVersion: 0,
     }),
-  ).rejects.toThrow("not approved");
-  expect(m.change).not.toHaveBeenCalled();
+  ).resolves.toEqual({ ok: true });
+  expect(m.change).toHaveBeenCalledOnce();
 });

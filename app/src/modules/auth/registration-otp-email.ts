@@ -129,7 +129,8 @@ export function sendRegistrationOtpEmail(
 
 export async function storeMailStatus() {
   let configured = false;
-  const brand = await mailBrand();
+  const desiredBrand = await mailBrand();
+  let brand = desiredBrand;
   let state: "active" | "preparing" | "action" | "unavailable" = "preparing";
   try {
     const config = registrationMailConfig();
@@ -141,13 +142,18 @@ export async function storeMailStatus() {
           Authorization: `Bearer ${config.key}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ origin, brand }),
+        body: JSON.stringify({ origin, brand: desiredBrand, action: "sender-status" }),
         redirect: "error",
         cache: "no-store",
         signal: AbortSignal.timeout(4000),
       });
-      await response.body?.cancel();
       configured = response.ok;
+      if (response.ok && response.headers.get("content-type")?.includes("application/json")) {
+        const body = await response.json();
+        if (typeof body.brand === "string") brand = sanitizeMailBrand(body.brand);
+      } else {
+        await response.body?.cancel();
+      }
       state = response.ok
         ? "active"
         : [401, 403, 409].includes(response.status)
@@ -161,37 +167,5 @@ export async function storeMailStatus() {
   } catch {
     state = process.env.STORE_MAIL_RELAY_TOKEN ? "unavailable" : "preparing";
   }
-  return { configured, state, brand, sender: mailSender(brand) };
-}
-
-/** Never publish a new customer sender identity that the scoped relay rejects. */
-export async function checkMailBrandChange(proposed: string) {
-  const next = sanitizeMailBrand(proposed);
-  if (next === (await mailBrand())) return;
-  let config;
-  try {
-    config = registrationMailConfig();
-  } catch {
-    return;
-  }
-  if (config.mode !== "relay") return;
-  try {
-    const response = await fetch(config.endpoint + "/status", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${config.key}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ origin: storeOrigin(), brand: next }),
-      redirect: "error",
-      cache: "no-store",
-      signal: AbortSignal.timeout(4000),
-    });
-    await response.body?.cancel();
-    if (response.ok) return;
-  } catch {}
-  throw new HttpError(
-    "Nama toko baru belum disetujui layanan Email & OTP. Hubungi operator untuk menyelaraskan identitas pengirim. Perubahan belum diterbitkan.",
-    409,
-  );
+  return { configured, state, brand, desiredBrand, sender: mailSender(brand) };
 }

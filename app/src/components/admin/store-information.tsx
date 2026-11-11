@@ -92,7 +92,9 @@ export function StoreInformation({
         publishedVersion: j.data.publishedVersion,
       });
       setRevision((n) => n + 1);
-      setMessage("Informasi toko tersimpan dan diterbitkan.");
+      setMessage(j.data.mailBrandPending
+        ? "Informasi toko tersimpan. Identitas pengirim email sedang disinkronkan."
+        : "Informasi toko tersimpan dan diterbitkan.");
       setPreview("");
       router.refresh();
     } catch (e) {
