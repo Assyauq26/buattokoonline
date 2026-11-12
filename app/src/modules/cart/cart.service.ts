@@ -2,8 +2,7 @@ import { withCampaignPricing } from "@/modules/promotions/campaign-pricing";
 import { Prisma } from "@prisma/client";
 import { randomUUID } from "node:crypto";
 import { prisma } from "@/lib/prisma";
-import { effectivePrice } from "@/lib/money";
-import { activeScheduledFlashPrice, effectiveProductPrice } from "@/modules/promotions/scheduled-flash-sale";
+import { effectiveVariantPrice } from "@/modules/promotions/scheduled-flash-sale";
 import { available } from "@/modules/inventory/inventory.service";
 import { HttpError } from "@/lib/response";
 
@@ -38,22 +37,6 @@ export async function getOrCreateCart(userId: string) {
 }
 
 /** Server-authoritative unit price for a variant. */
-function unitPriceFor(variant: {
-  price: number | null;
-  salePrice: number | null;
-  product: {
-    basePrice: number; salePrice: number | null;
-    flashSalePrice: number | null; flashSaleStartsAt: Date | null; flashSaleEndsAt: Date | null;
-  };
-}): number {
-  const campaignPrice=activeScheduledFlashPrice(variant.product);
-  if (campaignPrice!=null) return campaignPrice;
-  if (variant.price != null) {
-    return effectivePrice(variant.price, variant.salePrice);
-  }
-  return effectiveProductPrice(variant.product);
-}
-
 export const checkoutVariantSelection = {
   optionValues: { select: { value: { select: { value: true, group: { select: { name: true, sortOrder: true, allowsImage: true } }, image: { select: { url: true } } } } } },
   color: true,
@@ -113,15 +96,16 @@ export async function getCartView(userId: string, client: Prisma.TransactionClie
   if (!cart) return { cartId: null, lines: [], subtotal: 0, count: 0 };
 
   const priced = await withCampaignPricing(cart.items.map(it=>it.variant.product),client);
-  const lines = cart.items.map((it,index)=>checkoutLine({...it,variant:{...it.variant,product:priced[index]}}));
+  const lines = cart.items.map((it,index)=>checkoutLine({...it,variant:{...it.variant,product:priced[index]}}, priced[index]));
 
   const subtotal = lines.reduce((s, l) => s + l.lineTotal, 0);
   const count = lines.reduce((s, l) => s + l.quantity, 0);
   return { cartId: cart.id, lines, subtotal, count };
 }
 
-function checkoutLine(it: { id: string; variantId: string; quantity: number; variant: CheckoutVariant }) {
-  const unitPrice = unitPriceFor(it.variant);
+function checkoutLine(it: { id: string; variantId: string; quantity: number; variant: CheckoutVariant }, promotion?: { skuCampaign: boolean; skuOffers: Record<string,{id:string;price:number;available:number}> }) {
+  const offer = promotion?.skuOffers[it.variantId];
+  const unitPrice=effectiveVariantPrice({...it.variant.product,...promotion},{...it.variant,id:it.variantId});
   const stock = it.variant.inventory
     ? available(it.variant.inventory.onHand, it.variant.inventory.reserved)
     : 0;
@@ -131,10 +115,11 @@ function checkoutLine(it: { id: string; variantId: string; quantity: number; var
     id: it.id,
     variantId: it.variantId,
     quantity: it.quantity,
+    flashOfferId: offer?.id ?? null,
     unitPrice,
     lineTotal: unitPrice * it.quantity,
-    inStock: it.variant.product.status === "PUBLISHED" && stock >= it.quantity,
-    availableStock: stock,
+    inStock: it.variant.product.status === "PUBLISHED" && stock >= it.quantity && (!offer || offer.available >= it.quantity),
+    availableStock: offer ? Math.min(stock, offer.available) : stock,
     product: {
       id: it.variant.product.id,
       name: it.variant.product.name,
@@ -151,7 +136,7 @@ export async function getDirectCheckoutView(variantId: string, quantity: number,
   const variant = await client.productVariant.findUnique({ where: { id: variantId }, select: checkoutVariantSelection });
   if (!variant) throw new HttpError("Varian tidak ditemukan", 404);
   const [product] = await withCampaignPricing([variant.product],client);
-  const line = checkoutLine({ id: variantId, variantId, quantity, variant:{...variant,product} });
+  const line = checkoutLine({ id: variantId, variantId, quantity, variant:{...variant,product} }, product);
   return { cartId: null, lines: [line], subtotal: line.lineTotal, count: quantity };
 }
 

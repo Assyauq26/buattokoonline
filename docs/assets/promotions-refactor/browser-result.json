@@ -1,0 +1,20 @@
+{
+  "ok": true,
+  "run": "c37c85bb-ac7f-46d9-99aa-6894064f600f",
+  "checks": [
+    "Schedule validates WIB and preserves inputs between steps",
+    "Product picker cancel does not mutate participants",
+    "Selections persist across product pagination; unpublished product disabled; single dialog closes after apply",
+    "Publication creates two products/four SKU offers only after server success",
+    "Voucher preview follows inputs; fixed discount clears hidden percentage cap; server save succeeds",
+    "360/390/430/768/1440 layouts without document overflow; mobile picker fills viewport; Escape restores focus",
+    "Failed product request preserves the query and participants; explicit retry recovers without duplicate dialogs",
+    "Mobile voucher action sheet exposes Detail/Edit, restores focus, copies code and persists activation changes",
+    "Reload recovers unsaved fields; incomplete draft is persisted server-side without publication",
+    "Search and tab context persist in URL through tab switching and refresh",
+    "Percentage voucher keeps cap and real total/per-customer limits",
+    "Reduced motion disables control movement"
+  ],
+  "errors": [],
+  "scope": "isolated local synthetic database; no live campaign"
+}

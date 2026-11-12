@@ -1,6 +1,9 @@
 import { effectivePrice } from "@/lib/money";
 
 export type ScheduledFlashFields = {
+  skuCampaign?: boolean;
+  promotionCard?: { price: number; originalPrice: number } | null;
+  skuOffers?: Record<string, { id: string; price: number; available: number }>;
   campaignPriceVerified?: boolean;
   campaignAsOf?: number;
   basePrice: number;
@@ -9,6 +12,29 @@ export type ScheduledFlashFields = {
   flashSaleStartsAt?: Date | string | null;
   flashSaleEndsAt?: Date | string | null;
 };
+/** Shared SKU-level price for PDP, quick purchase, cart, and Buy Now. */
+export function effectiveVariantPrice(
+  product: ScheduledFlashFields,
+  variant: { id: string; price: number | null; salePrice: number | null },
+) {
+  const regular =
+    variant.price != null
+      ? effectivePrice(variant.price, variant.salePrice)
+      : effectivePrice(product.basePrice, product.salePrice);
+  if (product.skuCampaign)
+    return product.skuOffers?.[variant.id]?.price ?? regular;
+  return activeScheduledFlashPrice(product) ?? regular;
+}
+export function variantPromotionAvailability(
+  product: ScheduledFlashFields,
+  variantId: string,
+  stock: number,
+) {
+  return Math.max(
+    0,
+    Math.min(stock, product.skuOffers?.[variantId]?.available ?? Infinity),
+  );
+}
 
 /**
  * Read-time pricing: scheduled flash sales never overwrite an ordinary salePrice.
@@ -49,6 +75,8 @@ export function effectiveProductPrice(
   product: ScheduledFlashFields,
   now = new Date(product.campaignAsOf ?? Date.now()),
 ): number {
+  if (product.skuCampaign && product.promotionCard)
+    return product.promotionCard.price;
   return (
     activeScheduledFlashPrice(product, now) ??
     effectivePrice(product.basePrice, product.salePrice)

@@ -1,5 +1,6 @@
 import { validateJntLocation } from "@/infrastructure/shipping/jnt/mapping-regions";
 import { lockCampaignPricing } from "@/modules/promotions/campaign-pricing";
+import { lockSkuOffers } from "@/modules/promotions/promotion-offers";
 import { createHash } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
@@ -234,6 +235,7 @@ export async function createOrder(
     if (published.length !== productIds.length) throw new HttpError("Produk tidak lagi tersedia. Periksa keranjang Anda.", 409);
     const variantIds = cartView.lines.map(l => l.variantId).sort();
     await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "ProductVariant" WHERE "id" IN (${Prisma.join(variantIds)}) ORDER BY "id" FOR SHARE`);
+    await lockSkuOffers(tx, productIds);
     const current = input.intentId ? await getIntentCheckoutView(input.intentId, userId, tx) : await getCartView(userId, tx);
     if (!current.lines.length) throw new HttpError("Keranjang sudah diproses. Periksa pesanan Anda.", 409);
     if (checkoutSignature(current.lines) !== checkoutSignature(confirmation.data)) throw new HttpError("Harga atau isi keranjang berubah. Muat ulang checkout dan konfirmasi ulang sebelum membuat pesanan.", 409);
@@ -278,6 +280,7 @@ export async function createOrder(
         items: {
           create: current.lines.map((l) => ({
             variantId: l.variantId,
+            flashOfferId: l.flashOfferId,
             productName: l.product.name,
             variantLabel: l.variantLabel,
             imageUrl: l.product.image,

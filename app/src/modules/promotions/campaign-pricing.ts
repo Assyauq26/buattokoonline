@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import type { CampaignClock } from "./campaign.validation";
 import { HttpError } from "@/lib/http-error";
+import { readSkuOffers, type SkuOffer } from "./promotion-offers";
 type Client = Prisma.TransactionClient;
 export async function lockCampaignPricing(tx: Client, write = false) {
   const rows = await tx.$queryRaw<{ key: string }[]>(
@@ -18,9 +19,10 @@ export async function campaignPrices(
   ids: string[],
   db: Client = prisma,
   now = new Date(),
+  knownOffers?: SkuOffer[],
 ) {
   if (!ids.length) return [];
-  return db.$queryRaw<
+  const legacy = await db.$queryRaw<
     Array<{
       productId: string;
       flashSalePrice: number;
@@ -36,11 +38,28 @@ export async function campaignPrices(
     JOIN "Product" p ON p.id=i."productId"
     WHERE c."storeKey"='primary' AND c.status='SCHEDULED' AND c."startsAt"<=${now} AND c."endsAt">${now}
     AND p.id IN (${Prisma.join([...new Set(ids)])}) AND p.status='PUBLISHED'
+    AND NOT EXISTS (SELECT 1 FROM "FlashSaleSkuOffer" s WHERE s."itemId"=i.id)
     AND NOT p."isFlashSale" AND p."flashSalePrice" IS NULL
     AND i."flashSalePrice"<(CASE WHEN p."salePrice">0 AND p."salePrice"<p."basePrice" THEN p."salePrice" ELSE p."basePrice" END)
     AND NOT EXISTS(SELECT 1 FROM "ProductVariant" v WHERE v."productId"=p.id AND (CASE WHEN v.price IS NOT NULL THEN (CASE WHEN v."salePrice">0 AND v."salePrice"<v.price THEN v."salePrice" ELSE v.price END) ELSE (CASE WHEN p."salePrice">0 AND p."salePrice"<p."basePrice" THEN p."salePrice" ELSE p."basePrice" END) END)<=i."flashSalePrice")
     AND EXISTS(SELECT 1 FROM "ProductVariant" v JOIN "Inventory" n ON n."variantId"=v.id WHERE v."productId"=p.id AND n."onHand">n.reserved)
   `);
+  const offers = knownOffers ?? (await readSkuOffers(ids, db, now));
+  const products = new Map(legacy.map((p) => [p.productId, p]));
+  for (const offer of offers) {
+    const previous = products.get(offer.productId);
+    if (!previous || offer.price < previous.flashSalePrice)
+      products.set(offer.productId, {
+        productId: offer.productId,
+        flashSalePrice: offer.price,
+        startsAt: offer.startsAt,
+        endsAt: offer.endsAt,
+        id: offer.campaignId,
+        name: offer.name,
+        version: offer.version,
+      });
+  }
+  return [...products.values()];
 }
 /** Overlay fresh campaign data OUTSIDE metadata caches. Legacy columns are never a price authority. */
 export async function withCampaignPricing<
@@ -51,19 +70,68 @@ export async function withCampaignPricing<
     isFlashSale?: boolean;
   },
 >(rows: T[], db: Client = prisma, now = new Date()) {
+  const offers = await readSkuOffers(
+    rows.map((p) => p.id),
+    db,
+    now,
+  );
   const prices = new Map(
     (
       await campaignPrices(
         rows.map((p) => p.id),
         db,
         now,
+        offers,
       )
     ).map((p) => [p.productId, p]),
   );
+  // Presence is retained even after exhaustion: an unselected/exhausted SKU
+  // must never inherit the product-card minimum offer.
+  const skuProducts = rows.length
+    ? await db.$queryRaw<{ productId: string }[]>(Prisma.sql`
+    SELECT DISTINCT i."productId" FROM "FlashSaleSkuOffer" s JOIN "FlashSaleCampaignItem" i ON i.id=s."itemId"
+    JOIN "FlashSaleCampaign" c ON c.id=i."campaignId" WHERE i."productId" IN (${Prisma.join([...new Set(rows.map((p) => p.id))])})
+    AND c.status='SCHEDULED' AND c."startsAt"<=${now} AND c."endsAt">${now}`)
+    : [];
+  // The card displays an actually available SKU, never an unavailable base-price
+  // placeholder or an offer assigned to every variation. This stays outside the
+  // cached catalog metadata and does not overwrite the stored catalog prices.
+  const regularCards = skuProducts.length
+    ? await db.$queryRaw<
+        { productId: string; price: number; originalPrice: number }[]
+      >(Prisma.sql`
+      SELECT DISTINCT ON (v."productId") v."productId",COALESCE(v.price,p."basePrice") AS "originalPrice",
+        CASE WHEN v.price IS NOT NULL THEN CASE WHEN v."salePrice">0 AND v."salePrice"<v.price THEN v."salePrice" ELSE v.price END
+        ELSE CASE WHEN p."salePrice">0 AND p."salePrice"<p."basePrice" THEN p."salePrice" ELSE p."basePrice" END END AS price
+      FROM "ProductVariant" v JOIN "Product" p ON p.id=v."productId"
+      JOIN "Inventory" n ON n."variantId"=v.id
+      WHERE v."productId" IN (${Prisma.join(skuProducts.map((p) => p.productId))}) AND n."onHand">n.reserved
+      ORDER BY v."productId",price,"originalPrice",v.id`)
+    : [];
+  const cards = new Map(regularCards.map((p) => [p.productId, p]));
+  for (const offer of offers) {
+    const regular = cards.get(offer.productId);
+    if (!regular || offer.price <= regular.price)
+      cards.set(offer.productId, {
+        productId: offer.productId,
+        price: offer.price,
+        originalPrice: offer.originalPrice,
+      });
+  }
   return rows.map((p) => {
     const c = prices.get(p.id);
     return {
       ...p,
+      promotionCard: cards.get(p.id) ?? null,
+      skuCampaign: skuProducts.some((row) => row.productId === p.id),
+      skuOffers: Object.fromEntries(
+        offers
+          .filter((o) => o.productId === p.id)
+          .map((o) => [
+            o.variantId,
+            { id: o.id, price: o.price, available: o.available },
+          ]),
+      ),
       salePrice: p.isFlashSale ? null : p.salePrice,
       isFlashSale: Boolean(c),
       flashSalePrice: c?.flashSalePrice ?? null,

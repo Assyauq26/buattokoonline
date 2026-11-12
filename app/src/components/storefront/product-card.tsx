@@ -160,6 +160,7 @@ export function toCardData(p: {
   basePrice: number;
   salePrice: number | null;
   flashCampaign?: CampaignClock | null;
+  promotionCard?: {price:number;originalPrice:number} | null;
   campaignPriceVerified?: boolean;
   campaignAsOf?: number;
   flashSalePrice?: number | null;
@@ -179,8 +180,10 @@ export function toCardData(p: {
     brandName: p.brand?.name ?? null,
     flashCampaign: p.flashCampaign ?? null,
     image: p.images[0]?.url ?? null,
-    basePrice: p.basePrice,
-    salePrice: activeScheduledFlashPrice(p) ?? p.salePrice,
+    basePrice: p.promotionCard?.originalPrice ?? p.basePrice,
+    salePrice: p.promotionCard
+      ? (p.promotionCard.price < p.promotionCard.originalPrice ? p.promotionCard.price : null)
+      : activeScheduledFlashPrice(p) ?? p.salePrice,
     ratingAvg: p.ratingAvg,
     reviewCount: p.reviewCount,
     // Identifier hint for selectors only; mutation always uses fresh metadata.

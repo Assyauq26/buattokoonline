@@ -1,4 +1,7 @@
-import { isDeletedProduct, liveProductSlug } from "@/modules/catalog/deleted-product";
+import {
+  isDeletedProduct,
+  liveProductSlug,
+} from "@/modules/catalog/deleted-product";
 import "server-only";
 import { matchesLegacyArchive } from "./legacy-flash-policy";
 import { effectivePrice } from "@/lib/money";
@@ -14,6 +17,11 @@ import {
   campaignProductQuerySchema,
 } from "./campaign.validation";
 import { lockCampaignPricing } from "./campaign-pricing";
+import {
+  campaignListWhere,
+  promotionListQuery,
+  PROMOTION_PAGE_SIZE,
+} from "./promotion-list-query";
 type Actor = { id: string; isAdmin: boolean; permissions: string[] };
 function permit(actor: Actor, permission?: string) {
   if (
@@ -33,7 +41,11 @@ export async function assertCampaignProductEdit(
   input: {
     basePrice: number;
     salePrice?: number | null;
-    variants: { price?: number | null; salePrice?: number | null }[];
+    variants: {
+      id?: string;
+      price?: number | null;
+      salePrice?: number | null;
+    }[];
   },
 ) {
   const rows = await tx.flashSaleCampaignItem.findMany({
@@ -45,21 +57,39 @@ export async function assertCampaignProductEdit(
         endsAt: { gt: new Date() },
       },
     },
-    select: { flashSalePrice: true },
+    select: {
+      flashSalePrice: true,
+      skuOffers: { select: { variantId: true, price: true } },
+    },
   });
   if (
     rows.some(
       (i) =>
+        !i.skuOffers.length &&
         i.flashSalePrice >= effectivePrice(input.basePrice, input.salePrice),
     ) ||
-    rows.some((i) =>
-      input.variants.some(
-        (v) =>
-          i.flashSalePrice >=
-          (v.price != null
-            ? effectivePrice(v.price, v.salePrice)
-            : effectivePrice(input.basePrice, input.salePrice)),
-      ),
+    rows.some(
+      (i) =>
+        !i.skuOffers.length &&
+        input.variants.some(
+          (v) =>
+            i.flashSalePrice >=
+            (v.price != null
+              ? effectivePrice(v.price, v.salePrice)
+              : effectivePrice(input.basePrice, input.salePrice)),
+        ),
+    ) ||
+    rows.some((item) =>
+      item.skuOffers.some((offer) => {
+        const variant = input.variants.find((v) => v.id === offer.variantId);
+        return (
+          !variant ||
+          offer.price >=
+            (variant.price != null
+              ? effectivePrice(variant.price, variant.salePrice)
+              : effectivePrice(input.basePrice, input.salePrice))
+        );
+      }),
     )
   )
     throw new HttpError(
@@ -83,6 +113,18 @@ export async function saveCampaign(actor: Actor, value: unknown) {
     return await prisma.$transaction(
       async (tx) => {
         await lockCampaignPricing(tx, true);
+        if (
+          !input.id &&
+          input.requestId &&
+          (await tx.flashSaleCampaign.findUnique({
+            where: { id: input.requestId },
+            select: { id: true },
+          }))
+        )
+          throw new HttpError(
+            "Permintaan ini sudah diterima. Periksa daftar kampanye sebelum mencoba lagi.",
+            409,
+          );
         const now = new Date();
         if (
           input.status === "SCHEDULED" &&
@@ -100,13 +142,21 @@ export async function saveCampaign(actor: Actor, value: unknown) {
           current &&
           (current.version !== input.expectedVersion ||
             !["DRAFT", "SCHEDULED"].includes(current.status) ||
-            (current.status === "SCHEDULED" && current.endsAt <= now))
+            (current.status === "SCHEDULED" && current.startsAt <= now))
         )
           throw new HttpError(
             "Kampanye sudah berubah/berakhir. Muat ulang halaman.",
             409,
           );
         const ids = input.items.map((i) => i.productId).sort();
+        if (
+          input.status === "SCHEDULED" &&
+          input.items.some((item) => !item.skuOffers?.length)
+        )
+          throw new HttpError(
+            "Isi harga dan kuota untuk minimal satu SKU pada setiap produk sebelum menjadwalkan.",
+            422,
+          );
         await tx.$queryRaw(
           Prisma.sql`SELECT id FROM "Product" WHERE id IN (${Prisma.join(ids)}) ORDER BY id FOR UPDATE`,
         );
@@ -133,20 +183,46 @@ export async function saveCampaign(actor: Actor, value: unknown) {
           const price = input.items.find(
             (i) => i.productId === p.id,
           )!.flashSalePrice;
+          const skuOffers = input.items.find(
+            (i) => i.productId === p.id,
+          )!.skuOffers;
+          if (skuOffers) {
+            for (const offer of skuOffers) {
+              const variant = p.variants.find((v) => v.id === offer.variantId);
+              const stock = variant?.inventory
+                ? variant.inventory.onHand - variant.inventory.reserved
+                : 0;
+              const regular =
+                variant?.price != null
+                  ? effectivePrice(variant.price, variant.salePrice)
+                  : effectivePrice(p.basePrice, p.salePrice);
+              if (!variant || offer.price >= regular || offer.quota > stock)
+                throw new HttpError(
+                  `${p.name}: harga/kuota SKU harus sesuai harga reguler dan stok tersedia.`,
+                  422,
+                );
+            }
+            if (price !== Math.min(...skuOffers.map((o) => o.price)))
+              throw new HttpError(
+                "Ringkasan harga produk tidak sesuai harga SKU.",
+                422,
+              );
+          }
           if (
             p.status !== "PUBLISHED" ||
             !p.variants.length ||
-            p.variants.some(
-              (v) =>
-                price >=
-                (v.price != null
-                  ? effectivePrice(v.price, v.salePrice)
-                  : regular),
-            ) ||
+            (!skuOffers &&
+              p.variants.some(
+                (v) =>
+                  price >=
+                  (v.price != null
+                    ? effectivePrice(v.price, v.salePrice)
+                    : regular),
+              )) ||
             !p.variants.some(
               (v) => v.inventory && v.inventory.onHand > v.inventory.reserved,
             ) ||
-            price >= regular
+            (!skuOffers && price >= regular)
           )
             throw new HttpError(
               `${p.name}: produk harus terbit, memiliki stok, dan harga promo di bawah harga reguler setiap varian.`,
@@ -179,12 +255,13 @@ export async function saveCampaign(actor: Actor, value: unknown) {
             });
           }
         }
-        const id = current?.id ?? randomUUID();
+        const id = current?.id ?? input.requestId ?? randomUUID();
         const schedule = {
           name: input.name,
           status: input.status,
           startsAt: new Date(input.startsAt),
           endsAt: new Date(input.endsAt),
+          draft: Prisma.DbNull,
         };
         if (
           input.status === "SCHEDULED" &&
@@ -213,13 +290,25 @@ export async function saveCampaign(actor: Actor, value: unknown) {
         await tx.flashSaleCampaignItem.deleteMany({
           where: { campaignId: id },
         });
-        await tx.flashSaleCampaignItem.createMany({
-          data: input.items.map((i) => ({
-            ...i,
-            id: randomUUID(),
-            campaignId: id,
-          })),
-        });
+        for (const item of input.items) {
+          const itemId = randomUUID();
+          await tx.flashSaleCampaignItem.create({
+            data: {
+              id: itemId,
+              campaignId: id,
+              productId: item.productId,
+              flashSalePrice: item.flashSalePrice,
+            },
+          });
+          if (item.skuOffers)
+            await tx.flashSaleSkuOffer.createMany({
+              data: item.skuOffers.map((o) => ({
+                ...o,
+                id: randomUUID(),
+                itemId,
+              })),
+            });
+        }
         if (input.resolveLegacy)
           await tx.flashSaleLegacy.updateMany({
             where: { productId: { in: ids }, resolvedCampaignId: null },
@@ -233,6 +322,7 @@ export async function saveCampaign(actor: Actor, value: unknown) {
             action: current ? "flash-campaign.update" : "flash-campaign.create",
             meta: {
               ...schedule,
+              draft: null,
               startsAt: schedule.startsAt.toISOString(),
               endsAt: schedule.endsAt.toISOString(),
               version: row.version,
@@ -242,7 +332,16 @@ export async function saveCampaign(actor: Actor, value: unknown) {
           },
           tx,
         );
-        return { id, version: row.version };
+        return {
+          id,
+          version: row.version,
+          state:
+            input.status === "DRAFT"
+              ? "DRAFT"
+              : schedule.startsAt <= now
+                ? "ACTIVE"
+                : "UPCOMING",
+        };
       },
       { timeout: 15000 },
     );
@@ -317,7 +416,8 @@ export async function retireLegacy(actor: Actor, value: unknown) {
       Prisma.sql`SELECT id FROM "Product" WHERE id=${productId} FOR UPDATE`,
     );
     const p = await tx.product.findUnique({ where: { id: productId } });
-    if (!p || isDeletedProduct(p)) throw new HttpError("Produk tidak ditemukan.", 404);
+    if (!p || isDeletedProduct(p))
+      throw new HttpError("Produk tidak ditemukan.", 404);
     if (p.updatedAt.toISOString() !== expectedUpdatedAt)
       throw new HttpError("Data produk telah berubah. Muat ulang.", 409);
     const archive = await tx.flashSaleLegacy.findUnique({
@@ -377,11 +477,13 @@ export async function retireLegacy(actor: Actor, value: unknown) {
     return { productId };
   });
 }
-export async function listCampaigns(actor: Actor) {
+export async function listCampaigns(actor: Actor, query?: unknown) {
   permit(actor);
+  const parsed = query === undefined ? null : promotionListQuery.parse(query);
   const include = {
     items: {
       include: {
+        skuOffers: true,
         product: {
           select: {
             id: true,
@@ -389,8 +491,27 @@ export async function listCampaigns(actor: Actor) {
             basePrice: true,
             salePrice: true,
             status: true,
+            images: {
+              take: 1,
+              orderBy: { sortOrder: "asc" },
+              select: { url: true },
+            },
             variants: {
               select: {
+                id: true,
+                sku: true,
+                optionValues: {
+                  select: {
+                    value: {
+                      select: {
+                        value: true,
+                        group: { select: { name: true, sortOrder: true } },
+                      },
+                    },
+                  },
+                },
+                color: true,
+                size: true,
                 price: true,
                 salePrice: true,
                 inventory: { select: { onHand: true, reserved: true } },
@@ -403,9 +524,10 @@ export async function listCampaigns(actor: Actor) {
   } satisfies Prisma.FlashSaleCampaignInclude;
   const [recent, relevant] = await Promise.all([
     prisma.flashSaleCampaign.findMany({
-      where: { storeKey: "primary" },
+      where: parsed ? campaignListWhere(parsed) : { storeKey: "primary" },
       orderBy: { createdAt: "desc" },
-      take: 50,
+      take: parsed ? PROMOTION_PAGE_SIZE : 50,
+      skip: parsed && !parsed.id ? (parsed.page - 1) * PROMOTION_PAGE_SIZE : 0,
       include,
     }),
     prisma.flashSaleCampaign.findFirst({
@@ -420,9 +542,25 @@ export async function listCampaigns(actor: Actor) {
   ]);
   // An older active/next campaign must not disappear beneath newer drafts/history.
   const campaigns =
-    relevant && !recent.some((c) => c.id === relevant.id)
+    !parsed && relevant && !recent.some((c) => c.id === relevant.id)
       ? [relevant, ...recent]
       : recent;
+  const offerIds = campaigns.flatMap((c) =>
+    c.items.flatMap((i) => i.skuOffers.map((o) => o.id)),
+  );
+  const usage = offerIds.length
+    ? await prisma.orderItem.groupBy({
+        by: ["flashOfferId"],
+        where: {
+          flashOfferId: { in: offerIds },
+          order: { status: { notIn: ["CANCELLED", "EXPIRED"] } },
+        },
+        _sum: { quantity: true },
+      })
+    : [];
+  const used = new Map(
+    usage.map((u) => [u.flashOfferId, u._sum.quantity || 0]),
+  );
   return campaigns.map((c) => ({
     ...c,
     items: c.items.map((item) => {
@@ -447,6 +585,10 @@ export async function listCampaigns(actor: Actor) {
               : null;
       return {
         ...item,
+        skuOffers: item.skuOffers.map((o) => ({
+          ...o,
+          usedCount: used.get(o.id) || 0,
+        })),
         product: {
           name: p.name,
           basePrice: p.basePrice,
@@ -454,10 +596,28 @@ export async function listCampaigns(actor: Actor) {
           status: p.status,
           regularPrice,
           eligibilityWarning,
+          variants: p.variants.map((v) => ({
+            ...v,
+            label: v.optionValues.length
+              ? [...v.optionValues]
+                  .sort(
+                    (a, b) => a.value.group.sortOrder - b.value.group.sortOrder,
+                  )
+                  .map((o) => o.value.group.name + ": " + o.value.value)
+                  .join(" / ")
+              : [v.color, v.size].filter(Boolean).join(" / ") || v.sku,
+          })),
+          image: p.images[0]?.url ?? null,
         },
       };
     }),
   }));
+}
+export async function campaignListCount(actor: Actor, query: unknown) {
+  permit(actor);
+  return prisma.flashSaleCampaign.count({
+    where: campaignListWhere(promotionListQuery.parse(query)),
+  });
 }
 export async function campaignProducts(actor: Actor, value: unknown = {}) {
   permit(actor);
@@ -468,6 +628,7 @@ export async function campaignProducts(actor: Actor, value: unknown = {}) {
     page = query.page;
   const where: Prisma.ProductWhereInput = {
     slug: liveProductSlug,
+    ...(query.ids ? { id: { in: query.ids } } : {}),
     ...(query.search
       ? { name: { contains: query.search.slice(0, 160), mode: "insensitive" } }
       : {}),
@@ -477,8 +638,8 @@ export async function campaignProducts(actor: Actor, value: unknown = {}) {
     prisma.product.findMany({
       where,
       orderBy: [{ name: "asc" }, { id: "asc" }],
-      skip: (page - 1) * 20,
-      take: 20,
+      skip: query.ids ? 0 : (page - 1) * 20,
+      take: query.ids ? 200 : 20,
       select: {
         id: true,
         name: true,
@@ -497,6 +658,20 @@ export async function campaignProducts(actor: Actor, value: unknown = {}) {
         },
         variants: {
           select: {
+            id: true,
+            sku: true,
+            optionValues: {
+              select: {
+                value: {
+                  select: {
+                    value: true,
+                    group: { select: { name: true, sortOrder: true } },
+                  },
+                },
+              },
+            },
+            color: true,
+            size: true,
             price: true,
             salePrice: true,
             inventory: { select: { onHand: true, reserved: true } },
@@ -524,6 +699,21 @@ export async function campaignProducts(actor: Actor, value: unknown = {}) {
       ),
       image: p.images[0]?.url ?? null,
       updatedAt: p.updatedAt.toISOString(),
+      variants: p.variants.map((v) => ({
+        id: v.id,
+        sku: v.sku,
+        label: v.optionValues.length
+          ? [...v.optionValues]
+              .sort((a, b) => a.value.group.sortOrder - b.value.group.sortOrder)
+              .map((o) => o.value.group.name + ": " + o.value.value)
+              .join(" / ")
+          : [v.color, v.size].filter(Boolean).join(" / ") || v.sku,
+        regularPrice:
+          v.price != null
+            ? effectivePrice(v.price, v.salePrice)
+            : effectivePrice(p.basePrice, p.salePrice),
+        stock: v.inventory ? v.inventory.onHand - v.inventory.reserved : 0,
+      })),
       legacy:
         p.isFlashSale ||
         p.flashSalePrice != null ||
@@ -543,34 +733,26 @@ export async function campaignProducts(actor: Actor, value: unknown = {}) {
     })),
   };
 }
-export async function campaignHistory(actor: Actor) {
+export async function campaignHistory(actor: Actor, id?: string, page = 1) {
   permit(actor);
-  const [campaigns, relevant] = await Promise.all([
-    prisma.flashSaleCampaign.findMany({
-      where: { storeKey: "primary" },
-      select: { id: true },
-      orderBy: { createdAt: "desc" },
-      take: 50,
-    }),
-    prisma.flashSaleCampaign.findFirst({
-      where: {
-        storeKey: "primary",
-        status: "SCHEDULED",
-        endsAt: { gt: new Date() },
-      },
-      select: { id: true },
-      orderBy: { startsAt: "asc" },
-    }),
-  ]);
+  if (!Number.isSafeInteger(page) || page < 1 || page > 100000)
+    throw new HttpError("Halaman riwayat tidak valid.", 422);
+  if (id) {
+    if (!z.string().uuid().safeParse(id).success)
+      throw new HttpError("ID kampanye tidak valid.", 422);
+    if (
+      !(await prisma.flashSaleCampaign.findFirst({
+        where: { id, storeKey: "primary" },
+        select: { id: true },
+      }))
+    )
+      return [];
+  }
   return prisma.auditLog.findMany({
-    where: {
-      entity: "FlashSaleCampaign",
-      entityId: {
-        in: [...campaigns.map((c) => c.id), ...(relevant ? [relevant.id] : [])],
-      },
-    },
+    where: { entity: "FlashSaleCampaign", ...(id ? { entityId: id } : {}) },
     select: { id: true, entityId: true, action: true, createdAt: true },
-    orderBy: { createdAt: "desc" },
-    take: 100,
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    skip: (page - 1) * 20,
+    take: 20,
   });
 }

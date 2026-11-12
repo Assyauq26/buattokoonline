@@ -2,8 +2,7 @@ import { withCampaignPricing } from "@/modules/promotions/campaign-pricing";
 import "server-only";
 import { prisma } from "@/lib/prisma";
 import { HttpError } from "@/lib/response";
-import { effectivePrice } from "@/lib/money";
-import { activeScheduledFlashPrice, effectiveProductPrice } from "@/modules/promotions/scheduled-flash-sale";
+import { effectiveVariantPrice,variantPromotionAvailability } from "@/modules/promotions/scheduled-flash-sale";
 import {
   MAX_OPTION_GROUPS,
   MAX_OPTION_VALUES,
@@ -83,14 +82,8 @@ export async function getPurchaseOptions(
       sku: v.sku,
       color: v.color,
       size: v.size,
-      available: Math.max(
-        0,
-        (v.inventory?.onHand ?? 0) - (v.inventory?.reserved ?? 0),
-      ),
-      price:
-        activeScheduledFlashPrice(p) ?? (v.price != null
-          ? effectivePrice(v.price, v.salePrice)
-          : effectiveProductPrice(p)),
+      available:variantPromotionAvailability(p,v.id,(v.inventory?.onHand??0)-(v.inventory?.reserved??0)),
+      price:effectiveVariantPrice(p,v),
       originalPrice: v.price ?? p.basePrice,
       optionValueIds: v.optionValues.map((o) => o.valueId),
     })),
