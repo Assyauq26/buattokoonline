@@ -11,6 +11,10 @@ BASE_SHA = '5145bdcd7cd84f93f49a066aa669560e858db0ac'
 # tree, rather than permitting arbitrary future v1.7.3 deployments.
 V173_UI_BASE_SHA = 'b8b33ebecec3f1c9798b7148f0f407da142afb46'
 V173_UI_APP_TREE = '79de568eb19b30baaefe99b2023500aa7ceab82d'
+# Proposed next transition for PR #45, separately reviewed before installation.
+# Keep each deployed source paired with only its reviewed destination app tree.
+V173_SHEETS_BASE_SHA = 'f6ce29b03f994f3dc7d3368912737ca1d2aca99b'
+V173_SHEETS_APP_TREE = '307668134ed5b0f4057331ea652e128eccb5808e'
 ARCHIVE_SHA = 'dd7d400a3821e4fc20b6886f688ee48c46300a440344b0e06978e32313dad938'
 INSTALLATION = '2d958c50e7a60006f3a8531cf217335e'
 PAIRS = {
@@ -32,11 +36,14 @@ def authorize(name, old, fresh, installed, context, archive, target_version="1.7
     pair = PAIRS.get(name)
     original = (installed.get('version') == '1.7.2'
                 and installed.get('source_sha') == BASE_SHA)
+    transition = {
+        (V173_UI_BASE_SHA, V173_UI_APP_TREE): 'v1.7.3-ui-pr43',
+        (V173_SHEETS_BASE_SHA, V173_SHEETS_APP_TREE): 'v1.7.3-ui-pr45',
+    }.get((installed.get('source_sha'), source_app_tree))
     ui_redeploy = (installed.get('version') == '1.7.3'
-                   and installed.get('source_sha') == V173_UI_BASE_SHA
+                   and transition is not None
                    and installed.get('channel') == 'hubify-staging'
-                   and installed.get('candidate_version') == '1.7.3'
-                   and source_app_tree == V173_UI_APP_TREE)
+                   and installed.get('candidate_version') == '1.7.3')
     if (target_version != '1.7.3' or pair is None or (digest(old), digest(fresh)) != pair
             or not (original or ui_redeploy)
             or installed.get('db_contract') != 1
@@ -71,8 +78,8 @@ def authorize(name, old, fresh, installed, context, archive, target_version="1.7
             'installation': INSTALLATION, 'history': BASE_SHA,
             'evidence_archive': ARCHIVE_SHA}
     if ui_redeploy:
-        record.update(transition='v1.7.3-ui-pr43', installed_source=V173_UI_BASE_SHA,
-                      application_tree=V173_UI_APP_TREE)
+        record.update(transition=transition, installed_source=installed['source_sha'],
+                      application_tree=source_app_tree)
     return record
 
 def runtime_context():
