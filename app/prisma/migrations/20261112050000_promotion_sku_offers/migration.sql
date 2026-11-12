@@ -1,4 +1,8 @@
 -- Additive promotion data. Existing product-wide campaigns retain their behavior.
+-- This new, unpublished migration is atomic and fails promptly under contention.
+BEGIN;
+SET LOCAL lock_timeout = '3s';
+SET LOCAL statement_timeout = '30s';
 ALTER TABLE "FlashSaleCampaign" ADD COLUMN "draft" JSONB;
 CREATE TABLE "FlashSaleSkuOffer" (
   "id" UUID PRIMARY KEY,
@@ -12,3 +16,4 @@ CREATE INDEX "FlashSaleSkuOffer_variantId_idx" ON "FlashSaleSkuOffer"("variantId
 ALTER TABLE "FlashSaleSkuOffer" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "OrderItem" ADD COLUMN "flashOfferId" UUID REFERENCES "FlashSaleSkuOffer"("id") ON DELETE RESTRICT;
 CREATE INDEX "OrderItem_flashOfferId_idx" ON "OrderItem"("flashOfferId");
+COMMIT;

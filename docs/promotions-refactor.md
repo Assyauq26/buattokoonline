@@ -1,5 +1,7 @@
 # Promosi seller — audit dan rencana implementasi
 
+Catatan ini merekam implementasi dan verifikasi commit 6907023. Finalisasi versi v1.8.0, bukti upgrade dan keputusan deployment terbaru tersedia pada [checklist kesiapan rilis](promotions-release-readiness.md).
+
 Baseline: main b4aa626886429a5bd5378270abd6633c8d423ce8, VERSION 1.7.4. Worktree terpisah codex/promotions-refactor. Tidak ada AGENTS.md pada root atau jalur aplikasi; AGENTS.md platform-m1 berada di proyek lain. Desain desktop/mobile dan brief 53ef5437 menjadi acuan. Skill emil-design-eng diterapkan.
 
 | Before | After | Why |

@@ -1,0 +1,236 @@
+{
+  "main_sha": "b4aa626886429a5bd5378270abd6633c8d423ce8",
+  "implementation_sha": "69070233e8a50d4276c43b528f6a3c635d7b6845",
+  "release_source_sha": "c3cfb22fb03bc3bea37aadfb6d790c75e805d51b",
+  "historical": [
+    {
+      "name": "20260922143925_init",
+      "git_artifact_sha256": "f6c17309e9a970b2479bece2546cece8a7a483d0c7fa748e662d479b0e1910b9",
+      "working_sha256": "f6c17309e9a970b2479bece2546cece8a7a483d0c7fa748e662d479b0e1910b9",
+      "ledger_sha256": "f6c17309e9a970b2479bece2546cece8a7a483d0c7fa748e662d479b0e1910b9",
+      "active_source_sha256": "f6c17309e9a970b2479bece2546cece8a7a483d0c7fa748e662d479b0e1910b9"
+    },
+    {
+      "name": "20261015000000_add_refunded_payment_status",
+      "git_artifact_sha256": "e86e9a4d4ec18d6c60ebabceeaa9506a718de29059b1234a38dd2764c24a2e81",
+      "working_sha256": "e86e9a4d4ec18d6c60ebabceeaa9506a718de29059b1234a38dd2764c24a2e81",
+      "ledger_sha256": "e86e9a4d4ec18d6c60ebabceeaa9506a718de29059b1234a38dd2764c24a2e81",
+      "active_source_sha256": "e86e9a4d4ec18d6c60ebabceeaa9506a718de29059b1234a38dd2764c24a2e81"
+    },
+    {
+      "name": "20261016112100_coupon_usage_limits",
+      "git_artifact_sha256": "1f7ef91ea2b13c0bd6928602968c03c37b5bcc00cb7d351d679a0ff903c74265",
+      "working_sha256": "1f7ef91ea2b13c0bd6928602968c03c37b5bcc00cb7d351d679a0ff903c74265",
+      "ledger_sha256": "1f7ef91ea2b13c0bd6928602968c03c37b5bcc00cb7d351d679a0ff903c74265",
+      "active_source_sha256": "1f7ef91ea2b13c0bd6928602968c03c37b5bcc00cb7d351d679a0ff903c74265"
+    },
+    {
+      "name": "20261016112200_coupon_redemption_concurrent_index",
+      "git_artifact_sha256": "f205120c21d348d14f016ebdf793b9e6a93686ad5cba80227f3d66d3f632d40d",
+      "working_sha256": "f205120c21d348d14f016ebdf793b9e6a93686ad5cba80227f3d66d3f632d40d",
+      "ledger_sha256": "f205120c21d348d14f016ebdf793b9e6a93686ad5cba80227f3d66d3f632d40d",
+      "active_source_sha256": "f205120c21d348d14f016ebdf793b9e6a93686ad5cba80227f3d66d3f632d40d"
+    },
+    {
+      "name": "20261016140500_product_scheduled_flash_sale",
+      "git_artifact_sha256": "e0598e543c8fed33e5ee69f085f8d6a22230ebe288b72d6ab9d53293cb9abb39",
+      "working_sha256": "e0598e543c8fed33e5ee69f085f8d6a22230ebe288b72d6ab9d53293cb9abb39",
+      "ledger_sha256": "e0598e543c8fed33e5ee69f085f8d6a22230ebe288b72d6ab9d53293cb9abb39",
+      "active_source_sha256": "e0598e543c8fed33e5ee69f085f8d6a22230ebe288b72d6ab9d53293cb9abb39"
+    },
+    {
+      "name": "20261017000000_auth_session_controls",
+      "git_artifact_sha256": "35d593d27d0e0cd708d6c9353b61343e46481b9e7795656165297efbc16d88d1",
+      "working_sha256": "35d593d27d0e0cd708d6c9353b61343e46481b9e7795656165297efbc16d88d1",
+      "ledger_sha256": "35d593d27d0e0cd708d6c9353b61343e46481b9e7795656165297efbc16d88d1",
+      "active_source_sha256": "35d593d27d0e0cd708d6c9353b61343e46481b9e7795656165297efbc16d88d1"
+    },
+    {
+      "name": "20261018150000_registration_email_otp",
+      "git_artifact_sha256": "eec85ff983628830923da3c7b0760bfc20378bdcf9cb7376dd6b1cca539eb84e",
+      "working_sha256": "eec85ff983628830923da3c7b0760bfc20378bdcf9cb7376dd6b1cca539eb84e",
+      "ledger_sha256": "eec85ff983628830923da3c7b0760bfc20378bdcf9cb7376dd6b1cca539eb84e",
+      "active_source_sha256": "eec85ff983628830923da3c7b0760bfc20378bdcf9cb7376dd6b1cca539eb84e"
+    },
+    {
+      "name": "20261019054922_registration_identity_lookup_indexes",
+      "git_artifact_sha256": "369372134dd10fca58dc04e5afb4b4bcec347c948524f239918f1663e8fa3d0b",
+      "working_sha256": "369372134dd10fca58dc04e5afb4b4bcec347c948524f239918f1663e8fa3d0b",
+      "ledger_sha256": "369372134dd10fca58dc04e5afb4b4bcec347c948524f239918f1663e8fa3d0b",
+      "active_source_sha256": "369372134dd10fca58dc04e5afb4b4bcec347c948524f239918f1663e8fa3d0b"
+    },
+    {
+      "name": "20261020070000_custom_product_variations",
+      "git_artifact_sha256": "6ed1b88123dfc3194eef5accfeda58731f2380a0f89d542943eb2b211152872b",
+      "working_sha256": "6ed1b88123dfc3194eef5accfeda58731f2380a0f89d542943eb2b211152872b",
+      "ledger_sha256": "6ed1b88123dfc3194eef5accfeda58731f2380a0f89d542943eb2b211152872b",
+      "active_source_sha256": "6ed1b88123dfc3194eef5accfeda58731f2380a0f89d542943eb2b211152872b"
+    },
+    {
+      "name": "20261020120000_direct_checkout_intents",
+      "git_artifact_sha256": "96c9e45d13d8379c67bfdd87f3971664e3dcd43d19b6e430f60f7899186f55f0",
+      "working_sha256": "96c9e45d13d8379c67bfdd87f3971664e3dcd43d19b6e430f60f7899186f55f0",
+      "ledger_sha256": "96c9e45d13d8379c67bfdd87f3971664e3dcd43d19b6e430f60f7899186f55f0",
+      "active_source_sha256": "96c9e45d13d8379c67bfdd87f3971664e3dcd43d19b6e430f60f7899186f55f0"
+    },
+    {
+      "name": "20261021093000_product_editor_staged_media_shipping",
+      "git_artifact_sha256": "63eefd28491f47b5ed269539d88b52b985f47aac4b620e6600f1607f06414198",
+      "working_sha256": "63eefd28491f47b5ed269539d88b52b985f47aac4b620e6600f1607f06414198",
+      "ledger_sha256": "63eefd28491f47b5ed269539d88b52b985f47aac4b620e6600f1607f06414198",
+      "active_source_sha256": "63eefd28491f47b5ed269539d88b52b985f47aac4b620e6600f1607f06414198"
+    },
+    {
+      "name": "20261024140000_product_size_chart",
+      "git_artifact_sha256": "7d0c5b56d9d52183516e2261051942e5a53d8e72ecd14f62e769321191fb6b95",
+      "working_sha256": "7d0c5b56d9d52183516e2261051942e5a53d8e72ecd14f62e769321191fb6b95",
+      "ledger_sha256": "7d0c5b56d9d52183516e2261051942e5a53d8e72ecd14f62e769321191fb6b95",
+      "active_source_sha256": "7d0c5b56d9d52183516e2261051942e5a53d8e72ecd14f62e769321191fb6b95"
+    },
+    {
+      "name": "20261024150000_storefront_customize",
+      "git_artifact_sha256": "6e421d8c3a4964d7cdf1b16b409291486ca4b15d4f4540866fe67206b7f975ec",
+      "working_sha256": "6e421d8c3a4964d7cdf1b16b409291486ca4b15d4f4540866fe67206b7f975ec",
+      "ledger_sha256": "6e421d8c3a4964d7cdf1b16b409291486ca4b15d4f4540866fe67206b7f975ec",
+      "active_source_sha256": "6e421d8c3a4964d7cdf1b16b409291486ca4b15d4f4540866fe67206b7f975ec"
+    },
+    {
+      "name": "20261026110000_storefront_hero_cms",
+      "git_artifact_sha256": "bb639a13e6ae136892b4848539cb9df3a7457918a294cbae366d741c7d82ff70",
+      "working_sha256": "bb639a13e6ae136892b4848539cb9df3a7457918a294cbae366d741c7d82ff70",
+      "ledger_sha256": "bb639a13e6ae136892b4848539cb9df3a7457918a294cbae366d741c7d82ff70",
+      "active_source_sha256": "bb639a13e6ae136892b4848539cb9df3a7457918a294cbae366d741c7d82ff70"
+    },
+    {
+      "name": "20261027090000_verified_purchase_reviews",
+      "git_artifact_sha256": "8d0f773434a939face20edf11f8ba4fe451aeac224f437bfe56b6c4ada6fe701",
+      "working_sha256": "8d0f773434a939face20edf11f8ba4fe451aeac224f437bfe56b6c4ada6fe701",
+      "ledger_sha256": "8d0f773434a939face20edf11f8ba4fe451aeac224f437bfe56b6c4ada6fe701",
+      "active_source_sha256": "8d0f773434a939face20edf11f8ba4fe451aeac224f437bfe56b6c4ada6fe701"
+    },
+    {
+      "name": "20261029090000_flash_sale_campaign",
+      "git_artifact_sha256": "b4b3b29373bec307d683f20bfffdcdea67f7993938c719a8820b67bab5f58a42",
+      "working_sha256": "b4b3b29373bec307d683f20bfffdcdea67f7993938c719a8820b67bab5f58a42",
+      "ledger_sha256": "b4b3b29373bec307d683f20bfffdcdea67f7993938c719a8820b67bab5f58a42",
+      "active_source_sha256": "b4b3b29373bec307d683f20bfffdcdea67f7993938c719a8820b67bab5f58a42"
+    },
+    {
+      "name": "20261030090000_checkout_indonesia_regions_jnt",
+      "git_artifact_sha256": "31cd6d21d504a2f0c45cfb31a3786cef70302ff758ef41f2b368fc117abb7236",
+      "working_sha256": "31cd6d21d504a2f0c45cfb31a3786cef70302ff758ef41f2b368fc117abb7236",
+      "ledger_sha256": "31cd6d21d504a2f0c45cfb31a3786cef70302ff758ef41f2b368fc117abb7236",
+      "active_source_sha256": "31cd6d21d504a2f0c45cfb31a3786cef70302ff758ef41f2b368fc117abb7236"
+    },
+    {
+      "name": "20261031110000_jnt_platform_integration",
+      "git_artifact_sha256": "5e73cb281f53495df5d03cfeab1c6413d5f66d590f26060971eaa5c617b22d36",
+      "working_sha256": "5e73cb281f53495df5d03cfeab1c6413d5f66d590f26060971eaa5c617b22d36",
+      "ledger_sha256": "5e73cb281f53495df5d03cfeab1c6413d5f66d590f26060971eaa5c617b22d36",
+      "active_source_sha256": "5e73cb281f53495df5d03cfeab1c6413d5f66d590f26060971eaa5c617b22d36"
+    },
+    {
+      "name": "20261031123000_jnt_l3_and_awb_ledger",
+      "git_artifact_sha256": "1cf13a29475fb7e168982b4c5402f04a5246ce5ed6e254e576e99b3f705364f9",
+      "working_sha256": "1cf13a29475fb7e168982b4c5402f04a5246ce5ed6e254e576e99b3f705364f9",
+      "ledger_sha256": "1cf13a29475fb7e168982b4c5402f04a5246ce5ed6e254e576e99b3f705364f9",
+      "active_source_sha256": "1cf13a29475fb7e168982b4c5402f04a5246ce5ed6e254e576e99b3f705364f9"
+    },
+    {
+      "name": "20261105100000_shipping_settings",
+      "git_artifact_sha256": "4e0da4c8ce33d4dcffb3ca1a51c776c3a3551ddeb257519beb33120cc26e631e",
+      "working_sha256": "4e0da4c8ce33d4dcffb3ca1a51c776c3a3551ddeb257519beb33120cc26e631e",
+      "ledger_sha256": "4e0da4c8ce33d4dcffb3ca1a51c776c3a3551ddeb257519beb33120cc26e631e",
+      "active_source_sha256": "4e0da4c8ce33d4dcffb3ca1a51c776c3a3551ddeb257519beb33120cc26e631e"
+    },
+    {
+      "name": "20261109090000_bank_account_lifecycle",
+      "git_artifact_sha256": "f7dfd5b3c1f184a8679492a0d669aa0e333d35774fa2a3d3321d0c9a0ad118e9",
+      "working_sha256": "f7dfd5b3c1f184a8679492a0d669aa0e333d35774fa2a3d3321d0c9a0ad118e9",
+      "ledger_sha256": "f7dfd5b3c1f184a8679492a0d669aa0e333d35774fa2a3d3321d0c9a0ad118e9",
+      "active_source_sha256": "f7dfd5b3c1f184a8679492a0d669aa0e333d35774fa2a3d3321d0c9a0ad118e9"
+    },
+    {
+      "name": "20261109100000_jnt_cancel_attempt_history",
+      "git_artifact_sha256": "75bfc0218a15687dcf0eba58a91ae398e0052afad1585a3811c5023d43fdd32c",
+      "working_sha256": "75bfc0218a15687dcf0eba58a91ae398e0052afad1585a3811c5023d43fdd32c",
+      "ledger_sha256": "75bfc0218a15687dcf0eba58a91ae398e0052afad1585a3811c5023d43fdd32c",
+      "active_source_sha256": "75bfc0218a15687dcf0eba58a91ae398e0052afad1585a3811c5023d43fdd32c"
+    },
+    {
+      "name": "20261109110000_customer_account_management",
+      "git_artifact_sha256": "6066ba85e111dd327b8aceff91ee7d699b19fd2939e5be0327e03b7dcb84feab",
+      "working_sha256": "6066ba85e111dd327b8aceff91ee7d699b19fd2939e5be0327e03b7dcb84feab",
+      "ledger_sha256": "6066ba85e111dd327b8aceff91ee7d699b19fd2939e5be0327e03b7dcb84feab",
+      "active_source_sha256": "6066ba85e111dd327b8aceff91ee7d699b19fd2939e5be0327e03b7dcb84feab"
+    },
+    {
+      "name": "20261109120000_order_resolution_workflow",
+      "git_artifact_sha256": "865ec38af4482060322ba0dc89becc9132881d7bbb7f7e633b669af30e0444ec",
+      "working_sha256": "865ec38af4482060322ba0dc89becc9132881d7bbb7f7e633b669af30e0444ec",
+      "ledger_sha256": "789ef757b2cb2fb6f6d38f710c6a50cfcb371d9b61e18e4154120930e02107ac",
+      "active_source_sha256": "789ef757b2cb2fb6f6d38f710c6a50cfcb371d9b61e18e4154120930e02107ac",
+      "vps_original": {
+        "bytes": 3116,
+        "crlf": 19,
+        "lf": 20,
+        "sha256": "789ef757b2cb2fb6f6d38f710c6a50cfcb371d9b61e18e4154120930e02107ac"
+      },
+      "vps_active": {
+        "bytes": 3116,
+        "crlf": 19,
+        "lf": 20,
+        "sha256": "789ef757b2cb2fb6f6d38f710c6a50cfcb371d9b61e18e4154120930e02107ac"
+      },
+      "difference": "CRLF/LF only; original bytes match ledger"
+    },
+    {
+      "name": "20261109121500_resolution_transfer_review",
+      "git_artifact_sha256": "22cb34b1d3840926b42356fb333c0678f5a0ea850ee3c3b8b1f9373cc92a885b",
+      "working_sha256": "22cb34b1d3840926b42356fb333c0678f5a0ea850ee3c3b8b1f9373cc92a885b",
+      "ledger_sha256": "d67b0094191575be2f28c7968e41eabad5bf9a9ab84676d8c66b7e7c01313483",
+      "active_source_sha256": "d67b0094191575be2f28c7968e41eabad5bf9a9ab84676d8c66b7e7c01313483",
+      "vps_original": {
+        "bytes": 356,
+        "crlf": 2,
+        "lf": 2,
+        "sha256": "d67b0094191575be2f28c7968e41eabad5bf9a9ab84676d8c66b7e7c01313483"
+      },
+      "vps_active": {
+        "bytes": 356,
+        "crlf": 2,
+        "lf": 2,
+        "sha256": "d67b0094191575be2f28c7968e41eabad5bf9a9ab84676d8c66b7e7c01313483"
+      },
+      "difference": "CRLF/LF only; original bytes match ledger"
+    },
+    {
+      "name": "20261110100000_seller_contact_phone",
+      "git_artifact_sha256": "0f9721527be4701fa0ea525869481799c6502f4f01cf317711a52b47fd122d67",
+      "working_sha256": "0f9721527be4701fa0ea525869481799c6502f4f01cf317711a52b47fd122d67",
+      "ledger_sha256": "0f9721527be4701fa0ea525869481799c6502f4f01cf317711a52b47fd122d67",
+      "active_source_sha256": "0f9721527be4701fa0ea525869481799c6502f4f01cf317711a52b47fd122d67"
+    },
+    {
+      "name": "20261110160000_whatsapp_pilot",
+      "git_artifact_sha256": "00179fffef2de9a42a353f8bb1ec41e03efe8868e78df26280af94d7413683cb",
+      "working_sha256": "00179fffef2de9a42a353f8bb1ec41e03efe8868e78df26280af94d7413683cb",
+      "ledger_sha256": "00179fffef2de9a42a353f8bb1ec41e03efe8868e78df26280af94d7413683cb",
+      "active_source_sha256": "00179fffef2de9a42a353f8bb1ec41e03efe8868e78df26280af94d7413683cb"
+    },
+    {
+      "name": "20261111000000_whatsapp_seller_scope",
+      "git_artifact_sha256": "95c1e5b3465f9f74001c00e1091f68b4c4f7d2ee099b096c4ae877f49dc73041",
+      "working_sha256": "95c1e5b3465f9f74001c00e1091f68b4c4f7d2ee099b096c4ae877f49dc73041",
+      "ledger_sha256": "95c1e5b3465f9f74001c00e1091f68b4c4f7d2ee099b096c4ae877f49dc73041",
+      "active_source_sha256": "95c1e5b3465f9f74001c00e1091f68b4c4f7d2ee099b096c4ae877f49dc73041"
+    },
+    {
+      "name": "20261111090000_store_mail_brand_sync",
+      "git_artifact_sha256": "516c60442f7809bf3bd30cd735c857060c22f19ae4423bcbd1931a7348b7c7f6",
+      "working_sha256": "516c60442f7809bf3bd30cd735c857060c22f19ae4423bcbd1931a7348b7c7f6",
+      "ledger_sha256": "516c60442f7809bf3bd30cd735c857060c22f19ae4423bcbd1931a7348b7c7f6",
+      "active_source_sha256": "516c60442f7809bf3bd30cd735c857060c22f19ae4423bcbd1931a7348b7c7f6"
+    }
+  ]
+}
