@@ -1,0 +1,48 @@
+{
+  "viewport": 768,
+  "document": 867,
+  "elements": [
+    {
+      "tag": "A",
+      "class": "product-category-link",
+      "right": 866.84375,
+      "width": 604.84375,
+      "scroll": 603
+    },
+    {
+      "tag": "svg",
+      "class": {},
+      "right": 851.84375,
+      "width": 18,
+      "scroll": 18
+    },
+    {
+      "tag": "path",
+      "class": {},
+      "right": 845.09375,
+      "width": 4.5,
+      "scroll": 0
+    },
+    {
+      "tag": "LABEL",
+      "class": "min-w-0",
+      "right": 782,
+      "width": 150,
+      "scroll": 150
+    },
+    {
+      "tag": "SELECT",
+      "class": "h-11 max-w-full rounded-xl border border-line bg-white px-3 text-sm",
+      "right": 782,
+      "width": 150,
+      "scroll": 148
+    },
+    {
+      "tag": "BUTTON",
+      "class": "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-full text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98] transition-transform border border-line bg-white text-ink hover:bg-surface h-11 px-6",
+      "right": 866.84375,
+      "width": 74.84375,
+      "scroll": 73
+    }
+  ]
+}

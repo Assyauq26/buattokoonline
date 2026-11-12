@@ -1,5 +1,34 @@
 # Promosi v1.8.0 — checklist rilis dan recovery
 
+## Remediasi blocker terbaru — 12 November 2026
+
+Bagian ini menggantikan status blocker dalam catatan audit historis di bawah.
+Keputusan deployment tetap **NO-GO**; tidak ada merge/deploy/tag/publikasi.
+
+| Blocker | Status dan bukti terkini |
+| --- | --- |
+| Overflow produk 768 px | **Selesai lokal**: reproduksi dokumen 867 px pada viewport 768, berasal dari grid filter empat kolom/min-width. Toolbar dan baris produk memakai layout kompak sampai 1024; seluruh informasi/aksi dipertahankan. Browser produksi 66 pemeriksaan PASS, delapan lebar 360–1920 px; assertion tidak dilonggarkan. CI exact commit sedang dijalankan ulang. |
+| Baseline Hubify 1.7.3 vs 1.7.4 | **Investigasi selesai**: aktual tetap metadata/source 1.7.3/c67fb49. Runtime 552 file dipaketkan: 550 strict cocok artefak publik v1.7.4, hanya dua byte migrasi legacy. Katalog PostgreSQL strict cocok baseline 29 migrasi (601 kolom, 219 constraint, 182 indeks, 80 tabel). Tidak menulis versi perantara. Proposal metadata 1.8.0 hanya setelah aktivasi sehat. |
+| Jalur checksum/migrasi resmi | **Sebagian; deployment belum selesai**: modul diagnosis eksplisit, audit JSON, 13 tes kontrak/negatif dan rehearsal legacy Prisma 5.22 PASS. 29 checksum tidak diubah, satu migrasi baru diterapkan kanonis. Tetapi executor produksi untuk rollback_compatible=false belum tersedia/disetujui; helper terpasang tetap menolak J&T Production. Tidak boleh dinyatakan GO. |
+
+| Before | After | Why |
+| --- | --- | --- |
+| Filter empat kolom sejak 768 px; input min-width memaksa dokumen 867 px | Susunan kompak hingga 1023 px, grid desktop mulai 1024 px dan min-width label 0 | Lebar konten tablet berkurang oleh sidebar; semua kontrol tetap dapat diakses |
+| Lima kolom produk pada tablet membuat nama terpotong | Harga/status/stok/variasi tetap tampil di baris kompak hingga 1024 px | Menjaga informasi tanpa memotong dokumen |
+| Assertion menghentikan browser sebelum screenshot | Screenshot dan diagnosis elemen diambil sebelum assertion strict yang sama | Kegagalan berikutnya menyertakan bukti penyebab |
+
+Skill emil-design-eng diterapkan untuk perubahan UI terbatas ini. Tidak ada dependency, ikon atau animasi baru. Selector tes rekening mengikuti label UI existing dan output nomor rekening bertopeng; penyimpanan/divalidasi melalui UI tetap diuji. Tidak ada UI rekening yang diubah untuk meloloskan tes.
+
+Bukti terbaru: [sebelum 768](assets/promotions-blockers/products-768-before.png), [sesudah 768](assets/promotions-blockers/products-768-after.png), [diagnosis overflow](assets/promotions-blockers/overflow-before.json), [66 browser check](assets/promotions-blockers/browser-local.json), [runtime baseline](assets/promotions-blockers/baseline-equivalence.json), [schema equivalence](assets/promotions-blockers/schema-equivalence.json), [upgrade ledger legacy](assets/promotions-blockers/upgrade-legacy-local.json).
+
+Prosedur konkret, perintah diagnosis, prasyarat backup/fence dan kondisi recovery_required ada di [runbook operator](promotions-operator-runbook.md). `deploy/hubify-promotions-observe.py` membaca VPS tanpa menulis; `deploy/hubify-promotions-review.py --dry-run` menghasilkan acceptance ekuivalensi terpisah dari keputusan deployment. Exit 2 = ekuivalensi diterima dan cutover ditolak; tidak ada opsi apply. Updater generic, historical helper lama, file SQL historis, ledger dan flag J&T tidak diubah.
+
+Pengujian packaging installer memakai fixture kompatibel yang berangkat dari aplikasi/schema v1.8.0 yang sama ditambah tabel probe sintetis. Hanya policy pada clone fixture `/tmp` yang menyatakan kompatibilitas probe tersebut; policy kandidat nyata tetap false dan rentang 1.7.4. Ini tidak memberi izin upgrade 1.7.4→1.8.0.
+
+Identitas commit/artefak exact dan hasil CI final dicatat di PR49 setelah packaging dari checkout LF bersih. Paket eb69954 tidak dipakai untuk perubahan baru.
+
+## Catatan audit sebelumnya (dipertahankan untuk provenance)
+
 Keputusan: **NO-GO deployment/publikasi stabil**. Kandidat implementasi dan finalisasi siap review; tidak ada otorisasi deployment baru dalam finalisasi ini. Semua observasi produksi pada 12 November 2026 bersifat read-only; tidak ada file, ledger, data atau konfigurasi VPS yang ditulis oleh audit.
 
 ## Baseline dan scope

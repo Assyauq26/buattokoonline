@@ -168,10 +168,10 @@ async function ProductsContent({
             return (
               <li
                 key={p.id}
-                className="grid min-w-0 grid-cols-[56px_minmax(0,1fr)_44px] items-center gap-3 p-3 md:grid-cols-[64px_minmax(0,2fr)_minmax(130px,1fr)_minmax(100px,1fr)_44px] md:gap-4 md:p-4"
+                className="grid min-w-0 grid-cols-[56px_minmax(0,1fr)_44px] items-center gap-3 p-3 lg:grid-cols-[64px_minmax(0,2fr)_minmax(130px,1fr)_minmax(100px,1fr)_44px] lg:gap-4 lg:p-4"
                 data-testid={`admin-product-${p.slug}`}
               >
-                <div className="relative h-14 w-14 overflow-hidden rounded-xl bg-surface md:h-16 md:w-16">
+                <div className="relative h-14 w-14 overflow-hidden rounded-xl bg-surface lg:h-16 lg:w-16">
                   {p.images[0] ? (
                     <Image
                       src={p.images[0].url}
@@ -210,7 +210,7 @@ async function ProductsContent({
                     <span aria-hidden="true">|</span> {p._count.variants}{" "}
                     variasi
                   </p>
-                  <div className="mt-1 flex flex-wrap items-baseline gap-x-2 text-sm font-semibold tabular-nums md:hidden">
+                  <div className="mt-1 flex flex-wrap items-baseline gap-x-2 text-sm font-semibold tabular-nums lg:hidden">
                     {formatIDR(effectivePrice(p.basePrice, p.salePrice))}
                     {p.salePrice != null && p.salePrice < p.basePrice && (
                       <del className="text-xs font-normal text-zinc-500">
@@ -219,7 +219,7 @@ async function ProductsContent({
                     )}
                   </div>
                 </div>
-                <div className="hidden flex-wrap items-baseline gap-x-2 text-sm font-semibold tabular-nums md:flex">
+                <div className="hidden flex-wrap items-baseline gap-x-2 text-sm font-semibold tabular-nums lg:flex">
                   {formatIDR(effectivePrice(p.basePrice, p.salePrice))}
                   {p.salePrice != null && p.salePrice < p.basePrice && (
                     <del className="text-xs font-normal text-zinc-500">
@@ -227,7 +227,7 @@ async function ProductsContent({
                     </del>
                   )}
                 </div>
-                <div className="hidden text-xs md:block">
+                <div className="hidden text-xs lg:block">
                   <span className="rounded-full bg-zinc-100 px-2 py-1 font-medium">
                     {labels[p.status]}
                   </span>

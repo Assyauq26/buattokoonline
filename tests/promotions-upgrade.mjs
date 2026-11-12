@@ -20,7 +20,8 @@ const pg = process.env.PROMOTION_TEST_PG_BIN;
 assert(pg, "PROMOTION_TEST_PG_BIN required");
 const bin = (name) =>
   join(pg, name + (process.platform === "win32" ? ".exe" : ""));
-const out = resolve("promotion-evidence/release-upgrade");
+const legacy = process.env.PROMOTION_LEGACY_LEDGER === "yes";
+const out = resolve("promotion-evidence/" + (legacy ? "release-upgrade-legacy" : "release-upgrade"));
 mkdirSync(out, { recursive: true });
 const archive = resolve(process.env.PROMOTION_BASELINE_ARCHIVE || "");
 const digest = (p) =>
@@ -36,6 +37,19 @@ execFileSync("tar", ["-xf", archive, "-C", old, "app/prisma"], {
   windowsHide: true,
 });
 const baseline = join(old, "app/prisma");
+// Only the synthetic pre-upgrade fixture receives authenticated original bytes.
+// Candidate/repository/runtime historical files and the Prisma ledger are never edited.
+const legacyPairs = {
+  "20261109120000_order_resolution_workflow": "789ef757b2cb2fb6f6d38f710c6a50cfcb371d9b61e18e4154120930e02107ac",
+  "20261109121500_resolution_transfer_review": "d67b0094191575be2f28c7968e41eabad5bf9a9ab84676d8c66b7e7c01313483",
+};
+if (legacy) for (const [name, hash] of Object.entries(legacyPairs)) {
+  const original = resolve("tests/fixtures/historical-eol", name + ".bin");
+  assert.equal(digest(original), hash);
+  const canonical = join(baseline, "migrations", name, "migration.sql");
+  assert.equal(readFileSync(original).toString().replaceAll("\r\n", "\n"), readFileSync(canonical).toString());
+  writeFileSync(canonical, readFileSync(original));
+}
 const suffix = randomUUID().slice(0, 8),
   names = ["upgrade", "restore", "lock", "other"].map(
     (n) => "hubify_promotions_" + n + "_" + suffix,
@@ -229,6 +243,8 @@ try {
     'SELECT migration_name,checksum,finished_at,rolled_back_at FROM "_prisma_migrations" ORDER BY migration_name',
   );
   assert.equal(oldLedger.length, 29);
+  if (legacy) for (const [name, hash] of Object.entries(legacyPairs))
+    assert.equal(oldLedger.find(r => r.migration_name === name).checksum, hash);
   const dump = join(out, "synthetic-before.dump");
   run(bin("pg_dump"), [...args(), "-d", name, "-Fc", "-f", dump]);
   const began = performance.now();
@@ -371,7 +387,9 @@ try {
   );
   result = {
     ok: true,
-    baseline: "v1.7.4",
+    baseline: legacy ? "actual-v1.7.3-c67-equivalent-v1.7.4-legacy-ledger" : "v1.7.4",
+    legacyLedger: legacy,
+    prismaVersion: require("../app/node_modules/prisma/package.json").version,
     baselineArtifactSha256: digest(archive),
     newMigration: "20261112050000_promotion_sku_offers",
     newMigrationSha256: digest(
