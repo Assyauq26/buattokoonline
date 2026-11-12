@@ -248,7 +248,12 @@ try {
   const dump = join(out, "synthetic-before.dump");
   run(bin("pg_dump"), [...args(), "-d", name, "-Fc", "-f", dump]);
   const began = performance.now();
-  migrateEnv(name, resolve("app/prisma/schema.prisma"));
+  if (process.env.PROMOTION_EXECUTOR_REHEARSAL === "yes") {
+    execFileSync(process.env.PROMOTION_PYTHON || "python3", [resolve("tests/promotions-executor-rehearsal.py")], {
+      env: { ...process.env, PROMOTION_EXECUTOR_DATABASE: url(name), PROMOTION_NODE: process.execPath },
+      encoding: "utf8", maxBuffer: 2 * 1024 * 1024, windowsHide: true,
+    });
+  } else migrateEnv(name, resolve("app/prisma/schema.prisma"));
   const elapsedMs = Math.round(performance.now() - began);
   assert.deepEqual(
     await snapshot(db),

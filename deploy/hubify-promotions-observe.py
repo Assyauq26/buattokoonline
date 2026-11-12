@@ -19,7 +19,7 @@ def run(args, input=None):
     return result.stdout.strip()
 
 
-def main():
+def observe():
     config = Path('/etc/single-store')
     compose_path = Path('/opt/single-store/deploy/compose.yaml')
     compose = json.loads(compose_path.read_text())
@@ -60,7 +60,16 @@ def main():
         try{const b=fs.readFileSync(path);result[name]={sha256:crypto.createHash('sha256').update(b).digest('hex'),bytes:b.length}}
         catch{result[name]={missing:true}}
       }console.log(JSON.stringify(result));});"""
-    paths = [p for p in run(['git', '-C', str(source), 'ls-files', 'app']).splitlines()
+    if (source/'.git').exists():
+        tracked = run(['git', '-C', str(source), 'ls-files', 'app']).splitlines()
+        source_commit = run(['git', '-C', str(source), 'rev-parse', 'HEAD'])
+        app_tree = run(['git', '-C', str(source), 'rev-parse', 'HEAD:app'])
+    else:
+        release = json.loads((source/'release.json').read_text())
+        provenance = json.loads((source/'.hubify-provenance.json').read_text())
+        tracked = list(release['files'])
+        source_commit, app_tree = release['source_sha'], provenance['app_tree']
+    paths = [p for p in tracked if p.startswith('app/')
              if not p.startswith(('app/tests/', 'app/resources/'))]
     runtime = json.loads(run(dc + ['exec', '-T', 'app', 'node', '-e', runtime_js], json.dumps(paths)))
     containers = []
@@ -88,18 +97,18 @@ def main():
     observation = {
         'observed_at': datetime.datetime.now(datetime.timezone.utc).isoformat(),
         'version': json.loads((config / 'version.json').read_text()),
-        'source_commit': run(['git', '-C', str(source), 'rev-parse', 'HEAD']),
-        'app_tree': run(['git', '-C', str(source), 'rev-parse', 'HEAD:app']),
+        'source_commit': source_commit,
+        'app_tree': app_tree,
         'source_version': (source / 'VERSION').read_text().strip(),
         'source_inventory': {p.parent.name: hashlib.sha256(p.read_bytes()).hexdigest()
                              for p in (source / 'app/prisma/migrations').glob('*/migration.sql')},
         'app_environment': safe_environment, 'containers': containers,
         'database': database, 'historical_files': history,
     }
-    print(json.dumps({'observation': observation, 'runtime': runtime, 'schema': schema,
+    return {'observation': observation, 'runtime': runtime, 'schema': schema,
                       'context': {'installation': updater.get('installation'), 'origin': updater.get('origin')},
-                      'production_writes': False}, sort_keys=True))
+                      'production_writes': False}
 
 
 if __name__ == '__main__':
-    main()
+    print(json.dumps(observe(), sort_keys=True))

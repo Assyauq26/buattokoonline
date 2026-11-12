@@ -6,6 +6,11 @@ from .trust import Rejected, download, version
 from .state import ACTIVE
 from .package import extract
 
+def operator_cutover_guard():
+ path=core.CONFIG/'hubify-promotions-cutover.json'
+ if path.exists() and core.read_json(path).get('phase') not in ('complete','rolled_back'):
+  raise Rejected('operator_cutover_in_progress')
+
 class Engine:
  def __init__(self,state,config):self.state=state;self.config=config
  def pending(self,folder,kind):core.atomic_json(folder/'external-work.json',{'kind':kind,'startedAt':int(time.time())})
@@ -56,6 +61,7 @@ class Engine:
    except BlockingIOError:return # Retain queued; another authorized operator owns the lock.
    try:
     self.mark(job,'preflight')
+    operator_cutover_guard()
     installed=core.read_json(core.CONFIG/'version.json');old=core.read_json(core.COMPOSE)
     if 'APP_ORIGIN='+self.config['origin'] not in (core.CONFIG/'runtime.env').read_text().splitlines():raise Rejected('installation_mismatch')
     if version(release['version'])<=version(installed['version']) or not version(release['minimumInstalledVersion'])<=version(installed['version'])<=version(release['maximumInstalledVersion']) or release['minimumUpdater']>2 or installed['db_contract']!=release['dbContract']:raise Rejected('incompatible_release')

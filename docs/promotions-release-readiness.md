@@ -1,5 +1,10 @@
 # Promosi v1.8.0 — checklist rilis dan recovery
 
+## Finalisasi yang diotorisasi
+
+User telah mengotorisasi merge PR49, deployment satu instalasi Hubify, tag dan publikasi v1.8.0 setelah seluruh gate relevan lulus. Executor resmi ditambahkan pada `deploy/hubify-promotions-cutover.py`/`installer/promotions_cutover.py`; detail dan recovery berada di bagian awal runbook. Guard staging dan rollback_compatible=false tetap utuh. Jalur operator ini mematok baseline, dua pasangan EOL, app tree dan satu migrasi SQL; tidak mengubah versi perantara, SQL historis atau ledger. Keputusan GO hanya setelah gate executor, preflight kapasitas/backup aktual dan smoke berhasil. Bagian NO-GO di bawah adalah catatan historis sebelum otorisasi/implementasi terbaru.
+
+
 ## Remediasi blocker terbaru — 12 November 2026
 
 Bagian ini menggantikan status blocker dalam catatan audit historis di bawah.

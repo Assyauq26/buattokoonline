@@ -1,5 +1,31 @@
 # Hubify v1.8.0 — diagnosis, cutover dan recovery operator
 
+## Otorisasi dan executor final
+
+Otorisasi user terbaru mengizinkan finalisasi, merge PR49, deployment hanya Hubify, tag dan publikasi v1.8.0 setelah gate lulus. Bagian historis NO-GO di bawah digantikan oleh executor `deploy/hubify-promotions-cutover.py` dan state machine `installer/promotions_cutover.py`. Helper staging/generic tidak dilonggarkan. Executor operator menerima hanya instalasi/origin c67 yang diautentikasi, app tree 7b8ddfe64c35c981da0aed5804135ea719e2f714, satu SQL yang dipatok, SHA main hasil merge dan digest arsip exact.
+
+```bash
+python3 deploy/hubify-promotions-cutover.py --dry-run --candidate /PATH/store-v1.8.0.tar.gz --candidate-sha256 EXACT_DIGEST --source-sha MERGED_MAIN_SHA --baseline-archive /PATH/store-v1.7.4.tar.gz
+python3 deploy/hubify-promotions-cutover.py --apply --candidate /PATH/store-v1.8.0.tar.gz --candidate-sha256 EXACT_DIGEST --source-sha MERGED_MAIN_SHA --baseline-archive /PATH/store-v1.7.4.tar.gz
+# Hanya untuk intent yang terputus: tidak mengulang migrasi.
+python3 deploy/hubify-promotions-cutover.py --reconcile --candidate /PATH/store-v1.8.0.tar.gz --candidate-sha256 EXACT_DIGEST --source-sha MERGED_MAIN_SHA --baseline-archive /PATH/store-v1.7.4.tar.gz
+```
+
+Deployment produksi dijalankan oleh workflow existing `deploy-hubify.yml`, input `operation=promotions-v180`, SHA main dan digest arsip exact, melalui GitHub Environment `hubify-staging` yang sama. Required reviewers/SSH host pin tidak diganti. Jangan mengganti workflow dengan operator apply langsung jika approval platform masih pending. Root operator menyiapkan checkout `/opt/single-store/operator-sources/SHA`, arsip `/opt/single-store/operator-artifacts/SHA/store-v1.8.0.tar.gz`, baseline terautentikasi dan restricted launcher dari main. Launcher root-only menerima tepat dua argumen hex, menolak symlink/parent writable, dan hanya mengeksekusi executor pada checkout tersebut. Sudoers `hubifydeploy` ditambah hanya untuk launcher ini setelah backup/visudo; helper staging lama tetap utuh.
+
+Perintah `--dry-run`/`--reconcile` di atas adalah prosedur operator; apply dipanggil launcher workflow setelah approval Environment yang wajib. Jalankan sebagai root dari checkout main bersih LF yang dipatok. Manifest, setiap blob Git, isi arsip, identitas runtime/schema/ledger dan dua pasangan EOL diverifikasi sebelum ekstraksi. Dry-run tidak membuat journal, mengekstrak arsip, atau memanggil aksi layanan. Apply mengambil lock existing, build dengan budget 6 GiB + 2x data persisten, mengulangi preflight, menghentikan updater yang idle dan menunggu maintenance in-flight selesai tanpa membunuh operasi carrier. Seluruh environment/mount/service dipertahankan; semua flag J&T Production wajib tetap yes.
+
+Fence 503 hanya mengubah handle Hubify pada hash proxy yang direview, melindungi checkout/webhook agar provider dapat retry. App berhenti secara graceful; koneksi writer harus habis. Backup resmi diverifikasi dengan restore scratch. Migrasi dijalankan tepat sekali melalui tools image; seluruh 29 row ledger lengkap dan hash snapshot sembilan tabel harus identik. Aktivasi dan smoke GET akun existing/katalog/Promosi berjalan di balik fence. Metadata ditulis 1.8.0 dengan commit/digest sebenarnya, lalu traffic dan worker dipulihkan.
+
+Guard worker tambahan dipasang hanya setelah file existing cocok hash baseline publik; kedua salinan engine lama dibackup root-only. Guard ini hanya menolak job saat journal operator belum selesai. Tidak ada penggantian manager keseluruhan, perubahan kredensial, global normalizer atau repair ledger.
+
+Journal `/etc/single-store/hubify-promotions-cutover.json` memuat intent sebelum tiap aksi. Setelah migrasi dimulai, gagal/terputus menjadi recovery_required: schema/ledger dipertahankan dan tidak otomatis menyalakan binary lama. Reconcile menerima schema30 lengkap dan meneruskan aktivasi tanpa mengulang migrasi. Setelah traffic mungkin terbuka, reconcile hanya mengadopsi target sehat; snapshot lama tidak dipakai untuk menimpa transaksi baru. Untuk interupsi build/backup yang tidak dapat dibuktikan berhenti, operator harus memeriksa Docker/backup terlebih dahulu lalu menambahkan `--external-work-stopped`; ini bukan opsi untuk mengizinkan migration replay. Tidak ada jalur restore DB otomatis.
+
+Uji terarah: failure injection seluruh tahap, dry-run tanpa journal, idempotensi sukses, perubahan kandidat/baseline, POSIX lock paralel, penolakan recovery ledger parsial, worker cross-guard dan J&T preservation. Rehearsal state machine memakai PostgreSQL lokal existing port5557 dengan baseline legacy, backup/restore scratch nyata dan Prisma5.22 29→30; adapter service/proxy disimulasikan dalam rehearsal tersebut. Build/runtime aplikasi sama dengan kandidat yang telah lulus CI Ubuntu/VM2GB sebelumnya; gate baru mencakup executor/worker yang berubah.
+
+## Catatan review sebelum otorisasi dan implementasi executor
+
+
 Status: **NO-GO untuk mutasi produksi**. Dokumen ini menyiapkan review; bukan izin
 merge, memasang helper, deployment, tag atau publikasi. Helper diagnosis baru hanya
 mengautentikasi ekuivalensi. Executor cutover produksi yang memelihara seluruh guard
