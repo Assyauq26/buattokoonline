@@ -116,6 +116,15 @@ class CutoverTests(unittest.TestCase):
 
 
 class NativeGuardTests(unittest.TestCase):
+    def test_smoke_routes_match_existing_next_routes(self):
+        from urllib.parse import urlsplit
+        import promotions_smoke
+        app=ROOT/'app/src/app'
+        routes={'/'+'/'.join(part for part in page.relative_to(app).parts[:-1] if not part.startswith('('))
+                for page in app.rglob('page.tsx')}
+        for kind,url in promotions_smoke.BASE_ROUTES:
+            with self.subTest(kind=kind,url=url):self.assertIn(urlsplit(url).path,routes)
+        self.assertIn(('customer','/orders'),promotions_smoke.BASE_ROUTES)
     def test_disk_reservation_tracks_prepared_images_and_preserves_backup_headroom(self):
         self.assertEqual(p.disk_budget(100),6*1024**3+200)
         self.assertEqual(p.disk_budget(100,images_prepared=True),2*1024**3+200)

@@ -13,6 +13,10 @@ import urllib.parse
 import urllib.request
 import core
 
+BASE_ROUTES = [('public', '/'), ('public', '/login'), ('seller', '/admin/products'),
+               ('seller', '/admin/marketing?tab=flash'), ('seller', '/admin/marketing?tab=voucher'),
+               ('customer', '/account'), ('customer', '/orders')]
+
 
 def sessions():
     values = dict(line.split('=', 1) for line in (core.CONFIG / 'runtime.env').read_text().splitlines()
@@ -43,9 +47,7 @@ def sessions():
 
 def verify(include_promotions=True):
     tokens = sessions()
-    routes = [('public', '/'), ('public', '/login'), ('seller', '/admin/products'),
-              ('seller', '/admin/marketing?tab=flash'), ('seller', '/admin/marketing?tab=voucher'),
-              ('customer', '/account'), ('customer', '/account/orders')]
+    routes = list(BASE_ROUTES)
     campaign = core.sql('SELECT coalesce((SELECT id::text FROM "FlashSaleCampaign" ORDER BY id LIMIT 1),\'\');')
     voucher = core.sql('SELECT coalesce((SELECT id::text FROM "Coupon" ORDER BY id LIMIT 1),\'\');')
     product = core.sql('SELECT coalesce((SELECT slug FROM "Product" WHERE status=\'PUBLISHED\' ORDER BY id LIMIT 1),\'\');')
@@ -64,11 +66,14 @@ def verify(include_promotions=True):
         if kind in tokens:
             headers['Cookie'] = 'store_session=' + tokens[kind]
         request = urllib.request.Request('http://127.0.0.1:3000' + path, headers=headers)
-        with opener.open(request, timeout=30) as response:
-            body = response.read(8 * 1024 * 1024)
-            if response.status != 200 or (kind != 'public' and '/login' in response.url):
-                raise core.StoreError('Read-only authenticated route failed')
-            if b'Application error:' in body or b'Internal Server Error' in body:
-                raise core.StoreError('Runtime error in read-only route')
+        try:
+            with opener.open(request, timeout=30) as response:
+                body = response.read(8 * 1024 * 1024)
+                if response.status != 200 or (kind != 'public' and '/login' in response.url):
+                    raise core.StoreError('Read-only authenticated route failed')
+                if b'Application error:' in body or b'Internal Server Error' in body:
+                    raise core.StoreError('Runtime error in read-only route')
+        except urllib.error.HTTPError as error:
+            raise core.StoreError('Read-only smoke HTTP ' + str(error.code) + ': ' + path.split('?')[0]) from None
         results.append({'kind': kind, 'route': path.split('&id=')[0], 'status': 200})
     return {'read_only': True, 'routes': results, 'voucher_detail': 'tested' if voucher else 'no_existing_voucher'}
