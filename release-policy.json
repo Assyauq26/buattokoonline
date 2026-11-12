@@ -1,1 +1,1 @@
-{"db_contract":1,"minimum_installed_contract":1,"maximum_installed_contract":1,"postgres_major":16,"rollback_compatible":true,"minimum_installed_version":"1.7.2","maximum_installed_version":"1.7.2"}
+{"db_contract":1,"minimum_installed_contract":1,"maximum_installed_contract":1,"postgres_major":16,"rollback_compatible":true,"minimum_installed_version":"1.7.3","maximum_installed_version":"1.7.3"}
