@@ -116,6 +116,9 @@ class CutoverTests(unittest.TestCase):
 
 
 class NativeGuardTests(unittest.TestCase):
+    def test_disk_reservation_tracks_prepared_images_and_preserves_backup_headroom(self):
+        self.assertEqual(p.disk_budget(100),6*1024**3+200)
+        self.assertEqual(p.disk_budget(100,images_prepared=True),2*1024**3+200)
     def test_inflight_carrier_mutation_is_not_treated_as_idle(self):
         d=object.__new__(p.Native)
         with patch.object(core,'sql',return_value='1') as query:

@@ -30,6 +30,12 @@ PROXY_HASHES = {
 FLAGS = ('JNT_PRODUCTION_API_APPROVED', 'JNT_PRODUCTION_ORDER_APPROVED', 'JNT_ENABLE_ORDER_CREATE')
 
 
+def disk_budget(persistent_bytes, images_prepared=False):
+    # Build allocation is checked before building. Once both images exist only
+    # backup/scratch-restore headroom remains to be reserved, as in updater.backup.
+    return (2 if images_prepared else 6) * 1024**3 + 2 * persistent_bytes
+
+
 def check(condition, reason):
     if not condition:
         raise core.StoreError('CUTOVER_REJECTED: ' + reason)
@@ -227,7 +233,8 @@ class Native:
         core.preserved_caddy_content(True, PROXY_HASHES)
         size = int(core.sql("SELECT pg_database_size('store');"))
         size += sum(p.stat().st_size for p in (core.DATA / 'media').rglob('*') if p.is_file())
-        check(shutil.disk_usage(core.ROOT).free >= 6 * 1024**3 + 2 * size, 'insufficient disk for two images/backup/scratch restore')
+        size += sum(p.stat().st_size for p in core.CONFIG.rglob('*') if p.is_file())
+        check(shutil.disk_usage(core.ROOT).free >= disk_budget(size, images_prepared=own_journal), 'insufficient disk for remaining build/backup/scratch restore')
         from update_service.engine import Engine
         Engine(None, {}).resources()
         self.manifest, self.files = candidate
