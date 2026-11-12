@@ -16,8 +16,8 @@ export async function verifyShippingSettings({ page, context, base, sql, dc, pro
   assert.equal((await put(settings, { method: "jnt", environment: "sandbox" })).status(), 409);
   assert.equal(sql('SELECT count(*) FROM "ShippingSettings" WHERE "manualFlat"=0 AND "activeJntId" IS NULL;'), "1");
   await page.goto(base + "/admin/shipping");
-  await page.getByLabel("Ongkir flat per pesanan (Rp)").fill("19000");
-  await page.getByRole("button", { name: "Simpan dan aktifkan Manual" }).click();
+  await page.getByLabel("Tarif per pesanan (Rp)").fill("19000");
+  await page.getByRole("button", { name: "Simpan perubahan", exact: true }).click();
   await expect(page.getByRole("status")).toContainText("Pengiriman Manual aktif");
   assert.equal(sql('SELECT "manualFlat" FROM "ShippingSettings";'), "19000");
   await page.screenshot({ path: "test-results/shipping-settings-mobile.png", fullPage: true });
