@@ -1,5 +1,15 @@
 # Hubify v1.8.0 — diagnosis, cutover dan recovery operator
 
+## Hasil rilis final — 12 November 2026
+
+**GO: v1.8.0 sudah live di Hubify dan dipublikasikan.** Source aktif/tag/manifest sama: `7e81f8e60b27ab5695ac50ac6b653b63095e36d1`. SHA-256 asset yang dideploy dan dipublikasikan: `2e15208d27a87a4aeae4446404d45a1f91b55fcc5d28da3714dc064aeeaa9223`.
+
+[Bukti final](assets/promotions-release/v180-deployed.json) · [Release](https://github.com/Assyauq26/buattokoonline/releases/tag/v1.8.0) · [Workflow sukses](https://github.com/Assyauq26/buattokoonline/actions/runs/43244215658). PR49 dan perbaikan probe PR50 sudah merged. Seluruh 29 row ledger historis tetap identik; satu migrasi baru selesai. Backup database/media/config telah dipulihkan ke scratch untuk verifikasi. Snapshot sembilan tabel sebelum traffic utuh. Browser live15 pemeriksaan PASS tanpa request mutasi/uncaught error. Voucher existing kosong; detail diuji di suite terisolasi.
+
+J&T Production approval flags tetap yes; tidak ada AWB/pickup/cancellation/payment test atau rollout VPS seller lain. App/db healthy, updater/timer aktif dan shared proxy kembali persis. Sesudah write baru, gunakan forward recovery sesuai schema; jangan restore database lama otomatis.
+
+Catatan NO-GO/preparasi di bawah adalah histori sebelum executor selesai dan gate lulus. Dokumen ini ditambahkan setelah publikasi; **tag dan artefak rilis tidak dipindah/diganti**. Cutover satu kali dari baseline c67 telah selesai; jangan memakai contoh apply untuk source lain.
+
 ## Otorisasi dan executor final
 
 Otorisasi user terbaru mengizinkan finalisasi, merge PR49, deployment hanya Hubify, tag dan publikasi v1.8.0 setelah gate lulus. Bagian historis NO-GO di bawah digantikan oleh executor `deploy/hubify-promotions-cutover.py` dan state machine `installer/promotions_cutover.py`. Helper staging/generic tidak dilonggarkan. Executor operator menerima hanya instalasi/origin c67 yang diautentikasi, app tree 7b8ddfe64c35c981da0aed5804135ea719e2f714, satu SQL yang dipatok, SHA main hasil merge dan digest arsip exact.
