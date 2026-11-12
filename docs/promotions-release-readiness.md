@@ -7,9 +7,9 @@ Keputusan deployment tetap **NO-GO**; tidak ada merge/deploy/tag/publikasi.
 
 | Blocker | Status dan bukti terkini |
 | --- | --- |
-| Overflow produk 768 px | **Selesai lokal**: reproduksi dokumen 867 px pada viewport 768, berasal dari grid filter empat kolom/min-width. Toolbar dan baris produk memakai layout kompak sampai 1024; seluruh informasi/aksi dipertahankan. Browser produksi 66 pemeriksaan PASS, delapan lebar 360–1920 px; assertion tidak dilonggarkan. CI exact commit sedang dijalankan ulang. |
+| Overflow produk 768 px | **Selesai lokal dan CI**: reproduksi dokumen 867 px pada viewport 768, berasal dari grid filter empat kolom/min-width. Toolbar dan baris produk memakai layout kompak sampai 1024; seluruh informasi/aksi dipertahankan. Browser produksi 66 pemeriksaan PASS, delapan lebar 360–1920 px; assertion tidak dilonggarkan. CI head fef4d76 / merge 995d2de selesai PASS, termasuk gate PDF/barcode. |
 | Baseline Hubify 1.7.3 vs 1.7.4 | **Investigasi selesai**: aktual tetap metadata/source 1.7.3/c67fb49. Runtime 552 file dipaketkan: 550 strict cocok artefak publik v1.7.4, hanya dua byte migrasi legacy. Katalog PostgreSQL strict cocok baseline 29 migrasi (601 kolom, 219 constraint, 182 indeks, 80 tabel). Tidak menulis versi perantara. Proposal metadata 1.8.0 hanya setelah aktivasi sehat. |
-| Jalur checksum/migrasi resmi | **Sebagian; deployment belum selesai**: modul diagnosis eksplisit, audit JSON, 13 tes kontrak/negatif dan rehearsal legacy Prisma 5.22 PASS. 29 checksum tidak diubah, satu migrasi baru diterapkan kanonis. Tetapi executor produksi untuk rollback_compatible=false belum tersedia/disetujui; helper terpasang tetap menolak J&T Production. Tidak boleh dinyatakan GO. |
+| Jalur checksum/migrasi resmi | **Sebagian; deployment belum selesai**: modul diagnosis eksplisit, audit JSON, 13 tes kontrak/negatif dan rehearsal kanonis serta legacy Prisma 5.22 PASS di Ubuntu CI. 29 checksum tidak diubah, satu migrasi baru diterapkan kanonis. Tetapi executor produksi untuk rollback_compatible=false belum tersedia/disetujui; helper terpasang tetap menolak J&T Production. Tidak boleh dinyatakan GO. |
 
 | Before | After | Why |
 | --- | --- | --- |
@@ -25,7 +25,17 @@ Prosedur konkret, perintah diagnosis, prasyarat backup/fence dan kondisi recover
 
 Pengujian packaging installer memakai fixture kompatibel yang berangkat dari aplikasi/schema v1.8.0 yang sama ditambah tabel probe sintetis. Hanya policy pada clone fixture `/tmp` yang menyatakan kompatibilitas probe tersebut; policy kandidat nyata tetap false dan rentang 1.7.4. Ini tidak memberi izin upgrade 1.7.4→1.8.0.
 
-Identitas commit/artefak exact dan hasil CI final dicatat di PR49 setelah packaging dari checkout LF bersih. Paket eb69954 tidak dipakai untuk perubahan baru.
+Commit kode yang lulus kedua workflow adalah fef4d76 (app tree 7b8ddfe64c35c981da0aed5804135ea719e2f714). Commit penutupan bukti hanya mengubah docs; tidak mengulang suite kode yang sama. Artefak exact HEAD dokumentasi dikemas ulang dari checkout LF bersih, seluruh file dicocokkan Git/manifest, dan identitas/digest dicatat di PR49 serta attestation lokal. Hasil CI tidak diklaim berjalan pada SHA dokumentasi baru. Paket eb69954 tidak dipakai untuk perubahan baru.
+
+## Gate terbaru pada commit kode fef4d76
+
+- [Management CI 43223751603](https://github.com/Assyauq26/buattokoonline/actions/runs/43223751603): **PASS**. 784 tes aplikasi/100 file, 7 tes email, 6 tes operator, 13 kontrak/transition checks, upgrade kanonis dan legacy, build, 66 browser check, dan 3 PDF dengan QR/Code128/masking/ukuran tetap.
+- [Receipt management](assets/promotions-blockers/management-ci.json), [browser CI](assets/promotions-blockers/browser-ci.json), [upgrade kanonis CI](assets/promotions-blockers/upgrade-canonical-ci.json), [upgrade legacy CI](assets/promotions-blockers/upgrade-legacy-ci.json).
+- [Full Ubuntu release gate 43223791335](https://github.com/Assyauq26/buattokoonline/actions/runs/43223791335): **PASS seluruh job**: mail, installer runner, installer VM 2 GB dan kandidat package. Runner menjalankan 643 tes unit aplikasi dan 98 tes Python (92 PASS, 6 transition integration SKIP karena archive belum disediakan pada job ini; semua 13 promotion/transition checks dijalankan tanpa skip pada management CI).
+- [Receipt full release CI](assets/promotions-blockers/full-release-ci.json), [laporan VM 2 GB](assets/promotions-blockers/installer-vm2gb-report.json), [resource aktual](assets/promotions-blockers/resources-2gb.json): 2 vCPU, RAM 2.014.844 KiB, swap 2.097.148 KiB, OOM kill delta **0**, peak RAM 1.873.992 KiB, peak swap 996.352 KiB. Dua puluh skenario install/update/recovery PASS pada masing-masing profil.
+- [Installer runner report](assets/promotions-blockers/installer-runner-report.json): 20 skenario PASS, mencakup install, recovery wizard, persistence, shipping sintetis offline, compatible probe update, scratch restore dan pemulihan kegagalan release probe. Ini bukan latihan cutover v1.7.3→v1.8.0 pada Hubify Production.
+- [Tested candidate fef4d76](assets/promotions-blockers/tested-candidate-fef4d76.json): 823 file cocok Git/manifest; [dry-run exact candidate](assets/promotions-blockers/transition-dry-run-fef4d76.json) menerima ekuivalensi lalu menolak deployment dengan exit 2.
+- [Bukti produksi tidak berubah](assets/promotions-blockers/production-unchanged.json): version.json, Compose dan shared proxy cocok dengan audit sebelumnya; J&T Production tetap yes. Tidak ada VPS helper yang dipasang.
 
 ## Catatan audit sebelumnya (dipertahankan untuk provenance)
 

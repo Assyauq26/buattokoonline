@@ -1,0 +1,12 @@
+{
+  "/etc/single-store/runtime.env": "1457b13b6b7d1843f8add7c4086f17d7c545295df3c1125b5a538995f3c44796",
+  "/etc/single-store/version.json": "f6bd95060a10203d2937e16ec00c93c325010eefc5a99fd4764ad2d76ab834ac",
+  "/opt/single-store/deploy/compose.yaml": "edf01712948ec28801d2fd8cc14670a2c235d1eab92f7dc8d09739f74b9f0b51",
+  "/etc/single-store/Caddyfile": "d9bcf3dffdf41abfb3500f9f3b0f002ff175fb8b742639a4539569610e6e7852",
+  "comparison_to_previous_audit": {
+    "version_metadata_unchanged": true,
+    "compose_unchanged": true,
+    "shared_proxy_unchanged": true,
+    "production_writes": false
+  }
+}

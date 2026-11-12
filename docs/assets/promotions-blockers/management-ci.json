@@ -1,0 +1,24 @@
+{
+  "run_id": 43223751603,
+  "job_id": 131201547039,
+  "url": "https://github.com/Assyauq26/buattokoonline/actions/runs/43223751603",
+  "head_sha": "fef4d76fb77588aee7dcc13d29561fbc3a0e73e2",
+  "pull_request_merge_sha": "995d2de4ad77a1ae1a88e246c8761a16579d0b0b",
+  "application_tree": "7b8ddfe64c35c981da0aed5804135ea719e2f714",
+  "conclusion": "success",
+  "application_tests": {"files": 100, "passed": 784},
+  "email_tests_passed": 7,
+  "operator_tests_passed": 6,
+  "promotion_release_transition_tests_passed": 13,
+  "upgrade_canonical": {"passed": true, "before": 29, "after": 30, "prisma": "5.22.0"},
+  "upgrade_legacy_ledger": {"passed": true, "before": 29, "after": 30, "prisma": "5.22.0"},
+  "production_build": "PASS",
+  "browser": {"passed": 66, "viewport_widths": [360, 390, 430, 768, 1024, 1280, 1440, 1920]},
+  "awb_pdf_barcode": {"passed": 3, "checks": ["fixed size", "masking", "QR", "Code128"]},
+  "evidence_artifact": {
+    "id": 13948275212,
+    "name": "management-evidence-995d2de4ad77a1ae1a88e246c8761a16579d0b0b",
+    "digest": "sha256:3b7347b8e5ccdc808a054cad546b2ff515a05c9f1a298cf24cc2a5ea477847d0"
+  },
+  "production_touched": false
+}
