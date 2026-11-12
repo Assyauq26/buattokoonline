@@ -116,6 +116,11 @@ class CutoverTests(unittest.TestCase):
 
 
 class NativeGuardTests(unittest.TestCase):
+    def test_inflight_carrier_mutation_is_not_treated_as_idle(self):
+        d=object.__new__(p.Native)
+        with patch.object(core,'sql',return_value='1') as query:
+            self.assertFalse(d.carrier_idle());self.assertIn('CANCELLATION_PENDING',query.call_args[0][0])
+        with patch.object(core,'sql',return_value='0'):self.assertTrue(d.carrier_idle())
     def test_restricted_launcher_rejects_argument_or_path_injection(self):
         spec=importlib.util.spec_from_file_location('launcher',ROOT/'deploy/hubify-promotions-launcher.py')
         module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)

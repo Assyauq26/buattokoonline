@@ -203,9 +203,13 @@ class Native:
                 count = connection.execute("SELECT count(*) FROM jobs WHERE state NOT IN ('succeeded','failed','rolled_back')").fetchone()[0]
                 check(count == 0, 'updater has active/queued/recovery work')
 
+    def carrier_idle(self):
+        return core.sql('SELECT count(*) FROM "JntShipmentRequest" WHERE state=\'DISPATCHED\' OR (state=\'UNKNOWN\' AND "errorCode"=\'CANCELLATION_PENDING\');') == '0'
+
     def preflight(self, own_journal=False):
         check(os.geteuid() == 0, 'root operator required')
         self.worker_idle()
+        check(self.carrier_idle(), 'carrier mutation in flight or cancellation unconfirmed')
         for path in [core.CONFIG / 'update.json']:
             if path.exists():
                 check(core.read_json(path).get('status') not in ('updating', 'failed', 'recovery_required'), 'unresolved prior updater')
@@ -297,6 +301,10 @@ class Native:
     def fence(self, journal):
         check(self.flags() == journal['flags'], 'Production flags changed')
         core.write_caddy(core.read_json(core.STATE), live=False, preserve_extra_sites=True, approved_proxy_hashes=PROXY_HASHES)
+        deadline = time.monotonic() + 180
+        while not self.carrier_idle():
+            check(time.monotonic() < deadline, 'carrier mutation still pending; app is not killed')
+            time.sleep(1)
         core.dc(['stop', '-t', '90', 'app'], timeout=120)
         check(core.sql("SELECT count(*) FROM pg_stat_activity WHERE datname='store' AND pid<>pg_backend_pid() AND usename IN ('store_app','store_owner');") == '0', 'database writer still connected')
         journal['before_ledger'] = self.ledger_rows()
