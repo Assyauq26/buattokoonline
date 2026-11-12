@@ -17,6 +17,9 @@ export default defineConfig({
   css: { postcss: { plugins: [] } },
   test: {
     setupFiles: process.env.TEST_DATABASE_ENABLED === "yes" ? ["tests/database-target.setup.ts"] : [],
+    // Shared management fixtures use unique role names across files. Keep file
+    // setup serial; transaction/concurrency tests inside each suite still run.
+    fileParallelism: process.env.TEST_DATABASE_ENABLED !== "yes",
     environment: "node",
     include: ["tests/unit/**/*.test.ts", ...(process.env.TEST_DATABASE_ENABLED === "yes" ? ["tests/database/**/*.test.ts"] : [])],
     hookTimeout: 30000,
