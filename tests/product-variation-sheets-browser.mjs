@@ -12,7 +12,7 @@ const { SignJWT } =
 const url = new URL(process.env.DATABASE_URL || "http://invalid");
 assert.ok(
   ["localhost", "127.0.0.1"].includes(url.hostname) &&
-    url.pathname === "/product_sheets_test",
+    ["/product_sheets_test", "/hubify_sheets_delete_test"].includes(url.pathname),
   "Database uji lokal wajib",
 );
 const db = new PrismaClient(),
@@ -35,6 +35,7 @@ try {
     "product.create",
     "product.update",
     "product.delete",
+    "order.read",
     "inventory.read",
     "inventory.adjust",
   ]) {
@@ -221,6 +222,111 @@ try {
     }
     await finishGroup();
   };
+  const listFixture = await db.product.create({
+    data: {
+      name: "Produk tampilan " + run,
+      slug: "list-" + run,
+      basePrice: 10000,
+      status: "DRAFT",
+      variants: {
+        create: { sku: "UI-" + run, inventory: { create: { onHand: 1 } } },
+      },
+    },
+    include: { variants: true },
+  });
+  const testOrder = await db.order.create({
+    data: {
+      userId: user.id,
+      orderNumber: randomUUID(),
+      subtotal: 10000,
+      total: 10000,
+      items: {
+        create: {
+          variantId: listFixture.variants[0].id,
+          productName: listFixture.name,
+          variantLabel: "Pilihan asli",
+          imageUrl: "/icon.svg",
+          unitPrice: 10000,
+          quantity: 1,
+          lineTotal: 10000,
+        },
+      },
+    },
+    include: { items: true },
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(origin + "/admin/products?q=" + listFixture.slug);
+  await page.getByText(listFixture.name, { exact: true }).waitFor();
+  assert.equal(
+    await page.getByRole("link", { name: "Kelola Kategori Produk" }).count(),
+    1,
+  );
+  const listTrigger = page.getByRole("button", {
+    name: "Aksi " + listFixture.name,
+  });
+  await listTrigger.click();
+  const productActions = page.getByRole("dialog", {
+    name: listFixture.name,
+    exact: true,
+  });
+  await productActions.waitFor();
+  assert.equal(
+    await productActions.getByRole("link", { name: "Edit produk" }).count(),
+    1,
+  );
+  assert.equal(
+    await productActions.getByRole("button", { name: "Hapus produk" }).count(),
+    1,
+  );
+  assert.ok(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth + 1,
+    ),
+  );
+  await page.screenshot({
+    path: resolve(out, "product-actions-mobile.png"),
+    animations: "disabled",
+  });
+  await page.keyboard.press("Escape");
+  await productActions.waitFor({ state: "hidden" });
+  assert.equal(
+    await listTrigger.evaluate((el) => document.activeElement === el),
+    true,
+  );
+  await listTrigger.click();
+  await productActions.getByRole("button", { name: "Hapus produk" }).click();
+  await page.getByTestId(`admin-product-${listFixture.slug}`).waitFor({ state: "hidden" });
+  assert.equal(
+    (await db.product.findUniqueOrThrow({ where: { id: listFixture.id } })).slug,
+    `_deleted_${listFixture.id}`,
+  );
+  const historical = await db.orderItem.findUniqueOrThrow({
+    where: { id: testOrder.items[0].id },
+  });
+  assert.equal(historical.imageUrl, null);
+  assert.equal(historical.productName, listFixture.name);
+  assert.equal(historical.variantId, listFixture.variants[0].id);
+  const deletedResponse = await page.goto(origin + "/admin/products/" + listFixture.id);
+  assert.equal(deletedResponse.status(), 404);
+  await page.goto(origin + "/orders/" + testOrder.id);
+  await page.getByText(listFixture.name, { exact: true }).first().waitFor();
+  assert.equal(await page.locator('.customer-order-detail img[src="/icon.svg"]').count(), 0);
+  await page.goto(origin + "/admin/orders/" + testOrder.id);
+  await page.getByText(listFixture.name, { exact: true }).first().waitFor();
+  assert.equal(await page.locator(".order-thumb img").count(), 0);
+  checks.push(
+    "Hapus produk berpesanan melalui UI: hilang dari katalog, foto riwayat kosong, identitas pesanan dipertahankan",
+  );
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  assert.equal(
+    await page
+      .locator(".admin-sidebar")
+      .evaluate((el) => getComputedStyle(el).scrollbarWidth),
+    "none",
+  );
+  checks.push(
+    "Daftar dan panel tindakan produk responsif; Escape mengembalikan fokus; sidebar tetap scrollable",
+  );
   await page.goto(origin + "/admin/products/new");
   assert.deepEqual(await page.getByRole("tab").allTextContents(), [
     "Foto Produk",
@@ -364,8 +470,10 @@ try {
     "0s",
   );
   await outer().getByRole("button", { name: "Motif", exact: true }).click();
+  assert.equal(await outer().getByRole("button", { name: "Motif", exact: true }).evaluate(el => getComputedStyle(el).color), "rgb(24, 24, 27)");
   await outer().locator('input[aria-label^="Opsi "]').first().fill("Polos");
   await page.getByRole("button", { name: "Tutup editor", exact: true }).click();
+  assert.equal(await page.getByRole("button", { name: "Buang perubahan", exact: true }).evaluate(el => getComputedStyle(el).backgroundColor), "rgb(24, 24, 27)");
   await page
     .getByRole("button", { name: "Lanjut mengedit", exact: true })
     .click();

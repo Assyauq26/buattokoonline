@@ -6,7 +6,7 @@ import type { AuthUser } from "@/lib/auth/session";
 import { FilterForm } from "@/components/ui/filter-form";
 import Link from "@/components/ui/navigation";
 import Image from "next/image";
-import { Package, Plus } from "lucide-react";
+import { Package, Plus, LayoutGrid, ChevronRight } from "lucide-react";
 import { ProductStatus } from "@prisma/client";
 import { requireBackofficeUser } from "@/modules/admin/backoffice-access";
 import { PERMISSIONS } from "@/lib/auth/permissions";
@@ -71,9 +71,7 @@ async function ProductsContent({
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-ink">Produk</h1>
-          <p className="mt-1 text-sm text-ink-soft">
-            {result.total} produk · kelola katalog toko ini.
-          </p>
+          <p className="mt-1 text-sm text-ink-soft">{result.total} produk</p>
         </div>
         {canCreate && (
           <Button asChild>
@@ -86,17 +84,20 @@ async function ProductsContent({
       <FilterForm
         action={"/admin/products"}
         key={JSON.stringify(params)}
-        className="flex flex-wrap gap-3"
+        className="product-list-filters"
         role="search"
       >
         <label className="w-full min-w-0 sm:w-auto sm:flex-1">
           <span className="sr-only">Cari produk</span>
-          <Input
-            name="q"
-            defaultValue={params.q}
-            placeholder="Cari nama atau slug produk"
-          />
+          <Input name="q" defaultValue={params.q} placeholder="Cari produk" />
         </label>
+        <Link
+          href="/admin/products/categories"
+          className="product-category-link"
+        >
+          <LayoutGrid size={18} /> Kelola Kategori Produk{" "}
+          <ChevronRight size={18} />
+        </Link>
         <label>
           <span className="sr-only">Filter status</span>
           <select
@@ -129,9 +130,6 @@ async function ProductsContent({
         </label>
         <Button type="submit" variant="outline">
           Cari
-        </Button>
-        <Button asChild variant="ghost">
-          <Link href="/admin/products/categories">Kategori</Link>
         </Button>
       </FilterForm>
       {!result.items.length ? (
@@ -197,12 +195,20 @@ async function ProductsContent({
                   >
                     {p.name}
                   </Link>
-                  <p className="mt-1 truncate text-xs text-zinc-500">
-                    {p.category?.name || "Tanpa kategori"} · {p._count.variants}{" "}
+                  <p className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-zinc-600">
+                    <span
+                      className="product-list-status"
+                      data-status={p.status}
+                    >
+                      {labels[p.status]}
+                    </span>
+                    <span
+                      className={stock === 0 ? "product-list-empty-stock" : ""}
+                    >
+                      Stok {stock}
+                    </span>
+                    <span aria-hidden="true">|</span> {p._count.variants}{" "}
                     variasi
-                  </p>
-                  <p className="mt-1 text-xs text-zinc-600 md:hidden">
-                    {labels[p.status]} · Stok {stock}
                   </p>
                   <div className="mt-1 flex flex-wrap items-baseline gap-x-2 text-sm font-semibold tabular-nums md:hidden">
                     {formatIDR(effectivePrice(p.basePrice, p.salePrice))}
@@ -229,6 +235,7 @@ async function ProductsContent({
                 </div>
                 <ProductListActions
                   id={p.id}
+                  image={p.images[0]?.url}
                   slug={p.slug}
                   name={p.name}
                   status={p.status}

@@ -9,13 +9,17 @@ import {
   updateManagedProduct,
 } from "@/modules/catalog/product-management.service";
 import { generateCombinations } from "@/modules/catalog/variation-domain";
-import { reserveStock, releaseStock, adjustStock } from "@/modules/inventory/inventory.service";
+import {
+  reserveStock,
+  releaseStock,
+  adjustStock,
+} from "@/modules/inventory/inventory.service";
 import { addItem, getCartView } from "@/modules/cart/cart.service";
 
 const url = new URL(process.env.DATABASE_URL || "http://invalid");
 if (
   !["localhost", "127.0.0.1"].includes(url.hostname) ||
-  url.pathname !== "/product_editor_test"
+  !["/product_editor_test", "/hubify_editor_delete_test"].includes(url.pathname)
 )
   throw Error("Requires isolated product_editor_test database");
 const actor = {
@@ -82,15 +86,45 @@ async function variable(a = 2, b = 3) {
 }
 
 describe("remediasi editor dengan transaksi PostgreSQL nyata", () => {
+  it("melindungi foto internal yang dibagikan dengan produk lain", async () => {
+    let p = await simple();
+    const other = await simple();
+    const imageId = randomUUID();
+    const url = `/api/v1/product-images/${imageId}?object=store%2Fproduct-images%2Fstaged-${imageId}%2F${imageId}.png`;
+    await prisma.productImage.createMany({ data: [
+      { id: imageId, productId: p.id, url },
+      { productId: other.id, url },
+    ] });
+    p = await getManagedProduct(actor, p.id);
+    await expect(save(p, { images: [] })).rejects.toMatchObject({ status: 409 });
+    expect(await prisma.productImage.count({ where: { url } })).toBe(2);
+  });
   it("reservasi bersamaan tidak oversell dan edit stale tidak mereset stok", async () => {
-    const p = await simple(5), id = p.variants[0].id!;
-    const reservations = await Promise.allSettled([1, 2].map(() => prisma.$transaction(tx => reserveStock(tx, id, 4, randomUUID()))));
-    expect(reservations.filter(result => result.status === "fulfilled")).toHaveLength(1);
-    expect((await prisma.inventory.findUniqueOrThrow({ where: { variantId: id } })).reserved).toBe(4);
-    await prisma.$transaction(tx => releaseStock(tx, id, 4, randomUUID()));
-    await adjustStock(id, 8, "Uji perubahan di luar editor", { expectedOnHand: 5 });
-    await expect(save(p, { variants: [{ ...p.variants[0], onHand: 6 }] })).rejects.toMatchObject({ status: 409 });
-    expect((await prisma.inventory.findUniqueOrThrow({ where: { variantId: id } })).onHand).toBe(8);
+    const p = await simple(5),
+      id = p.variants[0].id!;
+    const reservations = await Promise.allSettled(
+      [1, 2].map(() =>
+        prisma.$transaction((tx) => reserveStock(tx, id, 4, randomUUID())),
+      ),
+    );
+    expect(
+      reservations.filter((result) => result.status === "fulfilled"),
+    ).toHaveLength(1);
+    expect(
+      (await prisma.inventory.findUniqueOrThrow({ where: { variantId: id } }))
+        .reserved,
+    ).toBe(4);
+    await prisma.$transaction((tx) => releaseStock(tx, id, 4, randomUUID()));
+    await adjustStock(id, 8, "Uji perubahan di luar editor", {
+      expectedOnHand: 5,
+    });
+    await expect(
+      save(p, { variants: [{ ...p.variants[0], onHand: 6 }] }),
+    ).rejects.toMatchObject({ status: 409 });
+    expect(
+      (await prisma.inventory.findUniqueOrThrow({ where: { variantId: id } }))
+        .onHand,
+    ).toBe(8);
   });
   it("menambah dan menghapus opsi aman menjaga SKU yang masih ada", async () => {
     let p = await variable(1, 1);
@@ -151,6 +185,88 @@ describe("remediasi editor dengan transaksi PostgreSQL nyata", () => {
       p.optionGroups!.find((group) => group.allowsImage)?.values[0].imageId,
     ).toBe(image.id);
   });
+  it.each([true, false])("hapus foto (variasi=%s) mengosongkan riwayat tanpa mengubah isi pesanan", async (isVariation) => {
+    let p = await variable(1, 1);
+    const image = await prisma.productImage.create({
+      data: {
+        productId: p.id,
+        url: "/icon.svg",
+        alt: "Uji",
+        isVariation,
+      },
+    });
+    p = await getManagedProduct(actor, p.id);
+    const groups = p.optionGroups!.map((group, index) => ({
+      ...group,
+      allowsImage: index === 0,
+      values: group.values.map((value) => ({
+        ...value,
+        imageId: index === 0 ? image.id : null,
+      })),
+    }));
+    p = await save(p, { optionGroups: groups });
+    const order = await prisma.order.create({
+      data: {
+        userId: actor.id,
+        orderNumber: randomUUID(),
+        subtotal: 10000,
+        total: 10000,
+        items: {
+          create: {
+            variantId: p.variants[0].id!,
+            productName: "Produk lama",
+            variantLabel: "Pilihan lama",
+            imageUrl: image.url,
+            unitPrice: 10000,
+            quantity: 1,
+            lineTotal: 10000,
+          },
+        },
+      },
+      include: { items: true },
+    });
+    const other = await simple();
+    const otherOrder = await prisma.order.create({
+      data: {
+        userId: actor.id,
+        orderNumber: randomUUID(),
+        subtotal: 10000,
+        total: 10000,
+        items: {
+          create: {
+            variantId: other.variants[0].id!,
+            productName: "Produk lain",
+            variantLabel: "",
+            imageUrl: image.url,
+            unitPrice: 10000,
+            quantity: 1,
+            lineTotal: 10000,
+          },
+        },
+      },
+      include: { items: true },
+    });
+    const detached = p.optionGroups!.map((group) => ({
+      ...group,
+      values: group.values.map((value) => ({ ...value, imageId: null })),
+    }));
+    await save(p, { optionGroups: detached, [isVariation ? "optionImages" : "images"]: [] });
+    const after = await prisma.orderItem.findUniqueOrThrow({
+      where: { id: order.items[0].id },
+    });
+    expect(after).toEqual({ ...order.items[0], imageUrl: null });
+    expect(
+      await prisma.orderItem.findUniqueOrThrow({
+        where: { id: otherOrder.items[0].id },
+      }),
+    ).toEqual(otherOrder.items[0]);
+    expect(
+      await prisma.productImage.findUnique({ where: { id: image.id } }),
+    ).toBeNull();
+    expect(
+      (await getManagedProduct(actor, p.id)).optionGroups![0].values[0].imageId,
+    ).toBeNull();
+  });
   it("membuat simple tepat satu SKU dan satu inventory", async () => {
     const p = await simple();
     expect(p.optionsEnabled).toBe(false);
@@ -204,15 +320,13 @@ describe("remediasi editor dengan transaksi PostgreSQL nyata", () => {
       ids: [...v.optionValueIds!].sort(),
     }));
     const next = await save(p, {
-      optionGroups: [...p.optionGroups!]
-        .reverse()
-        .map((g) => ({
-          ...g,
-          name: g.name + " baru",
-          values: [...g.values]
-            .reverse()
-            .map((v) => ({ ...v, value: v.value + " baru" })),
-        })),
+      optionGroups: [...p.optionGroups!].reverse().map((g) => ({
+        ...g,
+        name: g.name + " baru",
+        values: [...g.values]
+          .reverse()
+          .map((v) => ({ ...v, value: v.value + " baru" })),
+      })),
     });
     expect(
       next.variants.map((v) => ({

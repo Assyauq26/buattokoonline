@@ -241,9 +241,7 @@ async function OrderDetailContent({
               <div className="order-thumb">
                 {item.imageUrl ? (
                   <img src={item.imageUrl} alt={item.productName} />
-                ) : (
-                  <Package size={28} />
-                )}
+                ) : null}
               </div>
               <div>
                 <strong>{item.productName}</strong>

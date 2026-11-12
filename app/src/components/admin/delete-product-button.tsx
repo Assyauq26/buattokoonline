@@ -8,7 +8,7 @@ export function DeleteProductButton({ id, name, revision, disabled = false, clas
   const [message, setMessage] = useState("");
   const router = useRouter();
   return <div><button type="button" className={className} disabled={disabled || pending} onClick={() => {
-    if (!window.confirm(`Hapus produk “${name}”? Produk dengan riwayat transaksi, stok, atau promosi akan diarsipkan. Penghapusan permanen tidak dapat dibatalkan.`)) return;
+    if (!window.confirm(`Hapus produk “${name}”? Produk dihapus dari katalog dan inventori. Riwayat pesanan tetap ada tanpa foto. Tindakan ini tidak dapat dibatalkan.`)) return;
     start(async () => {
       const result = await deleteProductAction(id, revision);
       setMessage(result.ok && result.data ? result.data.message : result.error || "Penghapusan gagal.");

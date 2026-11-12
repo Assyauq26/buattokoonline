@@ -338,6 +338,20 @@ export function ProductVariationSheet({
               {...editor}
               groups={session.groups}
               rows={session.rows}
+              onRemovePhoto={(id) => {
+                editor.onRemovePhoto(id);
+                setSession((current) => ({
+                  ...current,
+                  groups: current.groups.map((group) => ({
+                    ...group,
+                    values: group.values.map((value) =>
+                      value.imageId === id
+                        ? { ...value, imageId: null }
+                        : value,
+                    ),
+                  })),
+                }));
+              }}
               groupId={mode === "group" ? session.groupId : undefined}
               mode={mode === "group" ? "groups" : "stock"}
               disabled={editor.disabled || discard}

@@ -224,4 +224,42 @@ class HistoricalCompatibilityTests(unittest.TestCase):
   self.installed=self.sheets_installed()
   with patch.object(core,'run',return_value=h.V173_UI_APP_TREE),self.assertRaises(core.StoreError):
    self.test_runtime_projection_is_confined_and_idempotent()
+ def delete_installed(self):
+  return dict(self.ui_installed(),source_sha=h.V173_DELETE_BASE_SHA)
+ def test_delete_transition_accepts_exact_pairs_without_sql(self):
+  installed=self.delete_installed();before=copy.deepcopy(installed)
+  with patch.object(core,'sql') as sql:
+   for name in h.PAIRS:
+    old,fresh=self.material(name)
+    result=h.authorize(name,old,fresh,installed,self.context,ARCHIVE,source_app_tree=h.V173_DELETE_APP_TREE)
+    self.assertEqual(result['transition'],'v1.7.3-product-deletion')
+    self.assertEqual(result['installed_source'],h.V173_DELETE_BASE_SHA)
+    self.assertEqual(result['application_tree'],h.V173_DELETE_APP_TREE)
+   sql.assert_not_called()
+  self.assertEqual(installed,before)
+ def test_delete_transition_rejects_cross_pairs_and_unreviewed_tree(self):
+  name=next(iter(h.PAIRS));old,fresh=self.material(name)
+  for base,tree in [(h.V173_DELETE_BASE_SHA,None),(h.V173_DELETE_BASE_SHA,'a'*40),
+                    (h.V173_DELETE_BASE_SHA,h.V173_SHEETS_APP_TREE),
+                    (h.V173_SHEETS_BASE_SHA,h.V173_DELETE_APP_TREE),
+                    ('a'*40,h.V173_DELETE_APP_TREE)]:
+   with self.subTest(base=base,tree=tree),self.assertRaises(core.StoreError):
+    h.authorize(name,old,fresh,dict(self.delete_installed(),source_sha=base),self.context,ARCHIVE,source_app_tree=tree)
+ def test_delete_transition_rejects_changed_history_context_and_sql(self):
+  name=next(iter(h.PAIRS));old,fresh=self.material(name);installed=self.delete_installed()
+  for changed in [dict(installed,version='1.7.4'),dict(installed,channel='stable'),
+                  dict(installed,candidate_version=None),dict(installed,migrations={}),dict(installed,db_contract=2)]:
+   with self.assertRaises(core.StoreError):
+    h.authorize(name,old,fresh,changed,self.context,ARCHIVE,source_app_tree=h.V173_DELETE_APP_TREE)
+  with self.assertRaises(core.StoreError):
+   h.authorize(name,old,fresh+b' ',installed,self.context,ARCHIVE,source_app_tree=h.V173_DELETE_APP_TREE)
+  with self.assertRaises(core.StoreError):
+   h.authorize(name,old,fresh,installed,dict(self.context,origin='https://other.example'),ARCHIVE,source_app_tree=h.V173_DELETE_APP_TREE)
+ def test_delete_projection_uses_git_tree_and_no_ledger_writes(self):
+  self.installed=self.delete_installed()
+  with patch.object(core,'run',return_value=h.V173_DELETE_APP_TREE) as git,patch.object(core,'sql') as sql:
+   self.test_runtime_projection_is_confined_and_idempotent()
+   self.assertEqual(git.call_count,1)
+   self.assertEqual(git.call_args.args[0][-3:],['rev-parse','--verify','HEAD:app'])
+   sql.assert_not_called()
 if __name__=='__main__':unittest.main()

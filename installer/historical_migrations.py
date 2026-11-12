@@ -15,6 +15,9 @@ V173_UI_APP_TREE = '79de568eb19b30baaefe99b2023500aa7ceab82d'
 # Keep each deployed source paired with only its reviewed destination app tree.
 V173_SHEETS_BASE_SHA = 'f6ce29b03f994f3dc7d3368912737ca1d2aca99b'
 V173_SHEETS_APP_TREE = '307668134ed5b0f4057331ea652e128eccb5808e'
+# Reviewed Hubify-only transition for the product deletion and seller UI update.
+V173_DELETE_BASE_SHA = 'f7da54d24e92241326ea58472d4d2012bfe791d0'
+V173_DELETE_APP_TREE = '476df370f9fc9595d00040b3309ee51f883148cb'
 ARCHIVE_SHA = 'dd7d400a3821e4fc20b6886f688ee48c46300a440344b0e06978e32313dad938'
 INSTALLATION = '2d958c50e7a60006f3a8531cf217335e'
 PAIRS = {
@@ -39,6 +42,7 @@ def authorize(name, old, fresh, installed, context, archive, target_version="1.7
     transition = {
         (V173_UI_BASE_SHA, V173_UI_APP_TREE): 'v1.7.3-ui-pr43',
         (V173_SHEETS_BASE_SHA, V173_SHEETS_APP_TREE): 'v1.7.3-ui-pr45',
+        (V173_DELETE_BASE_SHA, V173_DELETE_APP_TREE): 'v1.7.3-product-deletion',
     }.get((installed.get('source_sha'), source_app_tree))
     ui_redeploy = (installed.get('version') == '1.7.3'
                    and transition is not None

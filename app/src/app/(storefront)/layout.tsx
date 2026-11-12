@@ -58,7 +58,7 @@ export default async function StorefrontLayout({
           <div className="container flex flex-col items-center justify-between gap-2 py-6 text-xs text-ink-muted md:flex-row">
             <span className="font-display text-lg font-extrabold text-ink">{theme.footer.showLogo && <StoreLogo />}</span>
             <span>© {new Date().getFullYear()} {theme.identity.name}. {theme.footer.tagline}</span>
-            <nav aria-label="Informasi website" className="flex flex-wrap justify-center gap-4"><Link href="/syarat-ketentuan" className="hover:text-ink">Syarat &amp; Ketentuan</Link><Link href="/kebijakan-privasi" className="hover:text-ink">Kebijakan Privasi</Link><Link href="/admin" className="hover:text-ink">Admin</Link></nav>
+            <nav aria-label="Informasi website" className="flex flex-wrap justify-center gap-4"><Link href="/syarat-ketentuan" className="hover:text-ink">Syarat &amp; Ketentuan</Link><Link href="/kebijakan-privasi" className="hover:text-ink">Kebijakan Privasi</Link></nav>
           </div>
         </div>
       </footer>

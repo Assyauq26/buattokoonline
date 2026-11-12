@@ -1,3 +1,4 @@
+import { liveProductSlug } from "@/modules/catalog/deleted-product";
 import type { PrismaClient } from "@prisma/client";
 export async function assertCampaignSchema(db: PrismaClient) {
   const [row] = await db.$queryRaw<
@@ -12,6 +13,7 @@ export async function assertCampaignSchema(db: PrismaClient) {
   if (
     await db.product.count({
       where: {
+        slug: liveProductSlug,
         OR: [
           { isFlashSale: true },
           { flashSalePrice: { not: null } },

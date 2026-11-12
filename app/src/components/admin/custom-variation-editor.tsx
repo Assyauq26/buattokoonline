@@ -1059,7 +1059,7 @@ export function CustomVariationEditor(p: Props) {
                           setConfirmation({
                             title: "Hapus foto tersimpan?",
                             description:
-                              "File akan dihapus setelah produk disimpan. Server menolak penghapusan foto yang dipakai riwayat pesanan. Perubahan lain tetap berada di editor.",
+                              "Foto dihapus setelah produk disimpan. Foto pada opsi terkait dan riwayat pesanan akan dikosongkan; rincian pesanan tetap tersimpan.",
                             confirm: "Hapus foto",
                             run: () => p.onRemovePhoto(photo.id),
                           })

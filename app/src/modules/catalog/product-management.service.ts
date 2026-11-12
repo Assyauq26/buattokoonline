@@ -19,6 +19,7 @@ import {
   assertStableSelection,
 } from "./variation-persistence";
 import { Prisma, ProductStatus } from "@prisma/client";
+import { isDeletedProduct, liveProductSlug } from "./deleted-product";
 import { prisma } from "@/lib/prisma";
 import { HttpError } from "@/lib/response";
 import { PERMISSIONS, type PermissionKey } from "@/lib/auth/permissions";
@@ -96,7 +97,7 @@ async function lockProduct(
   expected: string,
 ) {
   const p = await tx.product.findUnique({ where: { id }, include });
-  if (!p) throw new HttpError("Produk tidak ditemukan", 404);
+  if (!p || isDeletedProduct(p)) throw new HttpError("Produk tidak ditemukan", 404);
   if (p.updatedAt.toISOString() !== expected)
     throw new HttpError(
       "Produk sudah berubah. Muat ulang sebelum menyimpan.",
@@ -216,10 +217,10 @@ function requireStockEdit(actor: CatalogActor) {
 function protectedSku(row: ManagedProduct["variants"][number]) {
   return Boolean(
     row.inventory?.onHand ||
-      row.inventory?.reserved ||
-      row._count.orderItems ||
-      row._count.cartItems ||
-      row._count.movements,
+    row.inventory?.reserved ||
+    row._count.orderItems ||
+    row._count.cartItems ||
+    row._count.movements,
   );
 }
 
@@ -613,13 +614,22 @@ export async function updateManagedProduct(
     for (const old of p.images.filter(
       (image) => !allImages.some((i) => i.id === image.id),
     )) {
-      if (await tx.orderItem.count({ where: { imageUrl: old.url } }))
-        throw new HttpError(
-          "Gambar dipakai riwayat pesanan dan tidak boleh dihapus",
-          409,
-        );
-      if (await tx.productOptionValue.count({ where: { imageId: old.id } }))
-        throw new HttpError("Gambar masih dipakai opsi variasi", 409);
+      if (old.url.startsWith("/api/v1/product-images/")) {
+        const sharedImage = await tx.productImage.count({ where: { url: old.url, productId: { not: id } } });
+        const sharedOrder = await tx.orderItem.count({ where: { imageUrl: old.url, variant: { productId: { not: id } } } });
+        if (sharedImage || sharedOrder)
+          throw new HttpError("Foto internal dipakai produk atau pesanan produk lain. Lepaskan referensi bersama sebelum menghapus foto.", 409);
+      }
+      // Order snapshots keep all transaction details while the removed photo
+      // becomes blank for this product in both seller and customer history.
+      await tx.orderItem.updateMany({
+        where: { imageUrl: old.url, variant: { productId: id } },
+        data: { imageUrl: null },
+      });
+      await tx.productOptionValue.updateMany({
+        where: { productId: id, imageId: old.id },
+        data: { imageId: null },
+      });
       await tx.productImage.delete({ where: { id: old.id } });
     }
     for (const [index, image] of allImages.entries())
@@ -652,7 +662,7 @@ export async function updateManagedProduct(
     await writeSaveReceipt(tx, actor, ctx, payloadHash, result);
     return result;
   });
-  // Delete objects only after the DB transaction commits. Never delete order-history images.
+  // Delete detached owned objects only after the DB transaction commits.
   // Legacy external URLs remain untouched. A failed cleanup is reported but never undoes the valid edit.
   for (const image of result.removedImages ?? []) {
     try {
@@ -670,6 +680,11 @@ export async function updateManagedProduct(
         !objectPath.startsWith(
           `${STORAGE_APP}/product-images/staged-${image.id}/${image.id}.`,
         )
+      )
+        continue;
+      if (
+        (await prisma.productImage.count({ where: { url: image.url } })) ||
+        (await prisma.orderItem.count({ where: { imageUrl: image.url } }))
       )
         continue;
       await removeObject(objectPath);
@@ -735,7 +750,7 @@ export async function changeProductStatus(
 export async function getManagedProduct(actor: CatalogActor, id: string) {
   assertCatalogPermission(actor, PERMISSIONS.PRODUCT_READ);
   const p = await prisma.product.findUnique({ where: { id }, include });
-  if (!p) throw new HttpError("Produk tidak ditemukan", 404);
+  if (!p || isDeletedProduct(p)) throw new HttpError("Produk tidak ditemukan", 404);
   return serializeProduct(p, actor);
 }
 function serializeProduct(p: ManagedProduct, actor: CatalogActor) {
@@ -783,10 +798,10 @@ function serializeProduct(p: ManagedProduct, actor: CatalogActor) {
     variants: p.variants.map((v) => ({
       protected: Boolean(
         v.inventory?.onHand ||
-          v.inventory?.reserved ||
-          v._count.orderItems ||
-          v._count.cartItems ||
-          v._count.movements,
+        v.inventory?.reserved ||
+        v._count.orderItems ||
+        v._count.cartItems ||
+        v._count.movements,
       ),
       optionValueIds: p.optionsEnabled
         ? v.optionValues.map((s) => s.valueId)
@@ -833,6 +848,7 @@ export async function listManagedProducts(
 ) {
   assertCatalogPermission(actor, PERMISSIONS.PRODUCT_READ);
   const where: Prisma.ProductWhereInput = {
+    slug: liveProductSlug,
     ...(q.trim()
       ? {
           OR: [

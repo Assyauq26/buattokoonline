@@ -1,7 +1,7 @@
 import { customerRefundView } from "@/lib/customer-refund-view";
 import Link from "next/link";
 import { PayOrderLink } from "@/components/storefront/pay-order-link";
-import { Package, ArrowLeft, Search, Clock, Truck, Info } from "lucide-react";
+import { ArrowLeft, Search, Clock, Truck, Info } from "lucide-react";
 import { getCurrentUserBasic } from "@/lib/auth/session";
 import { CustomerOrderTabs } from "@/components/storefront/customer-order-tabs";
 import { listCustomerOrderPage } from "@/modules/orders/orders.service";
@@ -75,9 +75,7 @@ export default async function OrdersPage({
                 <div className="customer-order-image">
                   {it?.imageUrl ? (
                     <img src={it.imageUrl} alt={it.productName} />
-                  ) : (
-                    <Package />
-                  )}
+                  ) : null}
                 </div>
                 <div>
                   <h2>{it?.productName || "Produk pesanan"}</h2>

@@ -245,9 +245,7 @@ export default async function Page({
                   <div className="order-thumb">
                     {i.imageUrl ? (
                       <img src={i.imageUrl} alt={i.productName} />
-                    ) : (
-                      <Package />
-                    )}
+                    ) : null}
                   </div>
                   <div>
                     <strong>{i.productName}</strong>

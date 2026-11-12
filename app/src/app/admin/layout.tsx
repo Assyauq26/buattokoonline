@@ -64,7 +64,7 @@ export default async function AdminLayout({
     >
       <RegistrationOtpCleanup />
       <aside
-        className="sticky top-0 hidden h-screen w-[238px] shrink-0 flex-col justify-between overflow-y-auto border-r border-zinc-200 bg-white pb-5 md:flex"
+        className="sticky top-0 hidden h-screen w-[238px] shrink-0 flex-col justify-between overflow-y-auto border-r border-zinc-200 bg-white pb-5 md:flex admin-sidebar"
         aria-label="Sidebar admin"
       >
         <div>

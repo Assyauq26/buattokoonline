@@ -3,3 +3,6 @@
 .storefront-root:has(.customer-account)>footer{display:none}@media(max-width:767px){.storefront-root:has(.customer-account)>header>.container:last-child:not(:first-child){display:none}}
 
 .account-subpage{max-width:820px;margin:auto;display:grid;gap:20px;padding:24px 0 calc(120px + env(safe-area-inset-bottom))}.account-subpage h1{font-size:26px;font-weight:750}.account-subpage-back{display:inline-flex;align-items:center;min-height:44px}.account-subpage .account-settings>form,.account-subpage #addresses{display:block}.account-subpage .account-settings>form{display:grid;gap:16px}
+
+.storefront-root a.account-admin, .storefront-root a.account-admin:hover { color: #fff; }
+.storefront-root a.account-admin:focus-visible, .storefront-root a.account-admin:active { color: #fff; }

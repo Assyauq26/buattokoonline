@@ -24,3 +24,8 @@ it("rejects custom mode without groups and duplicate option image IDs",()=>{
  expect(productInputSchema.safeParse({...data,optionsEnabled:true,optionGroups:undefined}).success).toBe(false);
  expect(productInputSchema.safeParse({...data,optionImages:[{id:"same"},{id:"same"}]}).success).toBe(false);
 });
+it("reserves deletion slug namespace and permits unrelated names", () => {
+ const data=input([group("a",1)]);
+ expect(productInputSchema.safeParse({...data,slug:"_deleted_product"}).success).toBe(false);
+ expect(productInputSchema.safeParse({...data,slug:"adeletedx-product"}).success).toBe(true);
+});
