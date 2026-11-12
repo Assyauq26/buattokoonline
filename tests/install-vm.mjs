@@ -139,7 +139,7 @@ try {
     await expect(page.locator('body')).toContainText('Produk Uji Mawar');
   }).toPass({timeout:60000,intervals:[1000,2000,5000]});
   await page.setViewportSize({width:390,height:844});
-  const cardImage=page.getByTestId('product-card-produk-uji-mawar').locator('img');
+  const cardImage=page.getByTestId('product-card-produk-uji-mawar').first().locator('img');
   await expect(cardImage).toBeVisible();
   await expect.poll(()=>cardImage.evaluate(img=>img.complete&&img.naturalWidth>0),{timeout:30000}).toBe(true);
   await page.screenshot({path:'test-results/storefront-after-restart-mobile.png',fullPage:true});
