@@ -256,7 +256,14 @@
   list-style: none;
 }
 .order-detail summary:after {
-  content: "⌄";
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-right: 1.7px solid currentColor;
+  border-bottom: 1.7px solid currentColor;
+  transform: rotate(45deg);
+  flex-shrink: 0;
   float: right;
 }
 .order-detail details[open] > summary {
@@ -1082,3 +1089,6 @@
 .order-workflow.simple-orders .compact-action .flow-secondary {margin-top:0}
 
 .order-workflow.simple-orders {gap:12px}
+
+.order-detail details[open] > summary::after { transform: rotate(225deg); }
+.order-detail summary::-webkit-details-marker { display: none; }

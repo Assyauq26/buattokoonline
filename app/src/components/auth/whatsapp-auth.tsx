@@ -372,18 +372,7 @@ export function WhatsAppAuth({
       >
         Masuk dengan email
       </Link>
-      {!link &&
-        !challenge &&
-        !confirmation &&
-        !state &&
-        accountType === "customer" && (
-          <Link
-            className="wa-text-button"
-            href="/whatsapp?account=seller&redirectTo=%2Fadmin"
-          >
-            Masuk dashboard seller dengan WhatsApp
-          </Link>
-        )}
+
     </div>
   );
 }

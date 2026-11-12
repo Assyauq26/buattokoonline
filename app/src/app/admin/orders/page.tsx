@@ -1,6 +1,6 @@
 import "./orders.css";
 import Link from "@/components/ui/navigation";
-import { Package, Search } from "lucide-react";
+import { Search } from "lucide-react";
 import { requireBackofficeUser } from "@/modules/admin/backoffice-access";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { orderWorkflowStyle } from "@/modules/orders/order-workflow-theme";
@@ -177,9 +177,7 @@ export default async function Page({
                       <div key={n}>
                         {i.imageUrl ? (
                           <img src={i.imageUrl} alt="" loading="lazy" />
-                        ) : (
-                          <Package aria-label="Gambar produk tidak tersedia" />
-                        )}
+                        ) : null}
                       </div>
                     ))}
                     {products.remaining > 0 && (

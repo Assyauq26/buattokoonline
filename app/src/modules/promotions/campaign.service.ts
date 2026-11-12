@@ -1,3 +1,4 @@
+import { isDeletedProduct, liveProductSlug } from "@/modules/catalog/deleted-product";
 import "server-only";
 import { matchesLegacyArchive } from "./legacy-flash-policy";
 import { effectivePrice } from "@/lib/money";
@@ -110,7 +111,7 @@ export async function saveCampaign(actor: Actor, value: unknown) {
           Prisma.sql`SELECT id FROM "Product" WHERE id IN (${Prisma.join(ids)}) ORDER BY id FOR UPDATE`,
         );
         const products = await tx.product.findMany({
-          where: { id: { in: ids } },
+          where: { id: { in: ids }, slug: liveProductSlug },
           include: { variants: { include: { inventory: true } } },
         });
         if (products.length !== ids.length)
@@ -316,7 +317,7 @@ export async function retireLegacy(actor: Actor, value: unknown) {
       Prisma.sql`SELECT id FROM "Product" WHERE id=${productId} FOR UPDATE`,
     );
     const p = await tx.product.findUnique({ where: { id: productId } });
-    if (!p) throw new HttpError("Produk tidak ditemukan.", 404);
+    if (!p || isDeletedProduct(p)) throw new HttpError("Produk tidak ditemukan.", 404);
     if (p.updatedAt.toISOString() !== expectedUpdatedAt)
       throw new HttpError("Data produk telah berubah. Muat ulang.", 409);
     const archive = await tx.flashSaleLegacy.findUnique({
@@ -466,6 +467,7 @@ export async function campaignProducts(actor: Actor, value: unknown = {}) {
   const query = parsed.data,
     page = query.page;
   const where: Prisma.ProductWhereInput = {
+    slug: liveProductSlug,
     ...(query.search
       ? { name: { contains: query.search.slice(0, 160), mode: "insensitive" } }
       : {}),

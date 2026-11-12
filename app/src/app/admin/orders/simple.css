@@ -292,7 +292,14 @@
   list-style: none;
 }
 .simple-detail summary::after {
-  content: "⌄";
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-right: 1.7px solid currentColor;
+  border-bottom: 1.7px solid currentColor;
+  transform: rotate(45deg);
+  flex-shrink: 0;
   margin-left: auto;
 }
 .simple-detail details[open] > summary {
@@ -516,3 +523,6 @@
 
 .simple-tabs::-webkit-scrollbar { display: none; }
 .simple-orders .compact-status .flow-status { border-radius: 6px; }
+
+.simple-detail details[open] > summary::after { transform: rotate(225deg); }
+.simple-detail summary::-webkit-details-marker { display: none; }

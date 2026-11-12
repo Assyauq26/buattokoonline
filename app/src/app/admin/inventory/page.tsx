@@ -1,3 +1,4 @@
+import { liveProductSlug } from "@/modules/catalog/deleted-product";
 import { FilterForm } from "@/components/ui/filter-form";
 import { Suspense } from "react";
 import { OperationsSkeleton } from "@/components/admin/operations-skeleton";
@@ -20,7 +21,7 @@ export default async function InventoryPage(props: { searchParams: Promise<{ q?:
 }
 async function InventoryPageContent({ searchParams }: { searchParams: Promise<{ q?: string; stock?: string; page?: string }> }) {
     const params = await searchParams; const q = (params.q || "").slice(0, 200);
-  const where: Prisma.ProductVariantWhereInput = { ...(q ? { OR: [{ sku: { contains: q, mode: "insensitive" } }, { product: { name: { contains: q, mode: "insensitive" } } }] } : {}), ...(params.stock === "reserved" ? { inventory: { reserved: { gt: 0 } } } : params.stock === "empty" ? { OR: [{ inventory: null }, { inventory: { onHand: 0 } }], ...(q ? { AND: [{ OR: [{ sku: { contains: q, mode: "insensitive" } }, { product: { name: { contains: q, mode: "insensitive" } } }] }] } : {}) } : {}) };
+  const where: Prisma.ProductVariantWhereInput = { product: { slug: liveProductSlug }, ...(q ? { OR: [{ sku: { contains: q, mode: "insensitive" } }, { product: { name: { contains: q, mode: "insensitive" } } }] } : {}), ...(params.stock === "reserved" ? { inventory: { reserved: { gt: 0 } } } : params.stock === "empty" ? { OR: [{ inventory: null }, { inventory: { onHand: 0 } }], ...(q ? { AND: [{ OR: [{ sku: { contains: q, mode: "insensitive" } }, { product: { name: { contains: q, mode: "insensitive" } } }] }] } : {}) } : {}) };
   const { rows, total, pages, page } = await readPage(pageNumber(params.page),
     () => prisma.productVariant.count({ where }),
     (skip, take) => prisma.productVariant.findMany({ where, select: { id: true, sku: true, color: true, size: true, product: { select: { name: true, status: true } }, inventory: { select: { onHand: true, reserved: true } } }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], skip, take }));

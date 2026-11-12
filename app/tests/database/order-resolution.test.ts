@@ -46,6 +46,7 @@ vi.mock("@/lib/storage", () => ({
   removeObject: storage.remove,
 }));
 import { prisma } from "@/lib/prisma";
+import { deleteManagedProduct } from "@/modules/catalog/product-delete.service";
 import { ALL_PERMISSIONS } from "@/lib/auth/permissions";
 import {
   requestResolution,
@@ -68,7 +69,7 @@ import { requestRefund } from "@/modules/payments/refund.service";
 const url = new URL(process.env.DATABASE_URL || "http://invalid");
 if (
   !["127.0.0.1", "localhost"].includes(url.hostname) ||
-  url.pathname !== "/management_v130_test"
+  !["/management_v130_test", "/hubify_management_delete_test"].includes(url.pathname)
 )
   throw Error("Isolated local management database required");
 let staff: { id: string; staff: true },
@@ -222,6 +223,69 @@ async function transfer(id: string, orderId: string, reference = randomUUID()) {
     "application/pdf",
   );
 }
+it("product removal retains unpaid cancellation and releases its reservation", async () => {
+  const o = await fixture(false);
+  const variant = await prisma.productVariant.findUniqueOrThrow({
+    where: { id: o.items[0].variantId },
+    include: { product: true },
+  });
+  await prisma.orderItem.update({
+    where: { id: o.items[0].id },
+    data: { imageUrl: "https://example.test/ordered.jpg" },
+  });
+  await deleteManagedProduct(
+    staff.id,
+    variant.productId,
+    variant.product.updatedAt.toISOString(),
+  );
+  expect(
+    (await prisma.orderItem.findUniqueOrThrow({ where: { id: o.items[0].id } }))
+      .imageUrl,
+  ).toBeNull();
+  const c = await request(o.id);
+  await command(c.id, o.id, "confirm-cancel");
+  expect(
+    await prisma.inventory.findUniqueOrThrow({
+      where: { variantId: variant.id },
+    }),
+  ).toMatchObject({ onHand: 10, reserved: 0 });
+  expect(
+    (await prisma.orderItem.findUniqueOrThrow({ where: { id: o.items[0].id } }))
+      .productName,
+  ).toBe("Immutable item");
+});
+it("product removal retains paid return inspection and refund calculation", async () => {
+  const o = await fixture(true, true);
+  const variant = await prisma.productVariant.findUniqueOrThrow({
+    where: { id: o.items[0].variantId },
+    include: { product: true },
+  });
+  await deleteManagedProduct(
+    staff.id,
+    variant.productId,
+    variant.product.updatedAt.toISOString(),
+  );
+  const c = await request(o.id, "RETURN");
+  await command(c.id, o.id, "approve-return", {
+    items: [{ orderItemId: o.items[0].id, quantity: 1 }],
+    shippingAmount: 0,
+    returnRequired: true,
+    policyReason: "Barang harus dikembalikan",
+  });
+  await command(c.id, o.id, "inspect-return", {
+    restock: true,
+    attested: true,
+    note: "Barang diterima",
+  });
+  expect(
+    (
+      await prisma.inventory.findUniqueOrThrow({
+        where: { variantId: variant.id },
+      })
+    ).onHand,
+  ).toBe(9);
+  expect((await view(o.id)).cases[0].refundAmount).toBeGreaterThan(0);
+});
 it("unpaid cancellation releases reservations once under concurrent confirmation", async () => {
   const o = await fixture(false),
     c = await request(o.id);

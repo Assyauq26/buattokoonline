@@ -1,3 +1,4 @@
+import { liveProductSlug } from "@/modules/catalog/deleted-product";
 import { FilterForm } from "@/components/ui/filter-form";
 import { movementLabel } from "@/components/admin/movement-label";
 import { Suspense } from "react";
@@ -21,7 +22,7 @@ export default async function InventoryDetail(props: { params: Promise<{ id: str
 }
 async function InventoryDetailContent({ params, searchParams, actor }: { params: Promise<{ id: string }>; searchParams: Promise<{ page?: string; type?: string }> } & { actor: AuthUser }) {
   const { id } = await params;
-  const variant = await prisma.productVariant.findUnique({ where: { id }, include: { product: { select: { name: true } }, inventory: true } }); if (!variant) notFound();
+  const variant = await prisma.productVariant.findFirst({ where: { id, product: { slug: liveProductSlug } }, include: { product: { select: { name: true } }, inventory: true } }); if (!variant) notFound();
   const query = await searchParams; const type = Object.values(MovementType).includes(query.type as MovementType) ? query.type as MovementType : undefined;
   const where = { variantId: id, ...(type ? { type } : {}) }; const total = await prisma.inventoryMovement.count({ where }); const pages = Math.max(1, Math.ceil(total / 20)); const page = Math.min(pageNumber(query.page), pages);
   const movements = await prisma.inventoryMovement.findMany({ where, orderBy: [{ createdAt: "desc" }, { id: "desc" }], skip: (page - 1) * 20, take: 20 }); const stock = variant.inventory;

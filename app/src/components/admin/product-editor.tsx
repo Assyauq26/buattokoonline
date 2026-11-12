@@ -786,28 +786,28 @@ export function ProductEditor({
     change(purpose, next);
   }
   function removePhoto(id: string, purpose: "images" | "optionImages") {
-    // A product photo may be the selected image for a customer-facing option.
-    // Never orphan that relation; ask the seller to select a replacement first.
-    if (
-      purpose === "images" &&
-      values.optionGroups?.some((group) =>
-        group.values.some((option) => option.imageId === id),
-      )
-    ) {
-      setError(
-        "Foto ini dipakai oleh opsi variasi. Pilih gambar pengganti pada Varian sebelum menghapus foto utama.",
-      );
-      return;
-    }
+    // Remove the image from any option that references it in the same draft.
+    // Nothing is permanent until the seller saves the product.
+    setValues((current) => ({
+      ...current,
+      [purpose]: current[purpose].filter((image) => image.id !== id),
+      sizeChart:
+        current.sizeChart?.mode === "image" && current.sizeChart.imageId === id
+          ? null
+          : current.sizeChart,
+      optionGroups: current.optionGroups?.map((group) => ({
+        ...group,
+        values: group.values.map((option) =>
+          option.imageId === id ? { ...option, imageId: null } : option,
+        ),
+      })),
+    }));
+    setError("");
     // Deletion is provisional until the product is saved. Cancelling staged media
     // here breaks both "Pulihkan foto" and discarding changes in the variation
     // panel: the restored media ID would already be cancelled server-side.
     // Unreferenced staged uploads are expired by the existing TTL cleanup;
     // finalized product media is removed only by the save transaction.
-    change(
-      purpose,
-      values[purpose].filter((image) => image.id !== id),
-    );
   }
   useEffect(() => {
     if (!dirty && !queueBusy && !pending?.startsWith("upload-")) return;

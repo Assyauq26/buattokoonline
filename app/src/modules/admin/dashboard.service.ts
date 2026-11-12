@@ -1,3 +1,4 @@
+import { liveProductSlug } from "@/modules/catalog/deleted-product";
 import { flowWhere } from "@/modules/orders/flow-state";
 import { prisma } from "@/lib/prisma";
 import { HttpError } from "@/lib/response";
@@ -9,10 +10,11 @@ export async function getSellerDashboard(actor: CatalogActor) {
   const has = (p: string) => actor.permissions.includes(p);
   const [products, inventory, orders, sales, recent] = await Promise.all([
     has(PERMISSIONS.PRODUCT_READ)
-      ? prisma.product.groupBy({ by: ["status"], _count: { _all: true } })
+      ? prisma.product.groupBy({ by: ["status"], where: { slug: liveProductSlug }, _count: { _all: true } })
       : null,
     has(PERMISSIONS.INVENTORY_READ)
       ? prisma.inventory.aggregate({
+          where: { variant: { product: { slug: liveProductSlug } } },
           _sum: { onHand: true, reserved: true },
           _count: { _all: true },
         })
