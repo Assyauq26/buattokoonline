@@ -1,0 +1,18 @@
+{
+  "started_at": 1794488847.9676492,
+  "samples": 662,
+  "peak_used_ram_kib": 1873992,
+  "peak_swap_used_kib": 996352,
+  "peak_node_rss_kib": 1263428,
+  "peak_node_hwm_kib": 1266244,
+  "mem_total_kib": 2014844,
+  "swap_total_kib": 2097148,
+  "vcpus": 2,
+  "elapsed_seconds": 715.6,
+  "oom_kill_delta": 0,
+  "pswpin_delta": 345163,
+  "pswpout_delta": 625974,
+  "pgmajfault_delta": 223426,
+  "build_seconds": 212.9,
+  "installed": true
+}

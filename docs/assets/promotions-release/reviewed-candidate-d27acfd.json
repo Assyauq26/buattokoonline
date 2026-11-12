@@ -1,0 +1,18 @@
+{
+  "candidate": true,
+  "published": false,
+  "version": "1.8.0",
+  "source_sha": "d27acfd3120629a6c9f547e5ed5921062f9b4e9a",
+  "application_tree": "799e95d98d0290255a36eb521b63f199661ccd5b",
+  "archive": "store-v1.8.0-candidate-d27acfd.tar.gz",
+  "archive_sha256": "561303e028f6ca269ed5d9824a1a429bc2ed20a8a579438ed743cb8d5ddd04e0",
+  "archive_bytes": 4221437,
+  "manifest_file_count": 809,
+  "migration_count": 30,
+  "new_migration_sha256": "0b43da5d78a6c9211c4fef32bf8d5a813e2e335992035f8923db64f50a35b2f7",
+  "canonical_git_bytes_match": true,
+  "automatic_updater": "rejected before extraction",
+  "rejection": "Kontrak database/rollback tidak kompatibel. Tindakan operator diperlukan.",
+  "ui_source_unchanged_since": "69070233e8a50d4276c43b528f6a3c635d7b6845",
+  "production_deployed": false
+}

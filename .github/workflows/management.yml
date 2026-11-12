@@ -21,11 +21,23 @@ jobs:
           POSTGRES_DB: management_v130_test
         ports: ['5432:5432']
         options: --health-cmd "pg_isready -U postgres" --health-interval 5s --health-retries 12
+      promotions-postgres:
+        image: postgres:16-bookworm
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: disposable-promotions-only
+          POSTGRES_DB: hubify_promotions_test
+        ports: ['5557:5432']
+        options: --health-cmd "pg_isready -U postgres" --health-interval 5s --health-retries 12
     env:
       DATABASE_URL: postgresql://postgres:disposable-management-only@127.0.0.1:5432/management_v130_test
       DIRECT_URL: postgresql://postgres:disposable-management-only@127.0.0.1:5432/management_v130_test
       TEST_DATABASE_ENABLED: 'yes'
       STORE_ISOLATED_TESTS: '1'
+      STORE_DATABASE_TEST_ROUTING: 'yes'
+      MANAGEMENT_TEST_DATABASE_URL: postgresql://postgres:disposable-management-only@127.0.0.1:5432/management_v130_test
+      PRODUCT_EDITOR_TEST_DATABASE_URL: postgresql://postgres:disposable-management-only@127.0.0.1:5432/product_editor_test
+      PROMOTIONS_TEST_DATABASE_URL: postgresql://postgres:disposable-promotions-only@127.0.0.1:5557/hubify_promotions_test
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -40,6 +52,17 @@ jobs:
           npm run security:prepare
           node node_modules/prisma/build/index.js generate
           npm run db:migrate
+      - name: Prepare separately guarded editor and promotions databases
+        working-directory: app
+        env:
+          PGHOST: 127.0.0.1
+          PGPORT: '5432'
+          PGUSER: postgres
+          PGPASSWORD: disposable-management-only
+        run: |
+          createdb product_editor_test
+          DATABASE_URL="$PRODUCT_EDITOR_TEST_DATABASE_URL" DIRECT_URL="$PRODUCT_EDITOR_TEST_DATABASE_URL" npm run db:migrate
+          DATABASE_URL="$PROMOTIONS_TEST_DATABASE_URL" DIRECT_URL="$PROMOTIONS_TEST_DATABASE_URL" npm run db:migrate
       - name: Full application and security tests
         working-directory: app
         run: |
@@ -49,9 +72,24 @@ jobs:
       - name: Email relay regression
         run: node --test services/mail-relay/*.test.mjs
       - name: Validate operator upgrade syntax
+        env:
+          PROMOTION_BASELINE_ARCHIVE: promotion-evidence/store-v1.7.4.tar.gz
         run: |
+          mkdir -p promotion-evidence
+          curl --fail --location --silent --show-error https://github.com/Assyauq26/buattokoonline/releases/download/v1.7.4/store-v1.7.4.tar.gz -o "$PROMOTION_BASELINE_ARCHIVE"
           python3 -m compileall -q deploy installer
           python3 -m unittest discover -s deploy -p "test_hubify_v*.py"
+          python3 -m unittest discover -s tests -p "promotions*test.py"
+      - name: Promotion upgrade and database restore rehearsal
+        env:
+          PROMOTION_RELEASE_TEST_DATABASE_URL: postgresql://postgres:disposable-promotions-only@127.0.0.1:5557/postgres
+          PROMOTION_TEST_PG_BIN: /usr/lib/postgresql/16/bin
+          PROMOTION_BASELINE_ARCHIVE: promotion-evidence/store-v1.7.4.tar.gz
+          PGPASSWORD: disposable-promotions-only
+        run: |
+          test -x "$PROMOTION_TEST_PG_BIN/pg_dump" || (sudo apt-get update -qq && sudo apt-get install -y postgresql-client-16)
+          node tests/promotions-upgrade.mjs
+          PROMOTION_LEGACY_LEDGER=yes PROMOTION_EXECUTOR_REHEARSAL=yes node tests/promotions-upgrade.mjs
       - name: Production build
         working-directory: app
         run: npm run build
@@ -72,5 +110,9 @@ jobs:
         if: always()
         with:
           name: management-evidence-${{ github.sha }}
-          path: management-evidence/
+          path: |
+            management-evidence/
+            promotion-evidence/release-upgrade/result.json
+            promotion-evidence/release-upgrade-legacy/result.json
+            promotion-evidence/executor-rehearsal/result.json
           if-no-files-found: ignore

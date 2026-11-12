@@ -10,6 +10,15 @@ on:
         description: 'Type DEPLOY HUBIFY to acknowledge staging downtime'
         type: string
         required: true
+      operation:
+        description: 'Reviewed executor; staging guard remains unchanged'
+        type: choice
+        default: staging
+        options: [staging, promotions-v180]
+      artifact_sha256:
+        description: 'Exact preflighted v1.8.0 artifact digest (promotions-v180 only)'
+        type: string
+        required: false
 
 permissions:
   contents: read
@@ -31,11 +40,15 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           SHA: ${{ inputs.exact_sha }}
           CONFIRMATION: ${{ inputs.confirmation }}
+          OPERATION: ${{ inputs.operation }}
+          DIGEST: ${{ inputs.artifact_sha256 }}
         shell: bash
         run: |
           set -euo pipefail
           [[ "$CONFIRMATION" == 'DEPLOY HUBIFY' ]]
           [[ "$SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$OPERATION" == 'staging' || "$OPERATION" == 'promotions-v180' ]]
+          if [[ "$OPERATION" == 'promotions-v180' ]]; then [[ "$DIGEST" =~ ^[0-9a-f]{64}$ ]]; fi
           REPO=$(gh api "repos/$GITHUB_REPOSITORY" --jq .full_name)
           test "$REPO" = 'Assyauq26/buattokoonline'
           HEAD_SHA=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)
@@ -44,6 +57,8 @@ jobs:
       - name: Deploy via pinned SSH host and restricted server helper
         env:
           SHA: ${{ inputs.exact_sha }}
+          OPERATION: ${{ inputs.operation }}
+          DIGEST: ${{ inputs.artifact_sha256 }}
           SSH_KEY: ${{ secrets.HUBIFY_SSH_PRIVATE_KEY }}
           SSH_KNOWN_HOSTS: ${{ secrets.HUBIFY_SSH_KNOWN_HOSTS }}
         shell: bash
@@ -57,10 +72,17 @@ jobs:
           printf '%s\n' "$SSH_KNOWN_HOSTS" | tr -d '\r' > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/hubify_deploy" "$HOME/.ssh/known_hosts"
           grep -Eq '^43[.]173[.]41[.]24 ssh-ed25519 ' "$HOME/.ssh/known_hosts"
+          if [[ "$OPERATION" == 'promotions-v180' ]]; then
+            HELPER=/usr/local/sbin/hubify-promotions-cutover
+            [[ "$DIGEST" =~ ^[0-9a-f]{64}$ ]]
+          else
+            HELPER=/usr/local/sbin/hubify-staging-deploy
+            DIGEST=''
+          fi
           ssh -T -i "$HOME/.ssh/hubify_deploy" -o IdentitiesOnly=yes \
             -o StrictHostKeyChecking=yes -o BatchMode=yes \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o GlobalKnownHostsFile=/dev/null \
             -o HostKeyAlgorithms=ssh-ed25519 -o ConnectTimeout=15 \
             -o ServerAliveInterval=30 -o ServerAliveCountMax=6 \
             hubifydeploy@43.173.41.24 \
-            sudo -n /usr/local/sbin/hubify-staging-deploy "$SHA"
+            sudo -n "$HELPER" "$SHA" ${DIGEST:+"$DIGEST"}

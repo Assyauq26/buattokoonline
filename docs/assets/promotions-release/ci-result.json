@@ -1,0 +1,34 @@
+{
+  "run_id": 43216706942,
+  "url": "https://github.com/Assyauq26/buattokoonline/actions/runs/43216706942",
+  "head_sha": "d27acfd3120629a6c9f547e5ed5921062f9b4e9a",
+  "job_id": 131177672964,
+  "conclusion": "failure",
+  "application_tests": {
+    "files_passed": 100,
+    "tests_passed": 784,
+    "failed": 0,
+    "skipped": 0
+  },
+  "passed_gates": [
+    "Source boundary",
+    "Pinned dependencies and isolated migrations",
+    "Full application/security suite",
+    "Email relay 7 tests",
+    "Operator syntax 6 tests",
+    "Promotion release contract 5 tests",
+    "Promotion upgrade and custom dump/restore",
+    "Production build"
+  ],
+  "failed_gate": {
+    "name": "Browser responsive and workflows",
+    "message": "AssertionError: products overflow at 768",
+    "source": "tests/management-browser.mjs:61",
+    "route": "/admin/products",
+    "viewport": 768
+  },
+  "not_run": [
+    "Fixed PDF and barcode evidence"
+  ],
+  "production_writes": false
+}

@@ -1,0 +1,86 @@
+{
+  "commit": "fef4d76fb77588aee7dcc13d29561fbc3a0e73e2",
+  "os": "Ubuntu 24.04 disposable GitHub-hosted VM",
+  "checks": [
+    {
+      "name": "Wizard authorization/origin checks and admin gate before DNS/HTTPS",
+      "status": "PASS"
+    },
+    {
+      "name": "Wizard recovers across DNS/build/bootstrap interruption and permanently revokes setup",
+      "status": "PASS"
+    },
+    {
+      "name": "Git clone and browser install.sh wizard completed on Ubuntu 24.04",
+      "status": "PASS"
+    },
+    {
+      "name": "Root-only credentials and local maintenance timer",
+      "status": "PASS"
+    },
+    {
+      "name": "Empty catalog/customer/order/promotion/carrier/media state and least-privilege runtime role",
+      "status": "PASS"
+    },
+    {
+      "name": "Application outbound internet blocked before storefront/admin/product tests",
+      "status": "PASS"
+    },
+    {
+      "name": "Brand header, metadata, empty storefront and public products API",
+      "status": "PASS"
+    },
+    {
+      "name": "Administrator created by installer can log in through dashboard UI",
+      "status": "PASS"
+    },
+    {
+      "name": "Add product, upload photo, publish, inventory and public product/image routes",
+      "status": "PASS"
+    },
+    {
+      "name": "Draft name/logo updates admin immediately; public branding changes only after Publish",
+      "status": "PASS"
+    },
+    {
+      "name": "Anonymous admin reads and cross-origin writes are rejected",
+      "status": "PASS"
+    },
+    {
+      "name": "Database, administrator session, brand, product stock and photo survive service restart",
+      "status": "PASS"
+    },
+    {
+      "name": "No external browser dependency, source store branding or browser runtime errors",
+      "status": "PASS"
+    },
+    {
+      "name": "Offline J&T mapping review/stage/activation with synthetic CSV; no carrier credentials or calls",
+      "status": "PASS"
+    },
+    {
+      "name": "Shipping Manual rupiah validation, database persistence, activation gate and responsive admin UI",
+      "status": "PASS"
+    },
+    {
+      "name": "Manual checkout charges once per two-item order, ignores submitted price, preserves snapshot and safely replays",
+      "status": "PASS"
+    },
+    {
+      "name": "Authorized dashboard API validates, stages, activates and rolls back separate synthetic mapping versions",
+      "status": "PASS"
+    },
+    {
+      "name": "Bounded 12,000-row CSV and XLSX previews, peak app container memory, and readiness after import",
+      "status": "PASS"
+    },
+    {
+      "name": "Release digest, compatible additive update, backup and actual scratch restore preserve account/brand/products/media/config",
+      "status": "PASS"
+    },
+    {
+      "name": "Failed disposable release restores previous container/code and login, retaining compatible schema and all seller data",
+      "status": "PASS"
+    }
+  ]
+}

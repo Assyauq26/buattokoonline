@@ -58,8 +58,10 @@ try {
       await page.setViewportSize({ width, height: 900 });
       const response = await page.goto(origin + path); assert.equal(response.status(), 200, `${name} HTTP`); await page.waitForLoadState('networkidle');
       if(path!=='/login') assert.ok(!page.url().includes('/login'), `Session on ${path}`);
-      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false, `${name} overflow at ${width}`);
       await page.screenshot({ path: resolve(out, `${name}-${width}.png`), fullPage: true });
+      const overflows = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1);
+      if (overflows) writeFileSync(resolve(out, `${name}-${width}-overflow.json`), JSON.stringify(await page.evaluate(() => ({ viewport: innerWidth, document: document.documentElement.scrollWidth, elements: [...document.querySelectorAll('body *')].filter(e => getComputedStyle(e).display !== 'none' && e.getBoundingClientRect().right > innerWidth + 1).map(e => ({ tag: e.tagName, class: e.className, right: e.getBoundingClientRect().right, width: e.getBoundingClientRect().width, scroll: e.scrollWidth })).slice(-30) })), null, 2));
+      assert.equal(overflows, false, `${name} overflow at ${width}`);
       checks.push(`${name} ${width}: no overflow`);
     }
   }
@@ -80,22 +82,22 @@ try {
   await staffPage.getByRole('button', { name: 'Aksi Produk Demo 00 Nama Variasi Panjang' }).click(); await staffPage.getByRole('button', { name: 'Hapus produk', exact: true }).click();
   await staffPage.waitForTimeout(1000); assert.equal(await db.product.count({ where: { slug: `${run}-0` } }), 0); checks.push('Product delete through UI');
   await staffPage.goto(origin + '/admin/bank-accounts');
-  await staffPage.getByLabel('Nama Bank', { exact: true }).fill('BCA'); await staffPage.getByLabel('Nomor Rekening', { exact: true }).fill('0012345678'); await staffPage.getByLabel('Nama Pemilik', { exact: true }).fill('Pemilik Demo'); await staffPage.getByLabel('Nama Tampilan', { exact: true }).fill('Rekening Browser ' + run);
-  await staffPage.getByRole('button', { name: 'Simpan Rekening' }).click(); await staffPage.getByText('Rekening ditambahkan.', { exact: true }).waitFor(); checks.push('Bank create through UI');
+  await staffPage.getByLabel('Bank', { exact: true }).fill('BCA'); await staffPage.getByLabel('Nomor rekening', { exact: true }).fill('0012345678'); await staffPage.getByLabel('Nama pemilik rekening', { exact: true }).fill('Pemilik Demo'); await staffPage.getByLabel('Nama tampilan', { exact: true }).fill('Rekening Browser ' + run);
+  await staffPage.getByRole('button', { name: 'Simpan rekening' }).click(); await staffPage.getByRole('status').filter({ hasText: 'Rekening ditambahkan.' }).waitFor(); checks.push('Bank create through UI');
   await staffPage.waitForLoadState('networkidle');
   const bankCard = () => staffPage.locator('article').filter({ hasText: 'Rekening Browser ' + run });
-  await bankCard().getByRole('button', { name: 'Edit', exact: true }).click();
-  await staffPage.getByLabel('Nomor Rekening', { exact: true }).fill('0098765432');
-  await staffPage.getByRole('button', { name: 'Simpan Rekening' }).click();
-  await bankCard().getByText('BCA · 0098765432', { exact: true }).waitFor();
+  await bankCard().getByRole('button', { name: 'Ubah', exact: true }).click();
+  await staffPage.getByLabel('Nomor rekening', { exact: true }).fill('0098765432');
+  await staffPage.getByRole('button', { name: 'Simpan rekening' }).click();
+  await bankCard().getByText('\u2022\u2022\u2022\u2022 5432 \u00b7 Pemilik Demo', { exact: true }).waitFor();
   await bankCard().getByRole('button', { name: 'Nonaktifkan', exact: true }).click();
   await bankCard().getByRole('button', { name: 'Aktifkan', exact: true }).waitFor();
   await bankCard().getByRole('button', { name: 'Hapus', exact: true }).click();
   await bankCard().waitFor({ state: 'detached' }); checks.push('Bank edit / disable / delete through UI');
-  await accountPage.goto(origin + '/account/settings?section=profile'); await accountPage.getByLabel('Nama', { exact: true }).fill('Profil Browser Diperbarui'); await accountPage.getByRole('button', { name: 'Simpan Profil' }).click(); await accountPage.getByText('Profil berhasil diperbarui.', { exact: true }).waitFor();
+  await accountPage.goto(origin + '/account/settings?section=profile'); await accountPage.getByLabel('Nama', { exact: true }).fill('Profil Browser Diperbarui'); await accountPage.getByRole('button', { name: 'Simpan Profil' }).click(); await accountPage.getByRole('status').filter({ hasText: 'Profil berhasil diperbarui.' }).waitFor();
   assert.equal((await db.user.findUniqueOrThrow({ where: { id: customer.id } })).name, 'Profil Browser Diperbarui'); checks.push('Customer profile through UI');
   await accountPage.goto(origin + '/account/settings?section=addresses');
-  await accountPage.getByRole('button', { name: 'Jadikan Utama' }).first().click(); await accountPage.getByText('Alamat utama diperbarui.', { exact: true }).waitFor(); checks.push('Customer default address through UI');
+  await accountPage.getByRole('button', { name: 'Jadikan Utama' }).first().click(); await accountPage.getByRole('status').filter({ hasText: 'Alamat utama diperbarui.' }).waitFor(); checks.push('Customer default address through UI');
   writeFileSync(resolve(out, 'results.json'), JSON.stringify({ passed: checks, productionWrites: false }, null, 2));
   console.log(JSON.stringify({ passed: checks.length, evidence: out }));
 } finally {

@@ -1,0 +1,299 @@
+{
+  "app_environment": {
+    "STORE_BUILD_SHA": "c67fb49da284d51618524812d83974de70526657",
+    "STORE_INSTALLED_VERSION": "1.7.3",
+    "STORE_UPDATE_CHANNEL": "pilot"
+  },
+  "app_tree": "476df370f9fc9595d00040b3309ee51f883148cb",
+  "containers": [
+    {
+      "health": "healthy",
+      "image": "sha256:52ecc4f33d3c856191428d12bc21806c4df23321d73d49f209933bc183516356",
+      "running": true,
+      "service": "app"
+    },
+    {
+      "health": "healthy",
+      "image": "sha256:e8a07d2c7579b038938cdba6c539e580e5001caf9ea203d397b5cc83e76bd938",
+      "running": true,
+      "service": "db"
+    },
+    {
+      "health": null,
+      "image": "sha256:70b3180738b46cd88e49b300d790ae448a0aca3f58edef0f000bb57d619a9ab3",
+      "running": true,
+      "service": "proxy"
+    }
+  ],
+  "database": {
+    "active_campaigns": 1,
+    "campaigns": [
+      {
+        "count": 4,
+        "status": "SCHEDULED"
+      }
+    ],
+    "counts": {
+      "orderItems": 19,
+      "orders": 13,
+      "products": 11,
+      "variants": 41,
+      "vouchers": 0
+    },
+    "ledger": [
+      {
+        "checksum": "f6c17309e9a970b2479bece2546cece8a7a483d0c7fa748e662d479b0e1910b9",
+        "finished": true,
+        "migration_name": "20260922143925_init",
+        "rolled_back": false
+      },
+      {
+        "checksum": "e86e9a4d4ec18d6c60ebabceeaa9506a718de29059b1234a38dd2764c24a2e81",
+        "finished": true,
+        "migration_name": "20261015000000_add_refunded_payment_status",
+        "rolled_back": false
+      },
+      {
+        "checksum": "1f7ef91ea2b13c0bd6928602968c03c37b5bcc00cb7d351d679a0ff903c74265",
+        "finished": true,
+        "migration_name": "20261016112100_coupon_usage_limits",
+        "rolled_back": false
+      },
+      {
+        "checksum": "f205120c21d348d14f016ebdf793b9e6a93686ad5cba80227f3d66d3f632d40d",
+        "finished": true,
+        "migration_name": "20261016112200_coupon_redemption_concurrent_index",
+        "rolled_back": false
+      },
+      {
+        "checksum": "e0598e543c8fed33e5ee69f085f8d6a22230ebe288b72d6ab9d53293cb9abb39",
+        "finished": true,
+        "migration_name": "20261016140500_product_scheduled_flash_sale",
+        "rolled_back": false
+      },
+      {
+        "checksum": "35d593d27d0e0cd708d6c9353b61343e46481b9e7795656165297efbc16d88d1",
+        "finished": true,
+        "migration_name": "20261017000000_auth_session_controls",
+        "rolled_back": false
+      },
+      {
+        "checksum": "eec85ff983628830923da3c7b0760bfc20378bdcf9cb7376dd6b1cca539eb84e",
+        "finished": true,
+        "migration_name": "20261018150000_registration_email_otp",
+        "rolled_back": false
+      },
+      {
+        "checksum": "369372134dd10fca58dc04e5afb4b4bcec347c948524f239918f1663e8fa3d0b",
+        "finished": true,
+        "migration_name": "20261019054922_registration_identity_lookup_indexes",
+        "rolled_back": false
+      },
+      {
+        "checksum": "6ed1b88123dfc3194eef5accfeda58731f2380a0f89d542943eb2b211152872b",
+        "finished": true,
+        "migration_name": "20261020070000_custom_product_variations",
+        "rolled_back": false
+      },
+      {
+        "checksum": "96c9e45d13d8379c67bfdd87f3971664e3dcd43d19b6e430f60f7899186f55f0",
+        "finished": true,
+        "migration_name": "20261020120000_direct_checkout_intents",
+        "rolled_back": false
+      },
+      {
+        "checksum": "63eefd28491f47b5ed269539d88b52b985f47aac4b620e6600f1607f06414198",
+        "finished": true,
+        "migration_name": "20261021093000_product_editor_staged_media_shipping",
+        "rolled_back": false
+      },
+      {
+        "checksum": "7d0c5b56d9d52183516e2261051942e5a53d8e72ecd14f62e769321191fb6b95",
+        "finished": true,
+        "migration_name": "20261024140000_product_size_chart",
+        "rolled_back": false
+      },
+      {
+        "checksum": "6e421d8c3a4964d7cdf1b16b409291486ca4b15d4f4540866fe67206b7f975ec",
+        "finished": true,
+        "migration_name": "20261024150000_storefront_customize",
+        "rolled_back": false
+      },
+      {
+        "checksum": "bb639a13e6ae136892b4848539cb9df3a7457918a294cbae366d741c7d82ff70",
+        "finished": true,
+        "migration_name": "20261026110000_storefront_hero_cms",
+        "rolled_back": false
+      },
+      {
+        "checksum": "8d0f773434a939face20edf11f8ba4fe451aeac224f437bfe56b6c4ada6fe701",
+        "finished": true,
+        "migration_name": "20261027090000_verified_purchase_reviews",
+        "rolled_back": false
+      },
+      {
+        "checksum": "b4b3b29373bec307d683f20bfffdcdea67f7993938c719a8820b67bab5f58a42",
+        "finished": true,
+        "migration_name": "20261029090000_flash_sale_campaign",
+        "rolled_back": false
+      },
+      {
+        "checksum": "31cd6d21d504a2f0c45cfb31a3786cef70302ff758ef41f2b368fc117abb7236",
+        "finished": true,
+        "migration_name": "20261030090000_checkout_indonesia_regions_jnt",
+        "rolled_back": false
+      },
+      {
+        "checksum": "5e73cb281f53495df5d03cfeab1c6413d5f66d590f26060971eaa5c617b22d36",
+        "finished": true,
+        "migration_name": "20261031110000_jnt_platform_integration",
+        "rolled_back": false
+      },
+      {
+        "checksum": "1cf13a29475fb7e168982b4c5402f04a5246ce5ed6e254e576e99b3f705364f9",
+        "finished": true,
+        "migration_name": "20261031123000_jnt_l3_and_awb_ledger",
+        "rolled_back": false
+      },
+      {
+        "checksum": "4e0da4c8ce33d4dcffb3ca1a51c776c3a3551ddeb257519beb33120cc26e631e",
+        "finished": true,
+        "migration_name": "20261105100000_shipping_settings",
+        "rolled_back": false
+      },
+      {
+        "checksum": "f7dfd5b3c1f184a8679492a0d669aa0e333d35774fa2a3d3321d0c9a0ad118e9",
+        "finished": true,
+        "migration_name": "20261109090000_bank_account_lifecycle",
+        "rolled_back": false
+      },
+      {
+        "checksum": "75bfc0218a15687dcf0eba58a91ae398e0052afad1585a3811c5023d43fdd32c",
+        "finished": true,
+        "migration_name": "20261109100000_jnt_cancel_attempt_history",
+        "rolled_back": false
+      },
+      {
+        "checksum": "6066ba85e111dd327b8aceff91ee7d699b19fd2939e5be0327e03b7dcb84feab",
+        "finished": true,
+        "migration_name": "20261109110000_customer_account_management",
+        "rolled_back": false
+      },
+      {
+        "checksum": "789ef757b2cb2fb6f6d38f710c6a50cfcb371d9b61e18e4154120930e02107ac",
+        "finished": true,
+        "migration_name": "20261109120000_order_resolution_workflow",
+        "rolled_back": false
+      },
+      {
+        "checksum": "d67b0094191575be2f28c7968e41eabad5bf9a9ab84676d8c66b7e7c01313483",
+        "finished": true,
+        "migration_name": "20261109121500_resolution_transfer_review",
+        "rolled_back": false
+      },
+      {
+        "checksum": "0f9721527be4701fa0ea525869481799c6502f4f01cf317711a52b47fd122d67",
+        "finished": true,
+        "migration_name": "20261110100000_seller_contact_phone",
+        "rolled_back": false
+      },
+      {
+        "checksum": "00179fffef2de9a42a353f8bb1ec41e03efe8868e78df26280af94d7413683cb",
+        "finished": true,
+        "migration_name": "20261110160000_whatsapp_pilot",
+        "rolled_back": false
+      },
+      {
+        "checksum": "95c1e5b3465f9f74001c00e1091f68b4c4f7d2ee099b096c4ae877f49dc73041",
+        "finished": true,
+        "migration_name": "20261111000000_whatsapp_seller_scope",
+        "rolled_back": false
+      },
+      {
+        "checksum": "516c60442f7809bf3bd30cd735c857060c22f19ae4423bcbd1931a7348b7c7f6",
+        "finished": true,
+        "migration_name": "20261111090000_store_mail_brand_sync",
+        "rolled_back": false
+      }
+    ],
+    "reserved_stock": 1
+  },
+  "helpers": {
+    "/opt/single-store/manager/historical_migrations.py": "e778769ac005115e02a7b7b5b7fb33fc4238a4448644c5d6065626cf66f791bb",
+    "/usr/local/sbin/hubify-staging-deploy": "7fced6deefaee441cf110d312435479f3bd5c856369845edad79863b383dc5ea"
+  },
+  "observed_at": "2026-11-12T11:44:25.426739+00:00",
+  "source": "/opt/single-store/staging-sources/main-c67fb49da284-8niubfqc",
+  "source_commit": "c67fb49da284d51618524812d83974de70526657",
+  "source_inventory": {
+    "20260922143925_init": "f6c17309e9a970b2479bece2546cece8a7a483d0c7fa748e662d479b0e1910b9",
+    "20261015000000_add_refunded_payment_status": "e86e9a4d4ec18d6c60ebabceeaa9506a718de29059b1234a38dd2764c24a2e81",
+    "20261016112100_coupon_usage_limits": "1f7ef91ea2b13c0bd6928602968c03c37b5bcc00cb7d351d679a0ff903c74265",
+    "20261016112200_coupon_redemption_concurrent_index": "f205120c21d348d14f016ebdf793b9e6a93686ad5cba80227f3d66d3f632d40d",
+    "20261016140500_product_scheduled_flash_sale": "e0598e543c8fed33e5ee69f085f8d6a22230ebe288b72d6ab9d53293cb9abb39",
+    "20261017000000_auth_session_controls": "35d593d27d0e0cd708d6c9353b61343e46481b9e7795656165297efbc16d88d1",
+    "20261018150000_registration_email_otp": "eec85ff983628830923da3c7b0760bfc20378bdcf9cb7376dd6b1cca539eb84e",
+    "20261019054922_registration_identity_lookup_indexes": "369372134dd10fca58dc04e5afb4b4bcec347c948524f239918f1663e8fa3d0b",
+    "20261020070000_custom_product_variations": "6ed1b88123dfc3194eef5accfeda58731f2380a0f89d542943eb2b211152872b",
+    "20261020120000_direct_checkout_intents": "96c9e45d13d8379c67bfdd87f3971664e3dcd43d19b6e430f60f7899186f55f0",
+    "20261021093000_product_editor_staged_media_shipping": "63eefd28491f47b5ed269539d88b52b985f47aac4b620e6600f1607f06414198",
+    "20261024140000_product_size_chart": "7d0c5b56d9d52183516e2261051942e5a53d8e72ecd14f62e769321191fb6b95",
+    "20261024150000_storefront_customize": "6e421d8c3a4964d7cdf1b16b409291486ca4b15d4f4540866fe67206b7f975ec",
+    "20261026110000_storefront_hero_cms": "bb639a13e6ae136892b4848539cb9df3a7457918a294cbae366d741c7d82ff70",
+    "20261027090000_verified_purchase_reviews": "8d0f773434a939face20edf11f8ba4fe451aeac224f437bfe56b6c4ada6fe701",
+    "20261029090000_flash_sale_campaign": "b4b3b29373bec307d683f20bfffdcdea67f7993938c719a8820b67bab5f58a42",
+    "20261030090000_checkout_indonesia_regions_jnt": "31cd6d21d504a2f0c45cfb31a3786cef70302ff758ef41f2b368fc117abb7236",
+    "20261031110000_jnt_platform_integration": "5e73cb281f53495df5d03cfeab1c6413d5f66d590f26060971eaa5c617b22d36",
+    "20261031123000_jnt_l3_and_awb_ledger": "1cf13a29475fb7e168982b4c5402f04a5246ce5ed6e254e576e99b3f705364f9",
+    "20261105100000_shipping_settings": "4e0da4c8ce33d4dcffb3ca1a51c776c3a3551ddeb257519beb33120cc26e631e",
+    "20261109090000_bank_account_lifecycle": "f7dfd5b3c1f184a8679492a0d669aa0e333d35774fa2a3d3321d0c9a0ad118e9",
+    "20261109100000_jnt_cancel_attempt_history": "75bfc0218a15687dcf0eba58a91ae398e0052afad1585a3811c5023d43fdd32c",
+    "20261109110000_customer_account_management": "6066ba85e111dd327b8aceff91ee7d699b19fd2939e5be0327e03b7dcb84feab",
+    "20261109120000_order_resolution_workflow": "789ef757b2cb2fb6f6d38f710c6a50cfcb371d9b61e18e4154120930e02107ac",
+    "20261109121500_resolution_transfer_review": "d67b0094191575be2f28c7968e41eabad5bf9a9ab84676d8c66b7e7c01313483",
+    "20261110100000_seller_contact_phone": "0f9721527be4701fa0ea525869481799c6502f4f01cf317711a52b47fd122d67",
+    "20261110160000_whatsapp_pilot": "00179fffef2de9a42a353f8bb1ec41e03efe8868e78df26280af94d7413683cb",
+    "20261111000000_whatsapp_seller_scope": "95c1e5b3465f9f74001c00e1091f68b4c4f7d2ee099b096c4ae877f49dc73041",
+    "20261111090000_store_mail_brand_sync": "516c60442f7809bf3bd30cd735c857060c22f19ae4423bcbd1931a7348b7c7f6"
+  },
+  "source_version": "1.7.3",
+  "timer": "active",
+  "version": {
+    "candidate_version": "1.7.3",
+    "channel": "hubify-staging",
+    "db_contract": 1,
+    "migrations": {
+      "20260922143925_init": "f6c17309e9a970b2479bece2546cece8a7a483d0c7fa748e662d479b0e1910b9",
+      "20261015000000_add_refunded_payment_status": "e86e9a4d4ec18d6c60ebabceeaa9506a718de29059b1234a38dd2764c24a2e81",
+      "20261016112100_coupon_usage_limits": "1f7ef91ea2b13c0bd6928602968c03c37b5bcc00cb7d351d679a0ff903c74265",
+      "20261016112200_coupon_redemption_concurrent_index": "f205120c21d348d14f016ebdf793b9e6a93686ad5cba80227f3d66d3f632d40d",
+      "20261016140500_product_scheduled_flash_sale": "e0598e543c8fed33e5ee69f085f8d6a22230ebe288b72d6ab9d53293cb9abb39",
+      "20261017000000_auth_session_controls": "35d593d27d0e0cd708d6c9353b61343e46481b9e7795656165297efbc16d88d1",
+      "20261018150000_registration_email_otp": "eec85ff983628830923da3c7b0760bfc20378bdcf9cb7376dd6b1cca539eb84e",
+      "20261019054922_registration_identity_lookup_indexes": "369372134dd10fca58dc04e5afb4b4bcec347c948524f239918f1663e8fa3d0b",
+      "20261020070000_custom_product_variations": "6ed1b88123dfc3194eef5accfeda58731f2380a0f89d542943eb2b211152872b",
+      "20261020120000_direct_checkout_intents": "96c9e45d13d8379c67bfdd87f3971664e3dcd43d19b6e430f60f7899186f55f0",
+      "20261021093000_product_editor_staged_media_shipping": "63eefd28491f47b5ed269539d88b52b985f47aac4b620e6600f1607f06414198",
+      "20261024140000_product_size_chart": "7d0c5b56d9d52183516e2261051942e5a53d8e72ecd14f62e769321191fb6b95",
+      "20261024150000_storefront_customize": "6e421d8c3a4964d7cdf1b16b409291486ca4b15d4f4540866fe67206b7f975ec",
+      "20261026110000_storefront_hero_cms": "bb639a13e6ae136892b4848539cb9df3a7457918a294cbae366d741c7d82ff70",
+      "20261027090000_verified_purchase_reviews": "8d0f773434a939face20edf11f8ba4fe451aeac224f437bfe56b6c4ada6fe701",
+      "20261029090000_flash_sale_campaign": "b4b3b29373bec307d683f20bfffdcdea67f7993938c719a8820b67bab5f58a42",
+      "20261030090000_checkout_indonesia_regions_jnt": "31cd6d21d504a2f0c45cfb31a3786cef70302ff758ef41f2b368fc117abb7236",
+      "20261031110000_jnt_platform_integration": "5e73cb281f53495df5d03cfeab1c6413d5f66d590f26060971eaa5c617b22d36",
+      "20261031123000_jnt_l3_and_awb_ledger": "1cf13a29475fb7e168982b4c5402f04a5246ce5ed6e254e576e99b3f705364f9",
+      "20261105100000_shipping_settings": "4e0da4c8ce33d4dcffb3ca1a51c776c3a3551ddeb257519beb33120cc26e631e",
+      "20261109090000_bank_account_lifecycle": "f7dfd5b3c1f184a8679492a0d669aa0e333d35774fa2a3d3321d0c9a0ad118e9",
+      "20261109100000_jnt_cancel_attempt_history": "75bfc0218a15687dcf0eba58a91ae398e0052afad1585a3811c5023d43fdd32c",
+      "20261109110000_customer_account_management": "6066ba85e111dd327b8aceff91ee7d699b19fd2939e5be0327e03b7dcb84feab",
+      "20261109120000_order_resolution_workflow": "789ef757b2cb2fb6f6d38f710c6a50cfcb371d9b61e18e4154120930e02107ac",
+      "20261109121500_resolution_transfer_review": "d67b0094191575be2f28c7968e41eabad5bf9a9ab84676d8c66b7e7c01313483",
+      "20261110100000_seller_contact_phone": "0f9721527be4701fa0ea525869481799c6502f4f01cf317711a52b47fd122d67",
+      "20261110160000_whatsapp_pilot": "00179fffef2de9a42a353f8bb1ec41e03efe8868e78df26280af94d7413683cb",
+      "20261111000000_whatsapp_seller_scope": "95c1e5b3465f9f74001c00e1091f68b4c4f7d2ee099b096c4ae877f49dc73041",
+      "20261111090000_store_mail_brand_sync": "516c60442f7809bf3bd30cd735c857060c22f19ae4423bcbd1931a7348b7c7f6"
+    },
+    "source_sha": "c67fb49da284d51618524812d83974de70526657",
+    "version": "1.7.3"
+  }
+}

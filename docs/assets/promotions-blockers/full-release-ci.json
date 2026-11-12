@@ -1,0 +1,40 @@
+{
+  "run_id": 43223791335,
+  "url": "https://github.com/Assyauq26/buattokoonline/actions/runs/43223791335",
+  "head_sha": "fef4d76fb77588aee7dcc13d29561fbc3a0e73e2",
+  "application_tree": "7b8ddfe64c35c981da0aed5804135ea719e2f714",
+  "conclusion": "success",
+  "jobs": {
+    "mail": "PASS",
+    "install_runner": "PASS",
+    "install_vm2gb": "PASS",
+    "candidate": "PASS"
+  },
+  "installer_scenarios_each": 20,
+  "unit_tests_each": 643,
+  "python_tests": {
+    "passed": 92,
+    "skipped": 6,
+    "skip_reason": "Pinned archive integration tests run separately in management CI (13 checks no skip)"
+  },
+  "vm2gb_resource_file": "resources-2gb.json",
+  "artifacts": [
+    {
+      "id": 13947542051,
+      "name": "ubuntu-installation-evidence-runner",
+      "digest": "sha256:62a7872ef5bc95f23b2d9dae590e2179c897c0351d63be4aedb3d5f331946c74"
+    },
+    {
+      "id": 13946684263,
+      "name": "ubuntu-installation-evidence-vm2gb",
+      "digest": "sha256:53851fcfcec0fe9c50bea51e98fb344f1a70778fc0c7073d99ec56ed551d3a1e"
+    },
+    {
+      "id": 13947912064,
+      "name": "mail-release-candidate-fef4d76fb77588aee7dcc13d29561fbc3a0e73e2",
+      "digest": "sha256:4393ee969035ecdf0ebdc74a8a3359dfd0bdfffb48df30503a0b3f3c1bc0d075"
+    }
+  ],
+  "production_touched": false,
+  "actual_hubify_cutover_exercised": false
+}

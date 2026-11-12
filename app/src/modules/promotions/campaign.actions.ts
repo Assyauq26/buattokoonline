@@ -4,6 +4,7 @@ import { PERMISSIONS } from "@/lib/auth/permissions";
 import { runAction } from "@/lib/action";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { CATALOG_CACHE_TAG } from "@/modules/catalog/catalog-cache";
+import { saveCampaignDraft, deleteCampaignDraft } from "./campaign-draft";
 import {
   saveCampaign,
   endCampaign,
@@ -23,6 +24,27 @@ function invalidate() {
   ])
     revalidatePath(path);
   revalidatePath("/product/[slug]", "page");
+}
+export async function saveCampaignDraftAction(value: unknown) {
+  return runAction(async () => {
+    const updating = Boolean(
+      value && typeof value === "object" && "id" in value && value.id,
+    );
+    const actor = await requirePermission(
+      updating ? PERMISSIONS.PROMOTION_UPDATE : PERMISSIONS.PROMOTION_CREATE,
+    );
+    const row = await saveCampaignDraft(actor, value);
+    invalidate();
+    return row;
+  });
+}
+export async function deleteCampaignDraftAction(id: string, version: number) {
+  return runAction(async () => {
+    const actor = await requirePermission(PERMISSIONS.PROMOTION_UPDATE);
+    const row = await deleteCampaignDraft(actor, id, version);
+    invalidate();
+    return row;
+  });
 }
 export async function saveCampaignAction(value: unknown) {
   return runAction(async () => {
@@ -57,6 +79,7 @@ export async function campaignProductsAction(query: {
   search?: string;
   categoryId?: string;
   page?: number;
+  ids?: string[];
 }) {
   return runAction(async () => {
     const actor = await requirePermission(PERMISSIONS.PRODUCT_READ);

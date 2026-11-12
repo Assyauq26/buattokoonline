@@ -2,6 +2,7 @@ import { z } from "zod";
 export const campaignInputSchema = z
   .object({
     id: z.string().uuid().nullable(),
+    requestId: z.string().uuid().optional(),
     expectedVersion: z.number().int().min(0),
     name: z.string().trim().min(2).max(120),
     status: z.enum(["DRAFT", "SCHEDULED"]),
@@ -14,6 +15,19 @@ export const campaignInputSchema = z
           .object({
             productId: z.string().min(1).max(64),
             flashSalePrice: z.number().int().positive().max(2147483647),
+            skuOffers: z
+              .array(
+                z
+                  .object({
+                    variantId: z.string().min(1).max(64),
+                    price: z.number().int().positive().max(2147483647),
+                    quota: z.number().int().positive().max(2147483647),
+                  })
+                  .strict(),
+              )
+              .min(1)
+              .max(500)
+              .optional(),
           })
           .strict(),
       )
@@ -34,6 +48,17 @@ export const campaignInputSchema = z
         path: ["items"],
         message: "Produk peserta tidak boleh duplikat.",
       });
+    for (const item of v.items)
+      if (
+        item.skuOffers &&
+        new Set(item.skuOffers.map((o) => o.variantId)).size !==
+          item.skuOffers.length
+      )
+        ctx.addIssue({
+          code: "custom",
+          path: ["items"],
+          message: "SKU peserta tidak boleh duplikat.",
+        });
     if (v.resolveLegacy && v.status !== "SCHEDULED")
       ctx.addIssue({
         code: "custom",
@@ -46,6 +71,7 @@ export const campaignProductQuerySchema = z
     search: z.string().trim().max(160).optional(),
     categoryId: z.string().min(1).max(64).optional(),
     page: z.number().int().min(1).max(100000).default(1),
+    ids: z.array(z.string().min(1).max(64)).max(200).optional(),
   })
   .strict();
 export type CampaignClock = {

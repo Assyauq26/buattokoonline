@@ -1,0 +1,10 @@
+{
+  "equivalent": true,
+  "sha256": "7bf82245b86cd80c7a1d38aa374538210ff19df871548da773549785de448ef1",
+  "columns": 601,
+  "constraints": 219,
+  "indexes": 182,
+  "tables": 80,
+  "comparison": "production read-only catalog vs fresh pinned v1.7.4/29-migration PostgreSQL16 database",
+  "productionWrites": false
+}

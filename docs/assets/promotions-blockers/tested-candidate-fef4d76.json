@@ -1,0 +1,18 @@
+{
+  "candidate": true,
+  "published": false,
+  "version": "1.8.0",
+  "source_sha": "fef4d76fb77588aee7dcc13d29561fbc3a0e73e2",
+  "application_tree": "7b8ddfe64c35c981da0aed5804135ea719e2f714",
+  "archive": "store-v1.8.0-candidate-fef4d76.tar.gz",
+  "archive_sha256": "cba6baeebbaf9c1176e0ee9dac1d8fa49aa7a2e5100c8e7dffbd8228377c2fa2",
+  "archive_bytes": 4378065,
+  "manifest_file_count": 823,
+  "migration_count": 30,
+  "new_migration_sha256": "0b43da5d78a6c9211c4fef32bf8d5a813e2e335992035f8923db64f50a35b2f7",
+  "canonical_git_bytes_match": true,
+  "automatic_updater": "rejected before extraction",
+  "rejection": "Kontrak database/rollback tidak kompatibel. Tindakan operator diperlukan.",
+  "scoped_ui_fix": "product filters and rows use compact layout below 1024px; promotion UI implementation preserved",
+  "production_deployed": false
+}

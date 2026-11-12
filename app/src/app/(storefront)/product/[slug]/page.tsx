@@ -35,15 +35,14 @@ import { wishlistProductIds } from "@/modules/wishlist/wishlist.service";
 
 import { purchaseGroups } from "@/modules/catalog/purchase-options";
 
-import { effectivePrice } from "@/lib/money";
-
 import {
   ProductSelectionProvider,
   ProductSelectionPrice,
 } from "@/components/storefront/product-selection";
 
 import {
-  activeScheduledFlashPrice,
+  effectiveVariantPrice,
+  variantPromotionAvailability,
   effectiveProductPrice,
 } from "@/modules/promotions/scheduled-flash-sale";
 
@@ -126,8 +125,6 @@ export default async function ProductPage({ params }: ProductRouteProps) {
 
   const price = effectiveProductPrice(product);
 
-  const campaignPrice = activeScheduledFlashPrice(product);
-
   const variantOptions = product.variants.map((v) => ({
     id: v.id,
 
@@ -135,9 +132,7 @@ export default async function ProductPage({ params }: ProductRouteProps) {
 
     optionValueIds: v.optionValues.map((s) => s.valueId),
 
-    price:
-      campaignPrice ??
-      (v.price != null ? effectivePrice(v.price, v.salePrice) : price),
+    price:effectiveVariantPrice(product,v),
 
     originalPrice: v.price ?? product.basePrice,
 
@@ -145,7 +140,7 @@ export default async function ProductPage({ params }: ProductRouteProps) {
 
     size: v.size,
 
-    available: v.inventory ? v.inventory.onHand - v.inventory.reserved : 0,
+    available:variantPromotionAvailability(product,v.id,v.inventory?v.inventory.onHand-v.inventory.reserved:0),
   }));
 
   const purchase = {

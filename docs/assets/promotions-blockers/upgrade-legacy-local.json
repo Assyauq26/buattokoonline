@@ -1,0 +1,127 @@
+{
+  "ok": true,
+  "baseline": "actual-v1.7.3-c67-equivalent-v1.7.4-legacy-ledger",
+  "legacyLedger": true,
+  "prismaVersion": "5.22.0",
+  "baselineArtifactSha256": "0a286296c0c85e5e320f85043e85dede0213e013dae129351a374df35f586b4e",
+  "newMigration": "20261112050000_promotion_sku_offers",
+  "newMigrationSha256": "0b43da5d78a6c9211c4fef32bf8d5a813e2e335992035f8923db64f50a35b2f7",
+  "beforeMigrations": 29,
+  "afterMigrations": 30,
+  "elapsedMs": 2246,
+  "lockElapsedMs": 5290,
+  "lockFailure": "Prisma schema loaded from app\\prisma\\schema.prisma\nDatasource \"db\": PostgreSQL database \"hubify_promotions_lock_b13473a4\", schema \"public\" at \"127.0.0.1:5557\"\n\n30 migrations found in prisma/migrations\n\nApplying migration `20261112050000_promotion_sku_offers`\nError: ERROR: current transaction is aborted, commands ignored until end of transaction block",
+  "unchangedTables": [
+    "Product",
+    "ProductVariant",
+    "Inventory",
+    "FlashSaleCampaign",
+    "FlashSaleCampaignItem",
+    "FlashSaleControl",
+    "Coupon",
+    "Order",
+    "OrderItem"
+  ],
+  "existingSnapshots": 4,
+  "legacyCampaigns": 5,
+  "checks": [
+    "upgrade preserves all existing rows and 29 ledger records",
+    "new nullable fields are null; no automatic SKU activation or backfill",
+    "positive checks, unique index, FK and RLS retained",
+    "representative pending/paid/cancelled/expired snapshots preserved",
+    "custom-format backup restored into separate local database",
+    "store product IDs absent in independent database",
+    "lock timeout rolls back entire migration; failed Prisma record is retained"
+  ],
+  "columns": [
+    {
+      "table_name": "FlashSaleCampaign",
+      "column_name": "draft",
+      "is_nullable": "YES",
+      "column_default": null,
+      "data_type": "jsonb"
+    },
+    {
+      "table_name": "OrderItem",
+      "column_name": "flashOfferId",
+      "is_nullable": "YES",
+      "column_default": null,
+      "data_type": "uuid"
+    }
+  ],
+  "constraints": [
+    {
+      "conname": "FlashSaleSkuOffer_itemId_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (\"itemId\") REFERENCES \"FlashSaleCampaignItem\"(id) ON DELETE CASCADE"
+    },
+    {
+      "conname": "FlashSaleSkuOffer_pkey",
+      "contype": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "conname": "FlashSaleSkuOffer_price_check",
+      "contype": "c",
+      "definition": "CHECK ((price > 0))"
+    },
+    {
+      "conname": "FlashSaleSkuOffer_quota_check",
+      "contype": "c",
+      "definition": "CHECK ((quota > 0))"
+    },
+    {
+      "conname": "FlashSaleSkuOffer_variantId_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (\"variantId\") REFERENCES \"ProductVariant\"(id) ON DELETE RESTRICT"
+    },
+    {
+      "conname": "OrderItem_flashOfferId_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (\"flashOfferId\") REFERENCES \"FlashSaleSkuOffer\"(id) ON DELETE RESTRICT"
+    },
+    {
+      "conname": "OrderItem_orderId_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (\"orderId\") REFERENCES \"Order\"(id) ON UPDATE CASCADE ON DELETE CASCADE"
+    },
+    {
+      "conname": "OrderItem_pkey",
+      "contype": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "conname": "OrderItem_variantId_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (\"variantId\") REFERENCES \"ProductVariant\"(id) ON UPDATE CASCADE ON DELETE RESTRICT"
+    }
+  ],
+  "indexes": [
+    {
+      "indexname": "FlashSaleSkuOffer_itemId_variantId_key",
+      "indexdef": "CREATE UNIQUE INDEX \"FlashSaleSkuOffer_itemId_variantId_key\" ON public.\"FlashSaleSkuOffer\" USING btree (\"itemId\", \"variantId\")"
+    },
+    {
+      "indexname": "FlashSaleSkuOffer_pkey",
+      "indexdef": "CREATE UNIQUE INDEX \"FlashSaleSkuOffer_pkey\" ON public.\"FlashSaleSkuOffer\" USING btree (id)"
+    },
+    {
+      "indexname": "FlashSaleSkuOffer_variantId_idx",
+      "indexdef": "CREATE INDEX \"FlashSaleSkuOffer_variantId_idx\" ON public.\"FlashSaleSkuOffer\" USING btree (\"variantId\")"
+    },
+    {
+      "indexname": "OrderItem_flashOfferId_idx",
+      "indexdef": "CREATE INDEX \"OrderItem_flashOfferId_idx\" ON public.\"OrderItem\" USING btree (\"flashOfferId\")"
+    },
+    {
+      "indexname": "OrderItem_orderId_idx",
+      "indexdef": "CREATE INDEX \"OrderItem_orderId_idx\" ON public.\"OrderItem\" USING btree (\"orderId\")"
+    },
+    {
+      "indexname": "OrderItem_pkey",
+      "indexdef": "CREATE UNIQUE INDEX \"OrderItem_pkey\" ON public.\"OrderItem\" USING btree (id)"
+    }
+  ],
+  "backupSha256": "d0702ab2d78dafdaf32b0b67967a1e46035d04bb24187e590ca5916ac3c3572c",
+  "productionTouched": false
+}
