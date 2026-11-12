@@ -13,7 +13,9 @@ import core
 fixture = Path('/tmp/store-release-fixture')
 subprocess.run(['git', 'clone', '--no-local', str(source), str(fixture)], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 major, minor, patch = map(int, (source / 'VERSION').read_text().strip().split('.'))
-for offset, name in [(1, '20261106000001_store_update_probe'), (2, '20261106000002_store_failure_probe')]:
+existing = core.inventory(source)
+for offset, name in [(1, '20990101000001_store_update_probe'), (2, '20990101000002_store_failure_probe')]:
+    assert name > max(existing, default=''), 'Disposable migration must follow the current inventory'
     version = f'{major}.{minor}.{patch + offset}'
     (fixture / 'VERSION').write_text(version + '\n')
     migration = fixture / 'app/prisma/migrations' / name
