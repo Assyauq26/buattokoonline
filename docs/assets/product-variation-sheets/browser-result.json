@@ -1,0 +1,21 @@
+{
+  "checks": [
+    "Urutan tab tepat, tab baru Foto Produk, seluruh aktif/garis hitam",
+    "Simple satu SKU internal, validasi pindah/fokus tab, reopen dan hash lama aman",
+    "Toggle hanya menampilkan empty state; SKU belum dapat dibuka; foto/nama bertahan antartab",
+    "Draft sheet belum masuk form; tutup memberi lanjut/buang tanpa opsi kosong",
+    "Foto inline satu dialog; pilih gallery langsung; upload gagal dapat retry tanpa hilang draft",
+    "Satu sampai tiga jenis, 3×3×1 kombinasi, tiap Edit hanya satu jenis; transfer foto inline dapat dibatalkan",
+    "SKU langsung: bulk semua/terpilih memakai indeks asli meski difilter; validasi diskon dan bulk belum diterapkan; hanya draft form",
+    "Tabel mobile 4 kolom, 7 viewport tanpa overflow, footer tinggi 500px dan reduced motion",
+    "Tutup sheet SKU mengembalikan nilai form sebelumnya; fokus kembali ke pemicu",
+    "Draft sheet pada produk tersimpan juga mengaktifkan guard keluar browser",
+    "Simpan/reopen/rename/reorder menjaga seluruh ID, kode, harga, stok dan foto opsi lama",
+    "SKU berstok tidak dapat dihapus; opsi baru mendapat stok 0; hapus opsi aman menjaga seluruh SKU lama",
+    "Edit harga legacy menjaga format lama, ID dan stok tanpa adopsi variasi tak disengaja",
+    "Tanpa gallery: pemilih inline empty, upload native; batal tidak menerapkan; hapus jenis terakhir dikonfirmasi dan mempertahankan SKU internal",
+    "Izin stok readonly dan fokus setelah sheet tetap berlaku",
+    "Guard keluar lintas tab tetap menjaga perubahan belum disimpan"
+  ],
+  "errors": []
+}
