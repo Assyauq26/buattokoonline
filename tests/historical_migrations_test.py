@@ -166,4 +166,62 @@ class HistoricalCompatibilityTests(unittest.TestCase):
   self.installed=self.ui_installed()
   with patch.object(core,'run',return_value='a'*40),self.assertRaises(core.StoreError):
    self.test_runtime_projection_is_confined_and_idempotent()
+ def sheets_installed(self):
+  return dict(self.ui_installed(),source_sha=h.V173_SHEETS_BASE_SHA)
+ def test_sheets_exact_transition_preserves_all_inputs_without_sql(self):
+  installed=self.sheets_installed();before=copy.deepcopy(installed)
+  with patch.object(core,'sql') as sql:
+   for name in h.PAIRS:
+    old,fresh=self.material(name);inputs=(old,fresh)
+    result=h.authorize(name,old,fresh,installed,self.context,ARCHIVE,
+                       source_app_tree=h.V173_SHEETS_APP_TREE)
+    self.assertEqual(result['transition'],'v1.7.3-ui-pr45')
+    self.assertEqual(result['installed_source'],h.V173_SHEETS_BASE_SHA)
+    self.assertEqual(result['application_tree'],h.V173_SHEETS_APP_TREE)
+    self.assertEqual((old,fresh),inputs)
+   sql.assert_not_called()
+  self.assertEqual(installed,before)
+ def test_sheets_rejects_cross_paired_and_unknown_source_or_destination(self):
+  name=next(iter(h.PAIRS));old,fresh=self.material(name)
+  for base,tree in [(h.V173_UI_BASE_SHA,h.V173_SHEETS_APP_TREE),
+                    (h.V173_SHEETS_BASE_SHA,h.V173_UI_APP_TREE),
+                    ('a'*40,h.V173_SHEETS_APP_TREE),
+                    (h.V173_SHEETS_BASE_SHA,None),
+                    (h.V173_SHEETS_BASE_SHA,'a'*40),
+                    (h.V173_SHEETS_BASE_SHA,h.V173_SHEETS_APP_TREE+'x')]:
+   with self.subTest(base=base,tree=tree),self.assertRaises(core.StoreError):
+    h.authorize(name,old,fresh,dict(self.sheets_installed(),source_sha=base),
+                self.context,ARCHIVE,source_app_tree=tree)
+ def test_sheets_rejects_metadata_context_history_and_byte_changes(self):
+  name=next(iter(h.PAIRS));old,fresh=self.material(name);installed=self.sheets_installed()
+  for key,value in [('version','1.7.4'),('channel','stable'),('candidate_version',None),
+                    ('db_contract',2),('migrations',{}),
+                    ('migrations',dict(installed['migrations'],unexpected='a'*64))]:
+   with self.subTest(key=key),self.assertRaises(core.StoreError):
+    h.authorize(name,old,fresh,dict(installed,**{key:value}),self.context,ARCHIVE,
+                source_app_tree=h.V173_SHEETS_APP_TREE)
+  for context in [dict(self.context,installation='a'*32),dict(self.context,origin='https://other.example')]:
+   with self.assertRaises(core.StoreError):
+    h.authorize(name,old,fresh,installed,context,ARCHIVE,source_app_tree=h.V173_SHEETS_APP_TREE)
+  for target in ['1.7.2','1.7.4']:
+   with self.assertRaises(core.StoreError):
+    h.authorize(name,old,fresh,installed,self.context,ARCHIVE,target,h.V173_SHEETS_APP_TREE)
+  for changed in [fresh+b' ',fresh.replace(b'ALTER',b'DROP',1),fresh+b'\nSELECT 1;']:
+   with self.assertRaises(core.StoreError):
+    h.authorize(name,old,changed,installed,self.context,ARCHIVE,source_app_tree=h.V173_SHEETS_APP_TREE)
+  with tempfile.TemporaryDirectory() as directory:
+   archive=Path(directory)/'changed.tar.gz';archive.write_bytes(ARCHIVE.read_bytes()+b'changed')
+   with self.assertRaises(core.StoreError):
+    h.authorize(name,old,fresh,installed,self.context,archive,source_app_tree=h.V173_SHEETS_APP_TREE)
+ def test_sheets_projection_uses_git_tree_without_ledger_writes(self):
+  self.installed=self.sheets_installed()
+  with patch.object(core,'run',return_value=h.V173_SHEETS_APP_TREE) as git,patch.object(core,'sql') as sql:
+   self.test_runtime_projection_is_confined_and_idempotent()
+   self.assertEqual(git.call_count,1)
+   self.assertEqual(git.call_args.args[0][-3:],['rev-parse','--verify','HEAD:app'])
+   sql.assert_not_called()
+ def test_sheets_projection_rejects_previous_ui_tree(self):
+  self.installed=self.sheets_installed()
+  with patch.object(core,'run',return_value=h.V173_UI_APP_TREE),self.assertRaises(core.StoreError):
+   self.test_runtime_projection_is_confined_and_idempotent()
 if __name__=='__main__':unittest.main()
