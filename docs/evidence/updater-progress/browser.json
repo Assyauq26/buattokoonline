@@ -1,0 +1,16 @@
+{
+  "ok": true,
+  "fixtureOnly": true,
+  "widths": [
+    390,
+    1440
+  ],
+  "stageCountNotTimePercentage": true,
+  "realDownloadRatio": true,
+  "busyStateConsistent": true,
+  "successEightOfEight": true,
+  "recoveryDoesNotClaimCompletion": true,
+  "reopenPreservesState": true,
+  "mutations": [],
+  "errors": []
+}
