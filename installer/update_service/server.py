@@ -34,9 +34,12 @@ class Controller:
     self.forward_ready={}
     installed=core.read_json(core.CONFIG/'version.json')
     for release in catalog['releases']:
-     if release['rollbackCompatible'] or version(release['version'])<=version(installed['version']):continue
+     if version(release['version'])<=version(installed['version']):continue
      if release['sha'] in catalog['revoked'] or (release['channel']=='pilot' and self.config['channel']!='pilot'):continue
      try:
+      if release['rollbackCompatible']:
+       if not version(release['minimumInstalledVersion'])<=version(installed['version'])<=version(release['maximumInstalledVersion']):continue
+       self.engine.inspect(release,installed);self.forward_ready[release['sha']]=None;continue
       from .policy_feed import authorized
       from .native_forward import NativeForward
       policy=authorized(release,installed,self.config,self.state,catalog)
@@ -54,11 +57,19 @@ class Controller:
    detail=json.loads(row['detail']);release=json.loads(row['release'])
    jobs.append({k:row[k] for k in ['id','state','created','updated']}|{'version':release['version'],'sha':release['sha'],'detail':{k:v for k,v in detail.items() if k in ['error','downloaded','total','activeVersion','finishedAt']}})
   discovery=availability(cat,installed,self.config['channel'],VERSION,bool(valid),getattr(self,'forward_ready',{}))
+  worker_state=None
+  worker_journal=core.CONFIG/'updater/worker-upgrade.json'
+  if worker_journal.exists():
+   phase=core.read_json(worker_journal).get('phase')
+   if phase not in ('complete','rolled_back'):
+    worker_state=phase;discovery={**discovery,'state':'blocked','reason':'worker_upgrade_in_progress'}
   # Do not offer a lower executable release while hiding a newer blocked one.
   offered=discovery['nextRelease'] if discovery['state']=='available' else None
   # Old dashboards must not mistake a blocked latest release for "current".
   compatibility_error='release_incompatible' if discovery['state']=='blocked' else None
-  return {'installation':self.config['installation'],'updaterVersion':VERSION,'installedVersion':installed['version'],'installedSha':installed['source_sha'],'checkedAt':self.last_check or None,'catalogError':self.catalog_error or compatibility_error,'release':offered,'availability':discovery,'jobs':jobs}
+  known=[] if not valid else [r for r in cat['releases'] if r['sha'] not in cat['revoked'] and (r['channel']=='stable' or self.config['channel']=='pilot')]
+  latest=max(known,key=lambda r:version(r['version'])) if known else None
+  return {'installation':self.config['installation'],'updaterVersion':VERSION,'workerUpgradeState':worker_state,'installedVersion':installed['version'],'installedSha':installed['source_sha'],'checkedAt':self.last_check or None,'catalogError':self.catalog_error or compatibility_error,'release':offered,'availability':discovery,'catalogLatest':None if not latest else {'version':latest['version']},'jobs':jobs}
  def command(self,body):
   if not isinstance(body,dict) or set(body)-{'action','installation','actor','sessionVersion','sessionHash','sessionExpires','sha','requestKey'}:raise Rejected('invalid_body')
   if body.get('installation')!=self.config['installation']:raise Rejected('installation_mismatch')
@@ -104,13 +115,26 @@ class Handler(BaseHTTPRequestHandler):
   data=json.dumps(body).encode();self.send_response(status);self.send_header('Content-Type','application/json');self.send_header('Cache-Control','private, no-store');self.send_header('X-Content-Type-Options','nosniff');self.send_header('Content-Length',str(len(data)));self.end_headers();self.wfile.write(data)
  def do_GET(self):
   try:
+   if self.server.readonly and self.path in ('/admin/settings/updates','/api/local-updater/session-status'):
+    from .cookie_session import actor
+    actor(self.headers.get('Cookie'),self.server.controller)
+    self.server.controller.state.limit('status',120,60)
+    if self.path=='/api/local-updater/session-status':return self.response(200,self.server.controller.status())
+    from .status_page import page
+    body,nonce=page();self.send_response(200)
+    for key,value in {'Content-Type':'text/html; charset=utf-8','Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff',
+       'Referrer-Policy':'no-referrer','X-Frame-Options':'DENY','Content-Security-Policy':"default-src 'none'; script-src 'nonce-"+nonce+"'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'",'Content-Length':str(len(body))}.items():self.send_header(key,value)
+    self.end_headers();self.wfile.write(body);return
    if not self.server.readonly or self.path!='/api/local-updater/status':return self.response(404,{'error':'not_found'})
    token=self.headers.get('Authorization','').removeprefix('Bearer ');actor=self.server.controller.state.ticket_actor(token)
    if not actor:raise Rejected('session_expired')
    self.server.controller.state.limit('status',120,60)
    self.server.controller.actor(actor['actor'],actor['session_version'],actor['session_hash'],actor['expires'])
    self.response(200,self.server.controller.status())
-  except Rejected as e:self.response(401 if str(e) in ['session_expired','access_denied'] else 429,{'error':'status_unavailable'})
+  except Rejected as e:
+   if self.path=='/admin/settings/updates' and str(e) in ('session_expired','access_denied'):
+    self.send_response(303);self.send_header('Location','/seller/login?next=%2Fadmin%2Fsettings%2Fupdates');self.send_header('Cache-Control','private, no-store');self.send_header('Content-Length','0');self.end_headers();return
+   self.response(401 if str(e) in ['session_expired','access_denied'] else 429,{'error':'status_unavailable'})
   except Exception:self.response(503,{'error':'status_unavailable'})
  def do_POST(self):
   try:
@@ -154,7 +178,9 @@ def main():
  if address:
   ip=ipaddress.ip_address(address)
   if ip.version!=4 or not ip.is_private or ip.is_unspecified:raise Rejected('status_address')
-  server=StatusServer((address,17841),Handler);server.controller=controller;server.readonly=True
+  port=cfg.get('statusPort',17841)
+  if type(port)!=int or not 1024<=port<=65535:raise Rejected('status_address')
+  server=StatusServer((address,port),Handler);server.controller=controller;server.readonly=True
   threading.Thread(target=server.serve_forever,daemon=True).start()
  controller.worker()
 if __name__=='__main__':main()

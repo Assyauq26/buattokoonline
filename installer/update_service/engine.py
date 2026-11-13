@@ -47,13 +47,33 @@ class Engine:
   receipt=core.read_json(folder/'backup.json')
   if receipt.get('verified') is not True:raise Rejected('backup_failed')
   return receipt['path']
- def verified(self,release,image):
+ def verified(self,release,image,public=True):
   core.healthy()
-  actual=json.loads(core.run(['docker','inspect','single-store-app-1']))[0]
+  actual=json.loads(core.run(['docker','inspect',core.dc(['ps','-q','app'])]))[0]
   expected=core.run(['docker','image','inspect','--format','{{.Id}}',image])
   env=dict(s.split('=',1) for s in actual['Config']['Env'] if '=' in s)
   if actual['Image']!=expected or env.get('STORE_BUILD_SHA')!=release['sha'] or env.get('STORE_INSTALLED_VERSION')!=release['version']:raise Rejected('active_version_mismatch')
-  core.public_health(core.read_json(core.STATE))
+  if public:core.public_health(core.read_json(core.STATE))
+ def safety(self,job):
+  from .native_forward import NativeForward,proxy_hashes
+  safety=NativeForward(self,job)
+  if not 160000<=int(core.sql('SHOW server_version_num;'))<170000:raise Rejected('postgres_version_unsupported')
+  env=safety.env()
+  if env.get('PAYMENT_PROVIDER','manual')!='manual':raise Rejected('payment_webhook_not_supported')
+  if not safety.carrier_idle():raise Rejected('carrier_work_pending')
+  hashes=proxy_hashes(self.config)
+  baseline=core.read_json(self.config['baseline'])
+  safety.policy={'baselineFiles':{p:d for p,d in baseline['files'].items() if p.startswith('app/') and not p.startswith(('app/tests/','app/resources/'))}}
+  safety.baseline()
+  return safety,hashes
+ def inspect(self,release,installed):
+  self.resources();self.baseline()
+  if self.ledger()!=installed['migrations'] or core.sql('SELECT count(*) FROM "_prisma_migrations" WHERE finished_at IS NULL AND rolled_back_at IS NULL;')!='0':raise Rejected('migration_history')
+  persistent=int(core.sql("SELECT pg_database_size('store');"))
+  persistent+=sum(p.stat().st_size for p in (core.DATA/'media').rglob('*') if p.is_file())
+  if shutil.disk_usage(core.ROOT).free < 6*1024**3+2*persistent:raise Rejected('insufficient_disk')
+  self.safety({'id':'read-only-preflight','release':json.dumps(release)})
+  core.healthy()
  def process(self,job):
   release=json.loads(job['release']);folder=Path(self.config['jobs'])/job['id'];folder.mkdir(mode=0o700,parents=True,exist_ok=True)
   journal_path=folder/'operation.json';mutated=False;stopped=False;timer=False;old=None;installed=None
@@ -70,6 +90,8 @@ class Engine:
      if not isinstance(release.get('upgradePolicy'),dict):raise Rejected('operator_migration_required')
      self.forward(job,folder,installed)
      return
+    from .policy_feed import compatible_current
+    compatible_current(self.config,self.state,release,installed)
     persistent=int(core.sql("SELECT pg_database_size('store');"))
     persistent+=sum(p.stat().st_size for p in (core.DATA/'media').rglob('*') if p.is_file())
     # Budget both isolated image targets, extraction, compressed backup and a
@@ -78,6 +100,7 @@ class Engine:
     self.resources()
     if self.ledger()!=installed['migrations'] or core.sql('SELECT count(*) FROM "_prisma_migrations" WHERE finished_at IS NULL AND rolled_back_at IS NULL;')!='0':raise Rejected('migration_history')
     self.baseline();core.healthy()
+    safety,proxy_hashes=self.safety(job)
     self.mark(job,'downloading',downloaded=0,total=release['size'])
     last=[0]
     def progress(done,total):
@@ -105,10 +128,11 @@ class Engine:
     while subprocess.run(['systemctl','is-active','--quiet','single-store-maintenance.service']).returncode==0:
      if time.monotonic()>deadline:raise Rejected('maintenance_busy')
      time.sleep(1)
-    old['services']['app']['image']=core.run(['docker','inspect','--format','{{.Image}}','single-store-app-1'])
-    journal={'previous':installed,'old_compose':old,'candidate':candidate,'manifest':manifest,'timer':timer,'backup':None,'previous_baseline':core.read_json(self.config['baseline'])}
+    old['services']['app']['image']=core.run(['docker','inspect','--format','{{.Image}}',core.dc(['ps','-q','app'])])
+    journal={'previous':installed,'old_compose':old,'candidate':candidate,'manifest':manifest,'timer':timer,'backup':None,'previous_baseline':core.read_json(self.config['baseline']),'proxy':proxy_hashes,'guards':safety.guards()}
     core.atomic_json(journal_path,journal)
-    self.mark(job,'backing_up');stopped=True;core.dc(['stop','-t','60','app'],timeout=90)
+    self.mark(job,'backing_up');stopped=True
+    self.pending(folder,'fence');safety.fence(journal,capture_snapshot=False);self.settled(folder)
     self.pending(folder,'backup')
     journal['backup']=self.backup(folder);core.atomic_json(journal_path,journal)
     self.settled(folder)
@@ -117,11 +141,15 @@ class Engine:
     core.dc(['run','--rm','-T','--no-deps','--name','single-store-migrate-'+job['id'],'tools','npm','run','db:migrate'],file=stage,timeout=300)
     self.settled(folder)
     if self.ledger()!=manifest['migrations']:raise Rejected('migration_verification')
-    self.mark(job,'activating');core.atomic_json(core.COMPOSE,candidate)
+    core.grant_runtime()
+    self.mark(job,'activating');safety.immutable_guards(journal);core.atomic_json(core.COMPOSE,candidate)
     core.dc(['up','-d','--no-deps','--no-build','--wait','--wait-timeout','90','app'],timeout=180)
-    self.mark(job,'verifying');self.verified(release,candidate['services']['app']['image'])
-    core.atomic_json(core.CONFIG/'version.json',{**installed,'version':release['version'],'source_sha':release['sha'],'migrations':manifest['migrations'],'channel':self.config['channel']})
+    self.mark(job,'verifying');self.verified(release,candidate['services']['app']['image'],public=False)
+    image=core.run(['docker','image','inspect','--format','{{.Id}}',candidate['services']['app']['image']])
+    core.atomic_json(core.CONFIG/'version.json',{**installed,'version':release['version'],'source_sha':release['sha'],'migrations':manifest['migrations'],'channel':self.config['channel'],'image_digest':image,'artifact_sha256':release['digest']})
     core.atomic_json(self.config['baseline'],{'root':str(source),'files':manifest['files']})
+    journal['traffic_may_have_opened']=True;core.atomic_json(journal_path,journal)
+    self.pending(folder,'opening');safety.immutable_guards(journal);safety.proxy(journal,True);core.public_health(core.read_json(core.STATE));self.settled(folder)
     self.mark(job,'succeeded',activeVersion=release['version'],finishedAt=int(time.time()))
    except Exception as error:
     reason=str(error) if isinstance(error,Rejected) else 'operation_failed'
@@ -137,7 +165,9 @@ class Engine:
      if not safe:self.mark(job,'recovery_required',error=reason);return
      try:
       self.mark(job,'rolling_back',error=reason);core.atomic_json(core.COMPOSE,old)
-      core.dc(['up','-d','--no-deps','--no-build','--wait','--wait-timeout','90','app']);core.healthy();core.public_health(core.read_json(core.STATE))
+      core.dc(['up','-d','--no-deps','--no-build','--wait','--wait-timeout','90','app']);core.healthy()
+      if journal.get('proxy'):safety.proxy(journal,True)
+      core.public_health(core.read_json(core.STATE))
       core.atomic_json(core.CONFIG/'version.json',{**installed,'migrations':self.ledger()})
       core.atomic_json(self.config['baseline'],core.read_json(journal_path)['previous_baseline'])
       self.mark(job,'rolled_back',error=reason,finishedAt=int(time.time()))

@@ -88,6 +88,8 @@ def prepare(source, root_bundle, address, channel='stable', migration_compatibil
             # existing hex representation. Existing updater state is retained above.
             installation = agent_id.replace('-', '')
     candidate, route = plan(core.read_json(core.COMPOSE), env['APP_ORIGIN'], installation, address)
+    from .ui_route import routes
+    route=routes({'statusAddress':address})
     for path in [core.DATA/'updater', core.DATA/'updater/jobs', Path('/var/backups/single-store')]: path.mkdir(mode=0o700, parents=True, exist_ok=True)
     config = {'installation':installation,'origin':env['APP_ORIGIN'],'channel':channel,'catalog':CATALOG,'statusAddress':address,
         'trust':str(folder/'trust.json'),'controlToken':str(folder/'control-token'),'baseline':str(folder/'baseline.json'),

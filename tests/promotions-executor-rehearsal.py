@@ -16,6 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'installer'))
 import promotions_cutover as cutover
 import promotions_transition as transition
+from update_service.forward_cutover import ForwardCutover
 
 url = os.environ['PROMOTION_EXECUTOR_DATABASE']
 target = urlparse(url)
@@ -50,7 +51,7 @@ class Rehearsal:
     def load(self): return self.journal
     def preflight(self):
         assert len(ledger()) == 29 and all(r['finished_at'] and not r['rolled_back_at'] for r in ledger())
-        path = ROOT / 'app/prisma/migrations' / transition.NEW_NAME / 'migration.sql'
+        path = Path(os.environ.get('PROMOTION_CANDIDATE_SCHEMA',str(ROOT/'app/prisma/schema.prisma'))).parent/'migrations'/transition.NEW_NAME/'migration.sql'
         assert transition.digest(path.read_bytes()) == transition.NEW_SQL
         return {'accepted':True}
     def recheck(self,j): self.preflight()
@@ -72,7 +73,7 @@ class Rehearsal:
     def migrate(self,j):
         self.calls.append('real_prisma_migrate_deploy')
         subprocess.run([os.environ['PROMOTION_NODE'],str(ROOT/'app/node_modules/prisma/build/index.js'),
-                        'migrate','deploy','--schema',str(ROOT/'app/prisma/schema.prisma')],env=env,check=True,capture_output=True)
+                        'migrate','deploy','--schema',os.environ.get('PROMOTION_CANDIDATE_SCHEMA',str(ROOT/'app/prisma/schema.prisma'))],env=env,check=True,capture_output=True)
     def verify_migration(self,j):
         rows=ledger();assert len(rows)==30 and rows[:29]==self.original
         assert rows[-1]['checksum']==transition.NEW_SQL
@@ -82,12 +83,19 @@ class Rehearsal:
     def open_traffic(self,j):self.calls.append('simulated_open')
     def resume_workers(self,j):self.calls.append('simulated_resume')
     def rollback_before_migration(self,j):raise AssertionError('Unexpected rollback')
+    def backup_and_restore_verify(self,j):j['backup']=self.backup(j)
+    def verify_identity(self,j):assert j['sha']==self.sha and j['digest']==self.digest
+    def external_work_stopped(self,j):pass
+    def database_state(self,j):return 'new' if len(ledger())==30 else 'old' if len(ledger())==29 else 'uncertain'
 
 
-d=Rehearsal();e=cutover.Cutover(d)
+d=Rehearsal();forward=os.environ.get('UPDATER_FORWARD_REHEARSAL')=='yes'
+e=ForwardCutover(d) if forward else cutover.Cutover(d)
 e.dry_run();assert ledger()==d.original and not (folder/'journal.json').exists()
 result=e.apply();assert result['phase']=='complete';assert d.calls.count('real_prisma_migrate_deploy')==1
-e.apply();assert d.calls.count('real_prisma_migrate_deploy')==1
+if forward:e.reconcile()
+else:e.apply()
+assert d.calls.count('real_prisma_migrate_deploy')==1
 receipt={'ok':True,'historicalLedgerUnchanged':True,'before':29,'after':30,'backupScratchRestore':True,
          'executorDryRunNoMutation':True,'completedRetryNoReplay':True,'nativeServicesSimulated':True,
          'calls':d.calls,'productionTouched':False}

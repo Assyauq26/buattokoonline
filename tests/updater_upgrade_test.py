@@ -8,10 +8,12 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 import types
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]/'installer'))
 from update_service.availability import availability, upgrade_path
 from update_service.upgrade_policy import authenticate, bind
+from update_service.policy_feed import authorized
 from update_service.state import State
 from update_service.trust import Rejected
 from update_service.forward_cutover import ForwardCutover
@@ -28,11 +30,11 @@ class WorkerUpgradeTests(unittest.TestCase):
             p=Path(folder)
             def git(*args): return subprocess.check_output(['git','-C',folder,*args],stderr=subprocess.DEVNULL).decode().strip()
             git('init');git('config','core.autocrlf','false')
-            for name in ('core.py','updater.py','update_service/server.py'):
-                path=p/'installer'/name;path.parent.mkdir(parents=True,exist_ok=True);path.write_bytes(b'# test\n')
+            for name in ('core.py','updater.py','update_service/server.py','update_service/__init__.py'):
+                path=p/'installer'/name;path.parent.mkdir(parents=True,exist_ok=True);path.write_bytes(b'VERSION = 3\n' if name.endswith('__init__.py') else b'# test\n')
             git('add','.');git('-c','user.name=Test','-c','user.email=test@example.invalid','commit','-m','fixture')
             sha=git('rev-parse','HEAD')
-            self.assertEqual(len(inventory(p,sha)),3)
+            self.assertEqual(len(inventory(p,sha)),4)
             (p/'installer/core.py').write_bytes(b'# tampered\n')
             with self.assertRaises(Rejected): inventory(p,sha)
             with self.assertRaises(Rejected): inventory(p,'a'*40)
@@ -132,6 +134,13 @@ class AvailabilityTests(unittest.TestCase):
         self.assertEqual(self.status()['nextRelease']['version'],'1.7.4')
         self.cat['revoked']=['c'*40]
         self.assertEqual(self.status()['reason'],'upgrade_path_unsupported')
+    def test_verified_predecessor_offered_without_hiding_blocked_latest(self):
+        bridge={**self.release,'rollbackCompatible':True,'version':'1.7.4','sha':'c'*40,'minimumInstalledVersion':'1.7.3','maximumInstalledVersion':'1.7.3'}
+        self.cat['releases'].append(bridge);self.installed['version']='1.7.3'
+        result=availability(self.cat,self.installed,'stable',3,True,{'c'*40:None,'a'*40:'policy_baseline_mismatch'})
+        self.assertEqual(result['latest']['version'],'1.8.0');self.assertEqual(result['nextRelease']['version'],'1.7.4');self.assertTrue(result['partial'])
+        result=availability(self.cat,self.installed,'stable',3,True,{'c'*40:'local_customization','a'*40:'policy_baseline_mismatch'})
+        self.assertEqual(result['state'],'blocked')
 
 
 class PolicyTests(unittest.TestCase):
@@ -174,6 +183,31 @@ class PolicyTests(unittest.TestCase):
         with self.assertRaises(Rejected): state.policy(self.policy,'b'*64)
         state.policy({**self.policy,'sequence':2},'c'*64)
         with self.assertRaises(Rejected): state.policy(self.policy,'a'*64)
+    def format_two(self):
+        self.policy.update(format=2,sourceSha='7e81f8e60b27ab5695ac50ac6b653b63095e36d1',
+            artifactDigest='2e15208d27a87a4aeae4446404d45a1f91b55fcc5d28da3714dc064aeeaa9223',
+            fromSourceSha='c3cfb22fb03bc3bea37aadfb6d790c75e805d51b',baselineSchemaHash='a'*64,
+            baselineFiles={'app/Dockerfile':'e'*64},installations=['a'*32])
+        roots=self.p/'roots.json';roots.write_text(json.dumps(self.roots))
+        return {'installation':'a'*32,'trust':str(roots)}
+    def test_embedded_separate_policy_authorizes_only_bound_cohort(self):
+        cfg=self.format_two()
+        r={**release(),'minimumUpdater':3,'sha':self.policy['sourceSha'],'digest':self.policy['artifactDigest'],'size':100,'url':'test-only','upgradePolicy':json.loads(self.envelope())}
+        cat={'expiresAt':2000,'releases':[r],'revoked':[]}
+        installed={'version':'1.7.4','source_sha':self.policy['fromSourceSha'],'migrations':self.before}
+        state=State(self.p/'policy.sqlite','test')
+        with patch('update_service.policy_feed.time.time',return_value=1500):
+            self.assertEqual(authorized(r,installed,cfg,state,cat)['format'],2)
+            for bad in ({**cfg,'installation':'b'*32},):
+                with self.assertRaises(Rejected):authorized(r,installed,bad,state,cat)
+            with self.assertRaises(Rejected):authorized(r,installed,cfg,state,{**cat,'revoked':[r['sha']]})
+            with self.assertRaises(Rejected):authorized({**r,'digest':'f'*64},installed,cfg,state,cat)
+    def test_forward_availability_requires_actual_preflight_result(self):
+        r=release();r['minimumUpdater']=3
+        cat={'releases':[r],'revoked':[]};installed={'version':'1.7.4','db_contract':1}
+        self.assertEqual(availability(cat,installed,'stable',3,True,{r['sha']:None})['state'],'available')
+        self.assertEqual(availability(cat,installed,'stable',3,True,{r['sha']:'carrier_work_pending'})['reason'],'carrier_work_pending')
+        self.assertEqual(availability(cat,installed,'stable',2,True,{r['sha']:None})['reason'],'worker_upgrade_required')
 
 
 if __name__=='__main__': unittest.main()

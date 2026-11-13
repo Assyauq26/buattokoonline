@@ -50,7 +50,8 @@ def proxy_hashes(config):
     else:
         from .activate import add_route
         setup=core.read_json(core.STATE)
-        route=f"  handle /api/local-updater/status {{\n    reverse_proxy {config['statusAddress']}:17841\n  }}\n"
+        from .ui_route import routes
+        route=routes(config)
         live=add_route(core.caddy_content(setup,True).decode(),config['origin'],route).encode()
         maintenance=add_route(core.caddy_content(setup,False).decode(),config['origin'],route).encode()
         hashes={'live':transition.digest(live),'maintenance':transition.digest(maintenance)}
@@ -80,6 +81,9 @@ class NativeForward:
     def guards(self):
         return {str(p):transition.digest(p.read_bytes()) for p in (core.COMPOSE,core.CONFIG/'runtime.env',
             core.CONFIG/'migration.env',core.CONFIG/'Caddyfile',core.CONFIG/'updater/config.json',core.CONFIG/'version.json')}
+    def immutable_guards(self,j):
+        for p in (core.CONFIG/'runtime.env',core.CONFIG/'migration.env',core.CONFIG/'updater/config.json'):
+            require(transition.digest(p.read_bytes())==j['guards'][str(p)],'configuration_changed')
     def ledger_rows(self):
         return json.loads(core.sql('SELECT coalesce(json_agg(to_jsonb(m) ORDER BY migration_name),\'[]\') FROM "_prisma_migrations" m;'))
     def carrier_idle(self):
@@ -93,6 +97,13 @@ class NativeForward:
         js="""const fs=require('fs'),c=require('crypto');let s='';process.stdin.on('data',x=>s+=x);process.stdin.on('end',()=>{const out={};for(const p of JSON.parse(s)){try{out[p]=c.createHash('sha256').update(fs.readFileSync('/app/'+p.slice(4))).digest('hex')}catch{out[p]=null}}console.log(JSON.stringify(out))});"""
         observed=json.loads(core.dc(['exec','-T','app','node','-e',js],input=json.dumps(list(self.policy['baselineFiles'])).encode()))
         require(observed==self.policy['baselineFiles'],'active_source_mismatch')
+        installed=core.read_json(core.CONFIG/'version.json')
+        item=json.loads(core.run(['docker','inspect',core.dc(['ps','-q','app'])]))[0]
+        env=dict(v.split('=',1) for v in item['Config']['Env'] if '=' in v)
+        require(env.get('STORE_BUILD_SHA')==installed['source_sha'] and env.get('STORE_INSTALLED_VERSION')==installed['version']
+            and env.get('APP_ORIGIN')==self.config['origin'] and env.get('STORE_INSTALLATION_ID')==self.config['installation']
+            and env.get('STORE_UPDATER_ENABLED')=='1','active_version_mismatch')
+        if installed.get('image_digest'):require(item['Image']==installed['image_digest'],'active_version_mismatch')
 
     def preflight(self,inspect_only=False):
         installed=core.read_json(core.CONFIG/'version.json')
@@ -101,10 +112,15 @@ class NativeForward:
         require(self.policy['fromSourceSha']==transition.BASE_RELEASE_SOURCE and self.policy['baselineAppTree']==transition.BASE_TREE
             and self.policy['baselineSchemaHash']==transition.BASE_SCHEMA,'policy_baseline_mismatch')
         require(self.release['rollbackCompatible'] is False and self.release['dbContract']==1,'policy_recovery')
+        require(160000<=int(core.sql('SHOW server_version_num;'))<170000,'postgres_version_unsupported')
         require(self.e.ledger()==self.policy['beforeMigrations']==installed['migrations'],'migration_history')
         require(len(self.ledger_rows())==29 and all(r['finished_at'] and not r['rolled_back_at'] for r in self.ledger_rows()),'migration_history')
         require(schema_hash()==self.policy['baselineSchemaHash'],'schema_drift')
-        env=self.env();self.baseline();core.healthy()
+        env=self.env()
+        # Published v1.7.4/v1.8.0 provider webhooks are acknowledgement-only.
+        # Never claim safe durable payment replay for an unimplemented provider.
+        require(env.get('PAYMENT_PROVIDER','manual')=='manual','payment_webhook_not_supported')
+        self.baseline();core.healthy()
         self.e.resources()
         persistent=int(core.sql("SELECT pg_database_size('store');"))
         persistent+=sum(p.stat().st_size for root in (core.DATA/'media',core.CONFIG) for p in root.rglob('*') if p.is_file())
@@ -152,13 +168,18 @@ class NativeForward:
         while self.active('single-store-maintenance.service'):
             require(time.monotonic()<deadline,'maintenance_busy');time.sleep(1)
     def proxy(self,j,live):
-        core.write_caddy(core.read_json(core.STATE),live=live,preserve_extra_sites=True,approved_proxy_hashes=j['proxy'])
+        from .activate import validate_proxy,write_proxy
+        content=core.preserved_caddy_content(live,j['proxy']).decode()
+        # Never start/recreate the app as an implicit proxy dependency, especially
+        # after SQL succeeded but the candidate has not yet been activated.
+        core.dc(['up','-d','--no-deps','--no-build','--pull','never','proxy'])
+        validate_proxy(content);write_proxy(content)
     def sockets_idle(self):
         # A pending inbound HTTP request or outbound carrier/payment connection
         # is not proof of completion. Exclude only persistent PostgreSQL sockets.
         js="""const f=require('fs');let n=0;for(const p of ['/proc/net/tcp','/proc/net/tcp6'])for(const l of f.readFileSync(p,'utf8').trim().split('\\n').slice(1)){const a=l.trim().split(/\\s+/);if(a[3]==='01'&& !a[2].endsWith(':1538'))n++}console.log(n);"""
         return core.dc(['exec','-T','app','node','-e',js])=='0'
-    def fence(self,j):
+    def fence(self,j,capture_snapshot=True):
         self.proxy(j,False)
         deadline=time.monotonic()+180;stable=0
         while stable<3:
@@ -168,13 +189,17 @@ class NativeForward:
         core.dc(['stop','-t','90','app'],timeout=120)
         require(self.carrier_idle(),'carrier_work_pending')
         require(core.sql("SELECT count(*) FROM pg_stat_activity WHERE datname='store' AND pid<>pg_backend_pid() AND usename IN ('store_app','store_owner');")=='0','database_writer_pending')
-        j['before_ledger']=self.ledger_rows();j['before_data']=self.data_snapshot()
+        if capture_snapshot:j['before_ledger']=self.ledger_rows();j['before_data']=self.data_snapshot()
     def data_snapshot(self):
         result={}
-        for name in ('Product','ProductVariant','Inventory','FlashSaleCampaign','FlashSaleCampaignItem','FlashSaleControl','Coupon','Order','OrderItem'):
+        names=json.loads(core.sql("SELECT coalesce(json_agg(tablename ORDER BY tablename),'[]') FROM pg_tables WHERE schemaname='public' AND tablename NOT IN ('_prisma_migrations','FlashSaleSkuOffer');"))
+        for name in names:
+            require(re.fullmatch('[A-Za-z][A-Za-z0-9_]{0,62}',name) is not None,'schema_drift')
             minus="-'draft'" if name=='FlashSaleCampaign' else "-'flashOfferId'" if name=='OrderItem' else ''
-            key='key' if name=='FlashSaleControl' else 'id'
-            raw=core.sql('SELECT coalesce(json_agg(to_jsonb(t)'+minus+' ORDER BY "'+key+'"),\'[]\') FROM "'+name+'" t;')
+            # Hash each row inside PostgreSQL; no customer/config payload leaves
+            # the DB and large JSON rows are not aggregated in worker memory.
+            raw=core.sql('SELECT count(*)::text||\':\'||coalesce(string_agg(h,\'\' ORDER BY h),\'\') FROM '
+                '(SELECT encode(sha256(convert_to((to_jsonb(t)'+minus+')::text,\'UTF8\')),\'hex\') h FROM "'+name+'" t) s;')
             result[name]=transition.digest(raw.encode())
         return result
     def backup_and_restore_verify(self,j):
@@ -194,10 +219,13 @@ class NativeForward:
         if not j.get('traffic_may_have_opened'):
             require([r for r in self.ledger_rows() if r['migration_name']!=transition.NEW_NAME]==j['before_ledger'],'migration_history')
             require(self.data_snapshot()==j['before_data'],'transaction_history_changed')
+            require(core.sql('SELECT count(*) FROM "FlashSaleSkuOffer";')=='0','unexpected_promotion_activation')
     def activate(self,j):
+        self.immutable_guards(j)
         core.grant_runtime();core.atomic_json(core.COMPOSE,j['candidate'])
         self.external('activation',lambda: core.dc(['up','-d','--no-deps','--no-build','--wait','--wait-timeout','90','app'],timeout=180))
     def verify_active(self,j):
+        self.immutable_guards(j)
         require(self.database_state(j)=='new','migration_history');core.healthy()
         item=json.loads(core.run(['docker','inspect',core.dc(['ps','-q','app'])]))[0]
         env=dict(v.split('=',1) for v in item['Config']['Env'] if '=' in v)
@@ -209,10 +237,11 @@ class NativeForward:
     def metadata(self,j):
         self.verify_migration(j)
         core.atomic_json(core.CONFIG/'version.json',{**j['installed'],'version':self.release['version'],'source_sha':self.sha,
-            'migrations':j['policy']['afterMigrations'],'artifact_sha256':self.digest,'channel':self.config['channel']})
+            'migrations':j['policy']['afterMigrations'],'artifact_sha256':self.digest,'image_digest':j['image'],'channel':self.config['channel']})
         core.atomic_json(self.config['baseline'],{'root':str(self.folder/'release'),'files':j['manifest']['files']})
-    def open_traffic(self,j): self.proxy(j,True);core.public_health(core.read_json(core.STATE))
+    def open_traffic(self,j):self.immutable_guards(j);self.proxy(j,True);core.public_health(core.read_json(core.STATE))
     def resume_workers(self,j):
+        self.immutable_guards(j)
         if j['timer']: core.run(['systemctl','start','single-store-maintenance.timer'])
     def verify_identity(self,j):
         require((j['sha'],j['digest'],j['installation'])==(self.sha,self.digest,self.config['installation']),'installation_mismatch')

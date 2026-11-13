@@ -16,6 +16,7 @@ def upgrade_path(catalog, installed, target, channel, worker, forward_ready=None
         if current in seen: continue
         seen.add(current)
         for r in sorted(catalog['releases'], key=lambda r: version(r['version'])):
+            if forward_ready is not None and r['sha'] in forward_ready and forward_ready[r['sha']] is not None:continue
             if (r['sha'] not in catalog['revoked'] and (r['rollbackCompatible'] or (forward_ready is not None and r['sha'] in forward_ready and forward_ready[r['sha']] is None))
                 and r['minimumUpdater'] <= worker and r['dbContract'] == installed['db_contract']
                 and (r['channel'] == 'stable' or channel == 'pilot')
@@ -45,10 +46,23 @@ def availability(catalog, installed, channel, worker, valid=True, forward_ready=
         reason = 'upgrade_path_unsupported'
     elif not target['rollbackCompatible']:
         reason = (forward_ready or {}).get(target['sha'],'operator_migration_required')
+    elif forward_ready is not None and target['sha'] in forward_ready:
+        reason=forward_ready[target['sha']]
     path = upgrade_path(catalog, installed, target['version'], channel, worker,forward_ready)
     if reason == 'upgrade_path_unsupported' and path:
         reason = None
     next_release = next((r for r in releases if path and r['sha'] == path[0]), None)
+    if not path:
+        # A blocked latest target must remain visible, but a verified predecessor
+        # may still be installed. Do not promise eligibility of a future baseline.
+        predecessors=[r for r in releases if r['rollbackCompatible'] and r['minimumUpdater']<=worker
+            and r['dbContract']==installed['db_contract']
+            and version(r['minimumInstalledVersion'])<=version(installed['version'])<=version(r['maximumInstalledVersion'])
+            and (forward_ready is None or (r['sha'] in forward_ready and forward_ready[r['sha']] is None))]
+        if predecessors:
+            next_release=predecessors[0]
+            return {'state':'available','latest':{k:target[k] for k in ('version','sha','notes')},'reason':None,
+                'latestReason':reason,'partial':True,'steps':1,'nextRelease':{k:next_release[k] for k in ('version','sha','notes')}}
     return {'state': 'blocked' if reason else 'available',
         'latest': {k: target[k] for k in ('version', 'sha', 'notes')}, 'reason': reason,
         'nextRelease': {k: next_release[k] for k in ('version','sha','notes')} if next_release else None,

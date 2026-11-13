@@ -36,7 +36,7 @@ def authenticate(raw, roots, now=None):
         if result.returncode:
             raise Rejected('policy_signature')
         policy = strict_json(payload)
-        if (policy['format'] not in (1,2) or policy['repository'] != REPO
+        if (type(policy['format']) is not int or policy['format'] not in (1,2) or policy['repository'] != REPO
             or type(policy['sequence']) is not int or policy['sequence'] < 1
             or type(policy['issuedAt']) is not int or type(policy['expiresAt']) is not int
             or not policy['issuedAt'] - 60 <= now < policy['expiresAt']
@@ -79,7 +79,7 @@ def authenticate(raw, roots, now=None):
                 if not name.startswith('app/') or '..' in name.split('/') or '\\' in name or ':' in name or not re.fullmatch('[a-f0-9]{64}',digest):
                     raise Rejected('policy_baseline_mismatch')
             cohort=policy['installations']
-            if not isinstance(cohort,list) or not 1 <= len(cohort) <= 1000 or len(set(cohort)) != len(cohort) or any(not re.fullmatch('[a-f0-9]{32}',i) for i in cohort):
+            if not isinstance(cohort,list) or not 1 <= len(cohort) <= 1000 or len(set(cohort)) != len(cohort) or (cohort!=['*'] and any(not re.fullmatch('[a-f0-9]{32}',i) for i in cohort)):
                 raise Rejected('policy_installation')
         if set(policy) != fields:
             raise Rejected('policy_unknown_fields')

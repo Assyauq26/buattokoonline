@@ -37,6 +37,14 @@ execFileSync("tar", ["-xf", archive, "-C", old, "app/prisma"], {
   windowsHide: true,
 });
 const baseline = join(old, "app/prisma");
+let candidateSchema = resolve("app/prisma/schema.prisma");
+if (process.env.PROMOTION_CANDIDATE_ARCHIVE) {
+  const candidateArchive = resolve(process.env.PROMOTION_CANDIDATE_ARCHIVE);
+  assert.equal(digest(candidateArchive), "2e15208d27a87a4aeae4446404d45a1f91b55fcc5d28da3714dc064aeeaa9223");
+  const candidate = join(out,"published-v180");mkdirSync(candidate,{recursive:true});
+  execFileSync("tar",["-xf",candidateArchive,"-C",candidate,"app/prisma"],{windowsHide:true});
+  candidateSchema=join(candidate,"app/prisma/schema.prisma");
+}
 // Only the synthetic pre-upgrade fixture receives authenticated original bytes.
 // Candidate/repository/runtime historical files and the Prisma ledger are never edited.
 const legacyPairs = {
@@ -250,10 +258,10 @@ try {
   const began = performance.now();
   if (process.env.PROMOTION_EXECUTOR_REHEARSAL === "yes") {
     execFileSync(process.env.PROMOTION_PYTHON || "python3", [resolve("tests/promotions-executor-rehearsal.py")], {
-      env: { ...process.env, PROMOTION_EXECUTOR_DATABASE: url(name), PROMOTION_NODE: process.execPath },
+      env: { ...process.env, PROMOTION_EXECUTOR_DATABASE: url(name), PROMOTION_NODE: process.execPath, PROMOTION_CANDIDATE_SCHEMA:candidateSchema },
       encoding: "utf8", maxBuffer: 2 * 1024 * 1024, windowsHide: true,
     });
-  } else migrateEnv(name, resolve("app/prisma/schema.prisma"));
+  } else migrateEnv(name, candidateSchema);
   const elapsedMs = Math.round(performance.now() - began);
   assert.deepEqual(
     await snapshot(db),
@@ -355,7 +363,7 @@ try {
   let failure = "";
   const lockBegan = performance.now();
   try {
-    migrateEnv(locked, resolve("app/prisma/schema.prisma"));
+    migrateEnv(locked, candidateSchema);
   } catch (e) {
     failure = String(e.stdout || "") + String(e.stderr || "");
   } finally {

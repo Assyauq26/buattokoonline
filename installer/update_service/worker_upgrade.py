@@ -14,6 +14,7 @@ import os
 from pathlib import Path
 import re
 import socket
+import stat
 import sqlite3
 import subprocess
 import tempfile
@@ -21,6 +22,17 @@ import time
 import core
 from .state import ACTIVE
 from .trust import Rejected
+OPERATION_LOCK=Path('/run/single-store-operation.lock')
+SERVICE_UNIT='single-store-updater.service'
+HEALTH_SOCKET=Path('/run/single-store-update-status/status.sock')
+
+
+def secure_path(path):
+    if os.name!='posix':return
+    for p in (Path(path),*Path(path).parents):
+        s=p.lstat()
+        if p.is_symlink() or s.st_uid!=0 or (s.st_mode&0o022 and not (s.st_mode&stat.S_ISVTX and p.is_dir())):
+            raise Rejected('worker_path_permissions')
 
 
 def exchange(a,b):
@@ -46,22 +58,36 @@ def files_digest(folder):
 def inventory(source, sha):
     source = Path(source).resolve()
     if not re.fullmatch('[a-f0-9]{40}', sha): raise Rejected('worker_source')
+    secure_path(source)
     def git(*args):
-        return subprocess.check_output(['git', '-C', str(source), *args], stderr=subprocess.DEVNULL)
+        return subprocess.check_output(['git', '-C', str(source), *args], stderr=subprocess.DEVNULL,
+            env={**os.environ,'GIT_NO_REPLACE_OBJECTS':'1','GIT_CONFIG_NOSYSTEM':'1','GIT_CONFIG_GLOBAL':os.devnull})
     if git('rev-parse', 'HEAD').decode().strip() != sha: raise Rejected('worker_source')
+    common=Path(git('rev-parse','--git-common-dir').decode().strip())
+    if not common.is_absolute():common=source/common
+    secure_path(common.resolve())
+    if os.name=='posix':
+        for p in common.rglob('*'):
+            if p.is_symlink() or p.stat().st_uid!=0 or p.stat().st_mode&0o022:raise Rejected('worker_path_permissions')
+    git('fsck','--full','--no-dangling','--no-reflogs',sha)
     result = {}
     for record in git('ls-tree', '-rz', sha, 'installer').split(b'\0'):
         if not record: continue
         header, raw_name = record.split(b'\t', 1)
         name = raw_name.decode()
         if not name.endswith('.py'): continue
+        if '..' in name.split('/') or '\\' in name or ':' in name or name.startswith('/'):raise Rejected('worker_source')
         if header.split()[0] not in (b'100644', b'100755'): raise Rejected('worker_source')
         p = source/name
         if p.is_symlink() or not p.is_file(): raise Rejected('worker_source')
         data = git('show', sha+':'+name)
         if p.read_bytes() != data: raise Rejected('worker_source_bytes')
         result[name.removeprefix('installer/')] = data
-    if not {'core.py','updater.py','update_service/server.py'} <= result.keys(): raise Rejected('worker_source')
+    if not {'core.py','updater.py','update_service/server.py','update_service/__init__.py'} <= result.keys(): raise Rejected('worker_source')
+    import ast
+    tree=ast.parse(result['update_service/__init__.py'])
+    versions=[n.value.value for n in tree.body if isinstance(n,ast.Assign) and any(isinstance(t,ast.Name) and t.id=='VERSION' for t in n.targets) and isinstance(n.value,ast.Constant)]
+    if versions!=[3]:raise Rejected('worker_source_version')
     return result
 
 
@@ -74,11 +100,11 @@ def idle(config):
 
 def health():
     for _ in range(20):
-        if subprocess.run(['systemctl','is-active','--quiet','single-store-updater.service']).returncode == 0:
+        if subprocess.run(['systemctl','is-active','--quiet',SERVICE_UNIT]).returncode == 0:
             try:
                 with socket.socket(socket.AF_UNIX) as connection:
                     connection.settimeout(2)
-                    connection.connect('/run/single-store-update-status/status.sock')
+                    connection.connect(str(HEALTH_SOCKET))
                     connection.sendall(b'GET /api/local-updater/status HTTP/1.0\r\n\r\n')
                     if connection.recv(256).startswith(b'HTTP/1.0 401'): return
             except OSError: pass
@@ -92,15 +118,18 @@ def install(source, sha, apply=False):
     target = core.ROOT/'updater'
     # Reject symlinked worker paths/parents instead of following arbitrary targets.
     if any(p.is_symlink() for p in (target, *target.parents)): raise Rejected('worker_path')
+    secure_path(target)
     config = core.read_json(core.CONFIG/'updater/config.json')
     # First rollout supports only the audited v2 family; unknown roots fail shut.
     if (target/'update_service/__init__.py').read_text().splitlines()[-1].strip() != 'VERSION = 2':
         raise Rejected('worker_version_unsupported')
     idle(config)
     receipt = {'sourceSha':sha, 'files':len(files), 'applied':False,
+        'configurationHash':hashlib.sha256((core.CONFIG/'updater/config.json').read_bytes()).hexdigest(),
+        'proxyHash':hashlib.sha256((core.CONFIG/'Caddyfile').read_bytes()).hexdigest(),
         'beforeFiles':files_digest(target),'afterFiles':{n:hashlib.sha256(v).hexdigest() for n,v in files.items()}}
     if not apply: return receipt
-    with open('/run/single-store-operation.lock','a+') as lock:
+    with open(OPERATION_LOCK,'a+') as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         idle(config)
         previous = target.with_name('updater.before-'+sha)
@@ -118,26 +147,35 @@ def install(source, sha, apply=False):
                 try:os.fsync(handle)
                 finally:os.close(handle)
             core.atomic_json(journal, {**receipt, 'phase':'prepared', 'previous':str(previous), 'stage':str(stage)})
-            core.run(['systemctl','stop','single-store-updater.service'])
+            core.run(['systemctl','stop',SERVICE_UNIT])
             idle(config)
             core.atomic_json(journal, {**receipt, 'phase':'switching', 'previous':str(previous), 'stage':str(stage)})
             exchange(target,stage)
-            core.run(['systemctl','start','single-store-updater.service'])
+            core.run(['systemctl','start',SERVICE_UNIT])
             health()
+            from . import ui_route
+            ui_backup=core.CONFIG/('updater/worker-ui-'+sha)
+            receipt['uiBackup']=str(ui_backup)
+            core.atomic_json(journal,{**receipt,'phase':'ui_preparing','previous':str(previous),'stage':str(stage)})
+            ui_route.enable(config,ui_backup)
+            core.run(['systemctl','restart',SERVICE_UNIT]);health()
             stage.rename(previous)
             receipt['applied']=True
             core.atomic_json(journal, {**receipt,'phase':'complete','previous':str(previous),'stage':str(stage)})
             return receipt
         except BaseException:
+            if receipt.get('uiBackup') and (Path(receipt['uiBackup'])/'Caddyfile.after').exists():
+                from . import ui_route
+                ui_route.restore(receipt['uiBackup'])
             # An interrupted directory switch stays journaled for operator review.
             # A completed, failed health probe can restore the untouched old worker.
             if stage.exists() and files_digest(target)==receipt['afterFiles'] and files_digest(stage)==receipt['beforeFiles']:
-                core.run(['systemctl','stop','single-store-updater.service'])
+                core.run(['systemctl','stop',SERVICE_UNIT])
                 exchange(target,stage)
-                core.run(['systemctl','start','single-store-updater.service']); health()
+                core.run(['systemctl','start',SERVICE_UNIT]); health()
                 core.atomic_json(journal, {**receipt,'phase':'rolled_back','previous':str(previous),'stage':str(stage)})
             elif target.exists() and not previous.exists():
-                core.run(['systemctl','start','single-store-updater.service']); health()
+                core.run(['systemctl','start',SERVICE_UNIT]); health()
             raise
 
 
@@ -149,12 +187,25 @@ def recover(source,sha):
     target=core.ROOT/'updater';stage=Path(j.get('stage',''));previous=Path(j.get('previous',''))
     if stage.parent!=target.parent or not stage.name.startswith('.worker-') or previous!=target.with_name('updater.before-'+sha):raise Rejected('worker_path')
     if any(p.is_symlink() for p in (target,stage,previous,*target.parents)):raise Rejected('worker_path')
-    with open('/run/single-store-operation.lock','a+') as lock:
+    with open(OPERATION_LOCK,'a+') as lock:
         fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
         idle(core.read_json(core.CONFIG/'updater/config.json'))
         current=files_digest(target)
         if current not in (j['beforeFiles'],j['afterFiles']):raise Rejected('worker_source_bytes')
-        core.run(['systemctl','start','single-store-updater.service']);health()
+        if current==j['afterFiles'] and not j.get('uiBackup'):
+            j['uiBackup']=str(core.CONFIG/('updater/worker-ui-'+sha))
+            j['phase']='ui_preparing';core.atomic_json(journal,j)
+        if j.get('uiBackup'):
+            from . import ui_route
+            backup=Path(j['uiBackup'])
+            if backup!=core.CONFIG/('updater/worker-ui-'+sha):raise Rejected('worker_path')
+            if current==j['afterFiles']:
+                if (backup/'Caddyfile.after').is_file() and (backup/'config.after.json').is_file():ui_route.finish(backup)
+                else:
+                    if hashlib.sha256((core.CONFIG/'Caddyfile').read_bytes()).hexdigest()!=j['proxyHash'] or hashlib.sha256((core.CONFIG/'updater/config.json').read_bytes()).hexdigest()!=j['configurationHash']:raise Rejected('configuration_changed')
+                    ui_route.enable(core.read_json(core.CONFIG/'updater/config.json'),backup,resume=backup.exists())
+            else:ui_route.restore(backup)
+        core.run(['systemctl','restart',SERVICE_UNIT]);health()
         if current==j['afterFiles']:
             if stage.exists():
                 if files_digest(stage)!=j['beforeFiles'] or previous.exists():raise Rejected('worker_source_bytes')

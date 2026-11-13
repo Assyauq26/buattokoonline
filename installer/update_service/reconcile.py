@@ -52,12 +52,17 @@ def reconcile(config, job_id, external_work_stopped=False):
         # Adopt only a fully activated target that passes real image/env/readiness checks.
         if ledger == journal['manifest']['migrations']:
             try:
-                engine.verified(target, journal['candidate']['services']['app']['image'])
+                engine.verified(target, journal['candidate']['services']['app']['image'],public=not bool(journal.get('proxy')))
             except Exception:
                 pass
             else:
-                core.atomic_json(core.CONFIG / 'version.json', {**journal['previous'], 'version': target['version'], 'source_sha': target['sha'], 'migrations': ledger, 'channel': config['channel']})
+                image=core.run(['docker','image','inspect','--format','{{.Id}}',journal['candidate']['services']['app']['image']])
+                core.atomic_json(core.CONFIG / 'version.json', {**journal['previous'], 'version': target['version'], 'source_sha': target['sha'], 'migrations': ledger, 'channel': config['channel'],'image_digest':image,'artifact_sha256':target['digest']})
                 core.atomic_json(config['baseline'], {'root': str(journal_path.parent / 'release'), 'files': journal['manifest']['files']})
+                if journal.get('proxy'):
+                    from .native_forward import NativeForward
+                    NativeForward(engine,job).proxy(journal,True)
+                    core.public_health(core.read_json(core.STATE))
                 state.set(job_id, 'succeeded', activeVersion=target['version'])
                 pending.unlink(missing_ok=True)
                 if journal['timer']: core.run(['systemctl', 'start', 'single-store-maintenance.timer'])
@@ -66,7 +71,11 @@ def reconcile(config, job_id, external_work_stopped=False):
         if not target['rollbackCompatible']: raise Rejected('unsafe_rollback')
         core.atomic_json(core.COMPOSE, journal['old_compose'])
         core.dc(['up', '-d', '--no-deps', '--no-build', '--wait', '--wait-timeout', '90', 'app'])
-        core.healthy(); core.public_health(core.read_json(core.STATE))
+        core.healthy()
+        if journal.get('proxy'):
+            from .native_forward import NativeForward
+            NativeForward(engine,job).proxy(journal,True)
+        core.public_health(core.read_json(core.STATE))
         core.atomic_json(core.CONFIG / 'version.json', {**journal['previous'], 'migrations': ledger})
         core.atomic_json(config['baseline'], journal['previous_baseline'])
         state.set(job_id, 'rolled_back', error='operator_reconciled')
