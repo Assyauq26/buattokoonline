@@ -1,0 +1,10 @@
+{
+  "origin": "https://gheverhan.store",
+  "actualSellerLoginForm": true,
+  "actualAppControlApiStatus": 200,
+  "worker": 3,
+  "installedVersion": "1.8.0",
+  "catalogLatest": "1.8.0",
+  "availability": "current",
+  "noUnnecessaryUpdate": true
+}
