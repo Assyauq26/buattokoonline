@@ -29,9 +29,9 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(path.read_text(),'custom policy')
     def test_mount_probe_checks_container_directory_and_unauthenticated_socket(self):
         host=self.root.stat()
-        with patch('core.dc',return_value=json.dumps({'directory':[host.st_dev,host.st_ino],'status':401})):
+        with patch('core.dc',return_value=json.dumps({'directory':[host.st_dev,host.st_ino],'status':404})):
             self.assertTrue(runtime.verify_mount(self.root)['appMountVerified'])
-        for value in ({'directory':[0,0],'status':401},{'directory':[host.st_dev,host.st_ino],'status':200}):
+        for value in ({'directory':[0,0],'status':404},{'directory':[host.st_dev,host.st_ino],'status':200}):
             with patch('core.dc',return_value=json.dumps(value)):
                 with self.assertRaises(Rejected):runtime.verify_mount(self.root)
     @unittest.skipUnless(os.name=='posix','Directory fsync on Linux')

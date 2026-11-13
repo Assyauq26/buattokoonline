@@ -24,8 +24,10 @@ def verify_mount(directory=Path('/run/single-store-updater')):
         host=Path(directory).stat()
         script="""const f=require('fs'),h=require('http'),s=f.statSync('/run/store-updater');const q=h.get({socketPath:'/run/store-updater/control.sock',path:'/api/local-updater/status'},r=>{r.resume();r.on('end',()=>console.log(JSON.stringify({directory:[s.dev,s.ino],status:r.statusCode})))});q.setTimeout(2000,()=>q.destroy());q.on('error',()=>process.exit(2));"""
         actual=json.loads(core.dc(['exec','-T','app','node','-e',script],timeout=10))
-        if actual!={'directory':[host.st_dev,host.st_ino],'status':401}:raise ValueError()
-        return {'appMountVerified':True,'unauthenticatedStatus':401}
+        # The command socket deliberately rejects GET; the separate read-only
+        # status socket supplies the unauthenticated 401 health check.
+        if actual!={'directory':[host.st_dev,host.st_ino],'status':404}:raise ValueError()
+        return {'appMountVerified':True,'readOnlyProbeStatus':404}
     except Exception:raise Rejected('worker_socket_mount_review_required') from None
 
 

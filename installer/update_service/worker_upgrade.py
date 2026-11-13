@@ -25,6 +25,7 @@ from .trust import Rejected
 OPERATION_LOCK=Path('/run/single-store-operation.lock')
 SERVICE_UNIT='single-store-updater.service'
 HEALTH_SOCKET=Path('/run/single-store-update-status/status.sock')
+CONTROL_DIRECTORY=Path('/run/single-store-updater')
 
 
 def secure_path(path):
@@ -133,7 +134,7 @@ def install(source, sha, apply=False):
     elif version!='VERSION = 2':raise Rejected('worker_version_unsupported')
     idle(config)
     from .service_runtime import verify_mount
-    verify_mount(HEALTH_SOCKET.parent)
+    verify_mount(CONTROL_DIRECTORY)
     receipt = {'sourceSha':sha, 'files':len(files), 'applied':False,
         'configurationHash':hashlib.sha256((core.CONFIG/'updater/config.json').read_bytes()).hexdigest(),
         'proxyHash':hashlib.sha256((core.CONFIG/'Caddyfile').read_bytes()).hexdigest(),
@@ -173,14 +174,14 @@ def install(source, sha, apply=False):
             exchange(target,stage)
             core.run(['systemctl','start',SERVICE_UNIT])
             health()
-            verify_mount(HEALTH_SOCKET.parent)
+            verify_mount(CONTROL_DIRECTORY)
             from . import ui_route
             ui_backup=core.CONFIG/('updater/worker-ui-'+sha)
             receipt['uiBackup']=str(ui_backup)
             core.atomic_json(journal,{**receipt,'phase':'ui_preparing','previous':str(previous),'stage':str(stage)})
             ui_route.enable(config,ui_backup,existing=bool(prior))
             core.run(['systemctl','restart',SERVICE_UNIT]);health()
-            verify_mount(HEALTH_SOCKET.parent)
+            verify_mount(CONTROL_DIRECTORY)
             stage.rename(previous)
             receipt['applied']=True
             core.atomic_json(journal, {**receipt,'phase':'complete','previous':str(previous),'stage':str(stage)})
@@ -232,7 +233,7 @@ def recover(source,sha):
             else:ui_route.restore(backup)
         core.run(['systemctl','restart',SERVICE_UNIT]);health()
         from .service_runtime import verify_mount
-        verify_mount(HEALTH_SOCKET.parent)
+        verify_mount(CONTROL_DIRECTORY)
         if current==j['afterFiles']:
             if stage.exists():
                 if files_digest(stage)!=j['beforeFiles'] or previous.exists():raise Rejected('worker_source_bytes')
