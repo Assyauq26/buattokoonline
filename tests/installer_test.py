@@ -16,6 +16,22 @@ import updater
 
 
 class InstallerTests(unittest.TestCase):
+    def test_fresh_compose_binds_exact_runtime_source(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'manager').mkdir()
+            (root / 'manager/compose-base.json').write_text(json.dumps({'services': {'app': {}, 'tools': {}}}))
+            (root / 'manager/VERSION').write_text('1.8.1\n')
+            state = root / 'setup.json'
+            state.write_text(json.dumps({'source_sha': 'a' * 40}))
+            with patch.object(core, 'ROOT', root), patch.object(core, 'STATE', state):
+                env = core.compose_for(root)['services']['app']['environment']
+                self.assertEqual(env['STORE_BUILD_SHA'], 'a' * 40)
+                self.assertEqual(env['STORE_INSTALLED_VERSION'], '1.8.1')
+                state.write_text(json.dumps({'source_sha': 'invalid'}))
+                with self.assertRaises(core.StoreError):
+                    core.compose_for(root)
+
     def test_official_release_identity_and_missing_release(self):
         identity={'id':core.REPO_ID,'full_name':core.REPO}
         missing=urllib.error.HTTPError(updater.API+'/releases/latest',404,'Not Found',{},None)

@@ -80,6 +80,13 @@ def compose_for(source, image='installed'):
     if version_file.is_file():
         config['services']['app'].setdefault('environment', {}).update(
             STORE_INSTALLED_VERSION=version_file.read_text().strip(), STORE_UPDATE_CHANNEL='stable')
+    if Path(source) == ROOT and STATE.exists():
+        # Fresh installers must expose the exact pinned source to readiness and
+        # the updater. A version label alone cannot authenticate the baseline.
+        source_sha = read_json(STATE).get('source_sha', '')
+        if not re.fullmatch('[a-f0-9]{40}', source_sha):
+            raise StoreError('Identitas source instalasi tidak valid.')
+        config['services']['app'].setdefault('environment', {})['STORE_BUILD_SHA'] = source_sha
     for name, target in [('app', 'runtime'), ('tools', 'tools')]:
         config['services'][name]['build'] = {'context': str(Path(source) / 'app'), 'target': target}
         config['services'][name]['image'] = 'single-store-' + name + ':' + image

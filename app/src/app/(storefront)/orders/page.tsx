@@ -40,8 +40,7 @@ export default async function OrdersPage({
         </Link>
         <h1>Pesanan Saya</h1>
       </header>
-      <form className="customer-order-search">
-        <Search size={20} />
+      <form className="customer-order-search" role="search" aria-label="Pencarian pesanan">
         <input
           name="q"
           defaultValue={q}
@@ -50,7 +49,7 @@ export default async function OrdersPage({
         />
         <input type="hidden" name="tab" value={tab} />
         <button type="submit" aria-label="Cari">
-          <Search size={18} />
+          <Search size={20} aria-hidden="true" />
         </button>
       </form>
       <CustomerOrderTabs tab={tab || "all"} q={q} counts={counts} />

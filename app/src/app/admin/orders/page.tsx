@@ -52,7 +52,6 @@ export default async function Page({
           role="search"
           key={JSON.stringify(params)}
         >
-          <Search size={21} />
           <input
             name="q"
             aria-label="Cari pesanan atau pembeli"
@@ -66,7 +65,7 @@ export default async function Page({
               <input key={k} type="hidden" name={k} value={v} />
             ))}
           <button aria-label="Cari pesanan" type="submit">
-            <Search size={18} />
+            <Search size={20} aria-hidden="true" />
           </button>
         </FilterForm>
         <OrderFilters params={{ ...params, tab }} />
