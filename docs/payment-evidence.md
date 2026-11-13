@@ -229,12 +229,32 @@ outside this Git worktree; synthetic data is not included in installer/runtime U
 
 ## Status and remaining operator inputs
 
+### First bank selected: blu by BCA Digital
+
+The owner selected blu and supplied a cropped Gmail screenshot on 2026-11-13.
+It shows an incoming bluAccount notification, Indonesian IDR formatting, recipient
+account, WIB date/time and BI-FAST type. It does NOT show a stable bank transaction
+ID, complete email, sender address or trusted delivery/authentication provenance.
+No personal name, account number, amount or timestamp from the screenshot is copied
+into repository fixtures. `blu-preview.ts` recognizes synthetic screenshot-shaped
+plain text only, returns UNKNOWN/untrusted/no bankTxId, and is deliberately not
+connected to ingestion or checkout. It cannot establish that funds arrived.
+
+blu is the first validation target; other banks remain undecided. A full original
+notification's MIME/text/HTML structure and redacted headers are needed for parser
+development. Sender authenticity must later be checked on original messages via
+the authorized mailbox, not inferred from edited headers or the displayed name.
+The production-supported bank list remains empty; no new source is activated.
+Incremental validation: 14 new blu-preview cases plus 36 existing payment-evidence
+unit cases passed (50 targeted tests); TypeScript and scoped ESLint passed. This
+does not replace the missing original-email, trusted-delivery or live-bank tests.
+
 | Feature | Status | Required before pilot |
 | --- | --- | --- |
 | Durable evidence/claims, local QR and preview seller UI | SIAP REVIEW | Review SQL, permissions, financial policy and operating procedures |
 | Official Gmail OAuth code | SIAP REVIEW; live BLOCKED | Real client/redirect, authorized consent/refresh/revoke test and verification/exception |
 | GoPay login/refresh and live mutations | BLOCKED | Auditable authorized protocol, merchant fixtures and limited real tests |
-| Bank notification interpretation | BLOCKED; synthetic fixture only | Named bank and redacted original notification/provenance samples |
+| Bank notification interpretation | BLOCKED; blu preview/synthetic fixture only | Complete blu notification and validated delivery/authentication provenance |
 | New checkout methods and scheduler | BLOCKED | Validated source, accounting/refund policy, end-to-end stock/order checks and updater migration/quiescence support |
 
 No feature is labelled SIAP PILOT or ready for production. Do not reuse the same
@@ -242,7 +262,8 @@ receiving merchant/bank account across independently installed stores for automa
 matching: this draft has no cross-VPS global transaction-claim registry. Amount/time
 association is insufficient even when each local claim is unique.
 
-Needed from the owner: target bank and redacted authentic notification samples,
+Needed from the owner: complete redacted authentic blu notifications (other banks
+can follow later),
 Google project/verification decision, an auditable authorized GoPay access contract
 and test account availability, and the business policy for unique-code collection
 and late/refund accounting. Do not provide passwords/OTP/private tokens in chat.
