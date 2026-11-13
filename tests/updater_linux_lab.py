@@ -45,7 +45,7 @@ def command(args,data=None):
     return result.stdout.decode().strip()
 
 
-def prepare(case):
+def prepare(case, empty=False, official=False):
     root=BASE/case
     if root.exists():raise RuntimeError('Case already exists; use a new case id')
     root.mkdir(mode=0o700)
@@ -67,6 +67,7 @@ def prepare(case):
     for key in ('app','tools'):
         compose['services'][key]['build']={'context':str(source/'app'),'target':'runtime' if key=='app' else 'tools'}
         compose['services'][key].pop('container_name',None)
+        if empty:compose['services'][key]['image']='updater-pilot-'+case+':'+key
     runtime=dict(line.split('=',1) for line in Path('/etc/single-store/runtime.env').read_text().splitlines() if '=' in line and not line.startswith('#'))
     identity=secrets.token_hex(16);password=secrets.token_hex(24)
     runtime.update(APP_ORIGIN='http://127.0.0.1:3198',DATABASE_URL='postgresql://store_app:'+password+'@db:5432/store?schema=public',
@@ -88,28 +89,39 @@ def prepare(case):
     command(dc+['up','-d','--no-build','--wait','db'])
     role_sql="CREATE ROLE store_owner LOGIN PASSWORD '"+password+"';CREATE ROLE store_app LOGIN BYPASSRLS PASSWORD '"+password+"';ALTER DATABASE store OWNER TO store_owner;"
     command(dc+['exec','-T','db','psql','-U','postgres','-d','store','-v','ON_ERROR_STOP=1'],role_sql.encode())
-    dump=root/'baseline.dump'
-    with dump.open('wb') as output:
-        result=subprocess.run(['docker','exec','single-store-db-1','pg_dump','-U','postgres','-d','store','-Fc'],stdout=output,stderr=subprocess.DEVNULL)
-        if result.returncode:raise RuntimeError('Read-only source dump failed')
-    with dump.open('rb') as inp:
-        result=subprocess.run(dc+['exec','-T','db','pg_restore','-U','postgres','-d','store','--exit-on-error'],stdin=inp,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
-        if result.returncode:raise RuntimeError('Isolated clone restore failed')
-    # Fixture factory ONLY. pg_restore rewrites four varchar IN predicates into
-    # equivalent explicit text casts. Recreate those constraints atomically from
-    # the authenticated original SQL, preserving every ledger/data row. Native
-    # upgrade code does not normalize schemas or permit this restored variant.
-    specs=[('20261029090000_flash_sale_campaign','FlashSaleCampaign','FlashSaleCampaign_status_check','status'),
-        ('20261031110000_jnt_platform_integration','JntIntegration','JntIntegration_environment_check','environment'),
-        ('20261031123000_jnt_l3_and_awb_ledger','JntL3Mapping','JntL3Mapping_status_check','matchStatus'),
-        ('20261031123000_jnt_l3_and_awb_ledger','JntShipmentRequest','JntShipmentRequest_state_check','state')]
-    statements=[]
-    for migration,table,constraint,column in specs:
-        sql=files['app/prisma/migrations/'+migration+'/migration.sql'].decode()
-        match=re.search(r'CHECK \(("'+column+r'" IN \([^)]*\))\)',sql)
-        if not match:raise RuntimeError('Authenticated fixture predicate missing')
-        statements.append('ALTER TABLE "'+table+'" DROP CONSTRAINT "'+constraint+'", ADD CONSTRAINT "'+constraint+'" CHECK ('+match[1]+');')
-    command(dc+['exec','-T','db','psql','-U','postgres','-d','store','-v','ON_ERROR_STOP=1'],('BEGIN;\n'+'\n'.join(statements)+'\nCOMMIT;').encode())
+    if empty:
+        # A newly created disposable DB: official 29 migrations and bootstrap,
+        # never clone/downgrade the current QA store's 30-migration database.
+        result=subprocess.run(dc+['build','app','tools'],stdout=(root/'build.log').open('wb'),stderr=subprocess.STDOUT,timeout=1800)
+        if result.returncode:raise RuntimeError('Pilot baseline build failed')
+        command(dc+['run','--rm','-T','tools','npm','run','db:migrate'])
+        bootstrap=('Isolated public-catalog pilot\0pilot-bootstrap@example.invalid\0'+secrets.token_urlsafe(28)).encode()
+        command(dc+['run','--rm','-T','tools','npm','run','bootstrap'],bootstrap)
+        grants='GRANT USAGE ON SCHEMA public TO store_app;GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO store_app;REVOKE ALL ON TABLE "_prisma_migrations" FROM store_app;GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO store_app;GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO store_app;ALTER DEFAULT PRIVILEGES FOR ROLE store_owner IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO store_app;ALTER DEFAULT PRIVILEGES FOR ROLE store_owner IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO store_app;'
+        command(dc+['exec','-T','db','psql','-U','postgres','-d','store','-v','ON_ERROR_STOP=1'],grants.encode())
+    else:
+        dump=root/'baseline.dump'
+        with dump.open('wb') as output:
+            result=subprocess.run(['docker','exec','single-store-db-1','pg_dump','-U','postgres','-d','store','-Fc'],stdout=output,stderr=subprocess.DEVNULL)
+            if result.returncode:raise RuntimeError('Read-only source dump failed')
+        with dump.open('rb') as inp:
+            result=subprocess.run(dc+['exec','-T','db','pg_restore','-U','postgres','-d','store','--exit-on-error'],stdin=inp,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+            if result.returncode:raise RuntimeError('Isolated clone restore failed')
+        # Fixture factory ONLY. pg_restore rewrites four varchar IN predicates into
+        # equivalent explicit text casts. Recreate those constraints atomically from
+        # the authenticated original SQL, preserving every ledger/data row. Native
+        # upgrade code does not normalize schemas or permit this restored variant.
+        specs=[('20261029090000_flash_sale_campaign','FlashSaleCampaign','FlashSaleCampaign_status_check','status'),
+            ('20261031110000_jnt_platform_integration','JntIntegration','JntIntegration_environment_check','environment'),
+            ('20261031123000_jnt_l3_and_awb_ledger','JntL3Mapping','JntL3Mapping_status_check','matchStatus'),
+            ('20261031123000_jnt_l3_and_awb_ledger','JntShipmentRequest','JntShipmentRequest_state_check','state')]
+        statements=[]
+        for migration,table,constraint,column in specs:
+            sql=files['app/prisma/migrations/'+migration+'/migration.sql'].decode()
+            match=re.search(r'CHECK \(("'+column+r'" IN \([^)]*\))\)',sql)
+            if not match:raise RuntimeError('Authenticated fixture predicate missing')
+            statements.append('ALTER TABLE "'+table+'" DROP CONSTRAINT "'+constraint+'", ADD CONSTRAINT "'+constraint+'" CHECK ('+match[1]+');')
+        command(dc+['exec','-T','db','psql','-U','postgres','-d','store','-v','ON_ERROR_STOP=1'],('BEGIN;\n'+'\n'.join(statements)+'\nCOMMIT;').encode())
     credentials={'password':secrets.token_urlsafe(24),'admin':'updater-admin-'+case+'@example.invalid','customer':'updater-buyer-'+case+'@example.invalid'}
     js="""const P=require('@prisma/client').PrismaClient,p=new P(),b=require('bcryptjs');let raw='';process.stdin.on('data',v=>raw+=v);process.stdin.on('end',async()=>{try{const x=JSON.parse(raw);for(const kind of ['admin','customer']){const role=await p.role.findUniqueOrThrow({where:{name:kind==='admin'?'Admin':'Customer'}});await p.user.create({data:{name:'Isolated updater '+kind,email:x[kind],passwordHash:await b.hash(x.password,10),emailVerifiedAt:new Date(),roles:{create:{roleId:role.id}},customer:{create:{fullName:'Isolated updater '+kind}}}})}await p.$disconnect()}catch{process.exit(1)}});"""
     command(dc+['run','--rm','-T','--no-deps','tools','node','-e',js],json.dumps(credentials).encode())
@@ -141,6 +153,9 @@ def prepare(case):
     cfg={'installation':identity,'origin':runtime['APP_ORIGIN'],'channel':'stable','statusAddress':gateway,'statusPort':17842,'proxyPort':3198,'catalog':'https://buattokosendiri.web.id/api/platform/store-releases',
         'trust':str(config/'updater/trust.json'),'controlToken':str(token),'baseline':str(config/'updater/baseline.json'),
         'database':str(data/'state.sqlite'),'jobs':str(data/'jobs'),'approvedProxyHashes':{'live':hashlib.sha256(live).hexdigest(),'maintenance':hashlib.sha256(maintenance).hexdigest()}}
+    if official:
+        cfg['officialCatalog']=True
+        (config/'updater/trust.json').write_bytes((source/'deploy/updater-trust.json').read_bytes())
     (config/'updater/config.json').write_text(json.dumps(cfg));State(cfg['database'],identity)
     unit='single-store-rehearsal-'+case
     service=Path('/etc/systemd/system')/(unit+'.service');timer=service.with_suffix('.timer')
@@ -205,12 +220,12 @@ def context(case):
     with contextlib.ExitStack() as stack:
         for name,value in [('core.ROOT',root),('core.CONFIG',config),('core.DATA',root/'data'),('core.COMPOSE',root/'compose.json'),
             ('core.STATE',config/'setup.json'),('updater.BACKUPS',root/'backups'),('core.run',run),('core.public_health',public),
-            ('update_service.server.build_opener',lambda *a:Transport()),('update_service.policy_feed.fresh',fresh),
-            ('update_service.policy_feed.current_catalog',catalog),
-            ('update_service.native_forward.fresh',fresh),('update_service.native_forward.NativeForward.active',active),
+('update_service.native_forward.NativeForward.active',active),
             ('update_service.native_forward.NativeForward.drain',drain),
             ('update_service.native_forward.NativeForward.save',save),
             ('update_service.engine.Engine.backup',backup)]:stack.enter_context(patch(name,value))
+        if not cfg.get('officialCatalog'):
+            for name,value in [('update_service.server.build_opener',lambda *a:Transport()),('update_service.policy_feed.fresh',fresh),('update_service.policy_feed.current_catalog',catalog),('update_service.native_forward.fresh',fresh)]:stack.enter_context(patch(name,value))
         yield root,cfg
 
 
@@ -256,8 +271,9 @@ def serve(case):
 
 if __name__=='__main__':
     parser=argparse.ArgumentParser();parser.add_argument('command',choices=['prepare','run','recover','serve']);parser.add_argument('--case',required=True)
+    parser.add_argument('--empty',action='store_true');parser.add_argument('--official-catalog',action='store_true')
     args=parser.parse_args()
     if os.geteuid()!=0 or not re.fullmatch('[a-f0-9]{8}',args.case):raise SystemExit('Explicit root disposable case required')
-    if args.command=='prepare':prepare(args.case)
+    if args.command=='prepare':prepare(args.case,args.empty,args.official_catalog)
     elif args.command=='serve':serve(args.case)
     else:run(args.case,args.command=='recover')

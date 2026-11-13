@@ -6,10 +6,19 @@ The initial prototype checkpoint is retained separately in
 unregistered-executor/worker-v2 statements describe that earlier commit only.
 This document and the evidence below supersede those implementation statements.
 
-Scope remains implementation, isolated verification and pilot preparation.
-The user additionally authorized a full fresh installation on the reset QA VPS.
-One QA store is now installed and verified. No central platform modification,
-production catalog publication, merge, public release or fleet deployment occurred.
+The earlier checkpoint covered implementation and isolated verification. The
+owner's follow-up now explicitly authorizes review, merge, central distribution
+configuration, a controlled pilot and release after safety gates pass. This does
+not authorize fleet app updates or changes to published v1.8.0 bytes. The original
+distribution decision below records that previous checkpoint; subsequent rollout
+receipts must state actual catalog, pilot and production changes separately.
+
+The follow-up adds a disposable empty-baseline factory to the existing Linux lab:
+official v1.7.4 migrations/bootstrap in a new database, distinct image names and
+internal networks, followed by real public-catalog transport. It does not clone
+or downgrade the reset QA store's current v1.8.0 database. Test transport patches
+are omitted only when `officialCatalog` is explicitly enabled. The fresh QA app
+and frozen worker source remain unchanged.
 
 ## Baseline and immutable application release
 
