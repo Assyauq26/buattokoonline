@@ -63,6 +63,10 @@ def availability(catalog, installed, channel, worker, valid=True, forward_ready=
             next_release=predecessors[0]
             return {'state':'available','latest':{k:target[k] for k in ('version','sha','notes')},'reason':None,
                 'latestReason':reason,'partial':True,'steps':1,'nextRelease':{k:next_release[k] for k in ('version','sha','notes')}}
+        blocked_steps=[r for r in releases if r['rollbackCompatible'] and r['minimumUpdater']<=worker
+            and r['dbContract']==installed['db_contract'] and version(r['minimumInstalledVersion'])<=version(installed['version'])<=version(r['maximumInstalledVersion'])
+            and forward_ready is not None and forward_ready.get(r['sha']) is not None]
+        if blocked_steps:reason=forward_ready[blocked_steps[0]['sha']]
     return {'state': 'blocked' if reason else 'available',
         'latest': {k: target[k] for k in ('version', 'sha', 'notes')}, 'reason': reason,
         'nextRelease': {k: next_release[k] for k in ('version','sha','notes')} if next_release else None,
