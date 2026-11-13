@@ -1,0 +1,610 @@
+import { randomUUID } from "node:crypto";
+import { afterAll, beforeAll, expect, it, vi } from "vitest";
+vi.mock("server-only", () => ({}));
+const browser = vi.hoisted(() => ({
+  cookie: "synthetic-seller-browser-session",
+}));
+vi.mock("next/headers", () => ({
+  cookies: async () => ({ get: () => ({ value: browser.cookie }) }),
+}));
+import { PrismaClient } from "@prisma/client";
+import { prisma } from "@/lib/prisma";
+import {
+  allocateAttempt,
+  allocateNewAttempt,
+  acquireSourceLease,
+  ingestObservation,
+  claimEvidence,
+  finishSourceLease,
+} from "@/modules/payments/evidence/repository";
+import {
+  createSource,
+  disconnectSource,
+} from "@/modules/payments/evidence/settings";
+import { PERMISSIONS } from "@/lib/auth/permissions";
+import type { Observation } from "@/modules/payments/evidence/policy";
+import {
+  beginGoogleOAuth,
+  completeGoogleOAuth,
+} from "@/modules/payments/evidence/google";
+import { unseal } from "@/modules/payments/evidence/secrets";
+
+const url = new URL(process.env.DATABASE_URL || "http://invalid");
+if (
+  url.protocol !== "postgresql:" ||
+  url.hostname !== "127.0.0.1" ||
+  !["5568", "5432"].includes(url.port) ||
+  url.pathname !== "/hubify_payment_evidence_test"
+)
+  throw new Error(
+    "Requires isolated local hubify_payment_evidence_test database on port 5568 or CI port 5432",
+  );
+const scope = `payment-test-${randomUUID()}`;
+let actor: string, customer: string, source: string;
+const now = new Date();
+const observation = (id: string, amount: number): Observation => ({
+  externalId: id,
+  bankTxId: id,
+  amount,
+  currency: "IDR",
+  direction: "CREDIT",
+  status: "SETTLEMENT",
+  accountRef: "test-merchant",
+  occurredAt: new Date(now.getTime() + 1000),
+  trusted: true,
+});
+beforeAll(async () => {
+  vi.stubEnv("STORE_INSTALLATION_ID", scope);
+  vi.stubEnv("PAYMENT_EVIDENCE_PREVIEW", "true");
+  const role = await prisma.role
+    .create({ data: { name: "Admin", label: "Test admin" } })
+    .catch(() => prisma.role.findUniqueOrThrow({ where: { name: "Admin" } }));
+  for (const key of [
+    PERMISSIONS.PAYMENT_READ,
+    PERMISSIONS.PAYMENT_VERIFY,
+    PERMISSIONS.BANK_MANAGE,
+  ]) {
+    const p = await prisma.permission.upsert({
+      where: { key },
+      update: {},
+      create: { key, label: key },
+    });
+    await prisma.rolePermission.upsert({
+      where: { roleId_permissionId: { roleId: role.id, permissionId: p.id } },
+      update: {},
+      create: { roleId: role.id, permissionId: p.id },
+    });
+  }
+  actor = (
+    await prisma.user.create({
+      data: {
+        name: "Operator fixture",
+        email: `${randomUUID()}@example.test`,
+        passwordHash: "disabled",
+        roles: { create: { roleId: role.id } },
+      },
+    })
+  ).id;
+  customer = (
+    await prisma.user.create({
+      data: {
+        name: "Customer fixture",
+        email: `${randomUUID()}@example.test`,
+        passwordHash: "disabled",
+      },
+    })
+  ).id;
+  source = (
+    await prisma.paymentEvidenceSource.create({
+      data: {
+        storeScope: scope,
+        kind: "GOPAY_QRIS",
+        label: "Synthetic only",
+        accountRef: "test-merchant",
+      },
+    })
+  ).id;
+});
+afterAll(async () => {
+  vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
+  await prisma.$disconnect();
+});
+
+it("binds official OAuth state to browser/actor/source, consumes once, encrypts tokens and reports failed remote revoke", async () => {
+  vi.stubEnv("STORE_INSTALLATION_ID", scope);
+  vi.stubEnv("PAYMENT_GMAIL_OAUTH_TEST", "true");
+  vi.stubEnv("PAYMENT_GOOGLE_CLIENT_ID", "synthetic-client");
+  vi.stubEnv("PAYMENT_GOOGLE_CLIENT_SECRET", "synthetic-secret");
+  vi.stubEnv(
+    "PAYMENT_INTEGRATION_ENCRYPTION_KEY",
+    Buffer.alloc(32, 9).toString("base64"),
+  );
+  vi.stubEnv("APP_ORIGIN", "https://fixture.example.test");
+  const gmail = await prisma.paymentEvidenceSource.create({
+    data: {
+      storeScope: scope,
+      kind: "GMAIL_BANK",
+      label: "Synthetic OAuth",
+      accountRef: randomUUID(),
+    },
+  });
+  const start = new URL(await beginGoogleOAuth(actor, gmail.id));
+  expect(start.origin).toBe("https://accounts.google.com");
+  expect(start.searchParams.get("scope")).toBe(
+    "https://www.googleapis.com/auth/gmail.readonly",
+  );
+  expect(start.searchParams.get("redirect_uri")).toBe(
+    "https://fixture.example.test/api/v1/admin/payment-evidence/oauth/callback",
+  );
+  expect(start.searchParams.get("code_challenge_method")).toBe("S256");
+  const state = start.searchParams.get("state")!;
+  browser.cookie = "another-browser-session";
+  await expect(
+    completeGoogleOAuth(actor, state, "synthetic-code"),
+  ).rejects.toThrow("Sesi OAuth");
+  browser.cookie = "synthetic-seller-browser-session";
+  await expect(
+    completeGoogleOAuth(customer, state, "synthetic-code"),
+  ).rejects.toThrow("izin");
+  const fetchMock = vi
+    .fn()
+    .mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          access_token: "private-access-token",
+          refresh_token: "private-refresh-token",
+          expires_in: 3600,
+          token_type: "Bearer",
+          scope: "https://www.googleapis.com/auth/gmail.readonly",
+        }),
+      ),
+    )
+    .mockResolvedValueOnce(new Response("unavailable", { status: 503 }));
+  vi.stubGlobal("fetch", fetchMock);
+  await completeGoogleOAuth(actor, state, "synthetic-code");
+  await expect(
+    completeGoogleOAuth(actor, state, "synthetic-code"),
+  ).rejects.toThrow("Sesi OAuth");
+  expect(fetchMock).toHaveBeenCalledTimes(1);
+  const saved = await prisma.paymentEvidenceSource.findUniqueOrThrow({
+    where: { id: gmail.id },
+  });
+  expect(saved.enabled).toBe(false);
+  expect(saved.health).toBe("CONNECTED_PARSER_BLOCKED");
+  expect(saved.encryptedSecret).not.toContain("private-");
+  expect(
+    JSON.parse(
+      unseal(saved.encryptedSecret!, scope, gmail.id, "google-tokens"),
+    ),
+  ).toHaveProperty("refresh", "private-refresh-token");
+  expect(await disconnectSource(actor, gmail.id)).toEqual({
+    disconnected: true,
+    remoteRevoked: false,
+  });
+  expect(
+    await prisma.paymentEvidenceSource.findUnique({ where: { id: gmail.id } }),
+  ).toMatchObject({
+    encryptedSecret: null,
+    enabled: false,
+    health: "DISCONNECTED",
+  });
+  expect(
+    await prisma.paymentEvidenceReview.count({
+      where: { sourceId: gmail.id, action: "REMOTE_REVOKE_REQUIRED" },
+    }),
+  ).toBe(1);
+  vi.unstubAllGlobals();
+});
+
+it("revokes tokens issued after a concurrent disconnect instead of saving a stale callback", async () => {
+  const gmail = await prisma.paymentEvidenceSource.create({
+    data: {
+      storeScope: scope,
+      kind: "GMAIL_BANK",
+      label: "Interrupted synthetic OAuth",
+      accountRef: randomUUID(),
+    },
+  });
+  const state = new URL(
+    await beginGoogleOAuth(actor, gmail.id),
+  ).searchParams.get("state")!;
+  const fetchMock = vi.fn(async (url: string | URL | Request) => {
+    if (String(url) === "https://oauth2.googleapis.com/token") {
+      await disconnectSource(actor, gmail.id);
+      return new Response(
+        JSON.stringify({
+          access_token: "discarded-access",
+          refresh_token: "discarded-refresh",
+          expires_in: 3600,
+          token_type: "Bearer",
+        }),
+      );
+    }
+    expect(String(url)).toBe("https://oauth2.googleapis.com/revoke");
+    return new Response("");
+  });
+  vi.stubGlobal("fetch", fetchMock);
+  await expect(
+    completeGoogleOAuth(actor, state, "synthetic-code"),
+  ).rejects.toThrow("Konfigurasi berubah");
+  expect(fetchMock).toHaveBeenCalledTimes(2);
+  expect(
+    await prisma.paymentEvidenceSource.findUnique({ where: { id: gmail.id } }),
+  ).toMatchObject({ encryptedSecret: null, health: "DISCONNECTED" });
+  expect(
+    await prisma.paymentEvidenceReview.count({
+      where: { sourceId: gmail.id, action: "DISCARDED_OAUTH_REVOKED" },
+    }),
+  ).toBe(1);
+  vi.unstubAllGlobals();
+});
+
+async function makePayment(total: number) {
+  return prisma.payment.create({
+    data: {
+      amount: total,
+      order: {
+        create: {
+          orderNumber: randomUUID(),
+          userId: customer,
+          subtotal: total,
+          total,
+          expiresAt: new Date(now.getTime() + 600_000),
+        },
+      },
+    },
+  });
+}
+async function attempt(paymentId: string, baseAmount = 10000) {
+  return prisma.$transaction((tx) =>
+    allocateAttempt(
+      tx,
+      {
+        sourceId: source,
+        paymentId,
+        baseAmount,
+        expiresAt: new Date(now.getTime() + 600_000),
+      },
+      now,
+    ),
+  );
+}
+
+it("preserves receiving-account identity across bank edits and does not create a new claim scope", async () => {
+  const accountNumber =
+    Date.now().toString() +
+    Math.floor(Math.random() * 1000)
+      .toString()
+      .padStart(3, "0");
+  const first = await prisma.bankAccount.create({
+    data: {
+      bankName: "Synthetic original",
+      accountNumber,
+      accountHolder: "Fixture",
+      displayName: "Original version",
+    },
+  });
+  const configured = await createSource(actor, {
+    kind: "GMAIL_BANK",
+    label: "Version-bound source",
+    accountRef: first.id,
+  });
+  await prisma.bankAccount.update({
+    where: { id: first.id },
+    data: { isActive: false, deletedAt: new Date() },
+  });
+  const second = await prisma.bankAccount.create({
+    data: {
+      bankName: "Changed display label",
+      accountNumber,
+      accountHolder: "Fixture",
+      displayName: "Replacement version",
+    },
+  });
+  await expect(
+    createSource(actor, {
+      kind: "GMAIL_BANK",
+      label: "Must not duplicate money",
+      accountRef: second.id,
+    }),
+  ).rejects.toThrow("sudah dikonfigurasi");
+  expect(
+    await prisma.paymentEvidenceSource.findUnique({
+      where: { id: configured.id },
+    }),
+  ).toHaveProperty("bankAccountId", first.id);
+});
+
+it("serializes equal-base allocations from concurrent transactions and retains cancelled amounts", async () => {
+  const create = () =>
+    prisma.$transaction((tx) =>
+      allocateNewAttempt(
+        tx,
+        {
+          sourceId: source,
+          baseAmount: 10000,
+          expiresAt: new Date(now.getTime() + 600_000),
+        },
+        (amount) =>
+          tx.payment.create({
+            data: {
+              amount,
+              order: {
+                create: {
+                  orderNumber: randomUUID(),
+                  userId: customer,
+                  subtotal: 10000,
+                  total: amount,
+                  expiresAt: new Date(now.getTime() + 600_000),
+                },
+              },
+            },
+            include: { order: true },
+          }),
+        now,
+      ),
+    );
+  const [a, b] = await Promise.all([create(), create()]);
+  expect([a.payable, b.payable].sort()).toEqual([10001, 10002]);
+  expect(await attempt(a.paymentId)).toHaveProperty("id", a.id);
+  const p1 = await prisma.payment.findUniqueOrThrow({
+    where: { id: a.paymentId },
+  });
+  await prisma.order.update({
+    where: { id: p1.orderId },
+    data: { status: "CANCELLED" },
+  });
+  const p3 = await makePayment(10003);
+  expect(await attempt(p3.id)).toHaveProperty("payable", 10003);
+});
+it("rejects inconsistent payable totals atomically without rewriting the order", async () => {
+  const p = await makePayment(10000);
+  await expect(attempt(p.id)).rejects.toThrow("Total pembayaran");
+  expect(
+    await prisma.paymentEvidenceAttempt.findUnique({
+      where: { paymentId: p.id },
+    }),
+  ).toBeNull();
+  expect(
+    await prisma.order.findUnique({ where: { id: p.orderId } }),
+  ).toHaveProperty("total", 10000);
+});
+it("fences parallel workers, deduplicates two ingesters, survives a new client, and preserves changes for review", async () => {
+  const leases = await Promise.all([
+    acquireSourceLease(source, now),
+    acquireSourceLease(source, now),
+  ]);
+  expect(leases.filter(Boolean)).toHaveLength(1);
+  const lease = leases.find(Boolean)!;
+  const o = observation(randomUUID(), 99999);
+  const ids = await Promise.all([
+    ingestObservation(source, lease.generation, lease.token, o, now),
+    ingestObservation(source, lease.generation, lease.token, o, now),
+  ]);
+  expect(new Set(ids).size).toBe(1);
+  const newProcessClient = new PrismaClient();
+  expect(
+    await newProcessClient.incomingPaymentEvidence.count({
+      where: { sourceId: source, externalId: o.externalId },
+    }),
+  ).toBe(1);
+  await newProcessClient.$disconnect();
+  await ingestObservation(
+    source,
+    lease.generation,
+    lease.token,
+    { ...o, status: "REFUND" },
+    now,
+  );
+  expect(
+    await prisma.incomingPaymentEvidence.findUnique({ where: { id: ids[0] } }),
+  ).toMatchObject({
+    trusted: false,
+    reason: "SOURCE_CHANGED_REQUIRES_REVIEW",
+    providerStatus: "SETTLEMENT",
+  });
+  await expect(
+    ingestObservation(source, lease.generation, "old-token", o, now),
+  ).rejects.toThrow("Lease");
+  await finishSourceLease(
+    source,
+    lease.token,
+    lease.generation,
+    { ok: false, cursor: "must-not-advance" },
+    now,
+  );
+  expect(
+    await prisma.paymentEvidenceSource.findUnique({ where: { id: source } }),
+  ).toMatchObject({
+    cursor: null,
+    failures: 1,
+    health: "TEMPORARILY_UNAVAILABLE",
+  });
+});
+it("stores one permanent claim with an explicit actor and no paid/stock/notification side effects", async () => {
+  const p = await makePayment(20001),
+    a = await attempt(p.id, 20000);
+  const lease = await acquireSourceLease(
+    source,
+    new Date(now.getTime() + 120_000),
+  );
+  const e = await ingestObservation(
+    source,
+    lease!.generation,
+    lease!.token,
+    {
+      ...observation(randomUUID(), 20001),
+      occurredAt: new Date(now.getTime() + 120_000),
+    },
+    new Date(now.getTime() + 120_000),
+  );
+  const results = await Promise.all([
+    claimEvidence(
+      actor,
+      e,
+      a.id,
+      "Saya periksa mutasi asli dan identitas pembeli secara terpisah.",
+      new Date(now.getTime() + 121_000),
+    ),
+    claimEvidence(
+      actor,
+      e,
+      a.id,
+      "Saya periksa mutasi asli dan identitas pembeli secara terpisah.",
+      new Date(now.getTime() + 121_000),
+    ),
+  ]);
+  expect(results[0].id).toBe(results[1].id);
+  expect(
+    await prisma.payment.findUnique({ where: { id: p.id } }),
+  ).toHaveProperty("status", "PENDING_PAYMENT");
+  expect(
+    await prisma.order.findUnique({ where: { id: p.orderId } }),
+  ).toHaveProperty("paymentStatus", "PENDING_PAYMENT");
+  expect(await prisma.notification.count({ where: { userId: customer } })).toBe(
+    0,
+  );
+  const p2 = await makePayment(20002),
+    b = await attempt(p2.id, 20000);
+  await expect(
+    claimEvidence(
+      actor,
+      e,
+      b.id,
+      "Mencoba menggunakan ulang transaksi yang sudah diklaim.",
+      new Date(now.getTime() + 122_000),
+    ),
+  ).rejects.toThrow("sudah diklaim");
+  await expect(
+    prisma.paymentEvidenceClaim.create({
+      data: {
+        evidenceId: e,
+        attemptId: b.id,
+        actorId: actor,
+        reason: "Mencoba klaim ulang melalui constraint database.",
+      },
+    }),
+  ).rejects.toThrow();
+  await expect(
+    prisma.paymentEvidenceSource.update({
+      where: { id: source },
+      data: { enabled: true },
+    }),
+  ).rejects.toThrow();
+});
+it("holds delayed, partial, excess, unknown, refund, missing identity, untrusted and closed-order evidence", async () => {
+  const receiver = randomUUID();
+  const s = await prisma.paymentEvidenceSource.create({
+    data: {
+      storeScope: scope,
+      kind: "GOPAY_QRIS",
+      label: "Unsafe synthetic cases",
+      accountRef: receiver,
+    },
+  });
+  const at = new Date(now.getTime() + 120_000),
+    reviewAt = new Date(now.getTime() + 121_000);
+  const lease = (await acquireSourceLease(s.id, at))!;
+  const cases: Array<{
+    patch?: Partial<Observation>;
+    status?: "CANCELLED" | "EXPIRED" | "REFUNDED";
+  }> = [
+    { patch: { bankTxId: undefined } },
+    { patch: { trusted: false } },
+    { patch: { status: "REFUND" } },
+    { patch: { status: "PARTIAL_REFUND" } },
+    { patch: { status: "UNKNOWN" } },
+    { patch: { amount: 1 } },
+    { patch: { amount: 999999 } },
+    { patch: { occurredAt: new Date(now.getTime() + 700_000) } },
+    { patch: { occurredAt: new Date(now.getTime() - 60_000) } },
+    { status: "CANCELLED" },
+    { status: "EXPIRED" },
+    { status: "REFUNDED" },
+  ];
+  for (let index = 0; index < cases.length; index++) {
+    const base = 30000 + index * 1000,
+      p = await makePayment(base + 1);
+    const a = await prisma.$transaction((tx) =>
+      allocateAttempt(
+        tx,
+        {
+          sourceId: s.id,
+          paymentId: p.id,
+          baseAmount: base,
+          expiresAt: new Date(now.getTime() + 600_000),
+        },
+        now,
+      ),
+    );
+    if (cases[index].status)
+      await prisma.order.update({
+        where: { id: p.orderId },
+        data: { status: cases[index].status },
+      });
+    const o = {
+      ...observation(randomUUID(), base + 1),
+      occurredAt: at,
+      accountRef: receiver,
+      ...cases[index].patch,
+    };
+    const evidence = await ingestObservation(
+      s.id,
+      lease.generation,
+      lease.token,
+      o,
+      at,
+    );
+    await expect(
+      claimEvidence(
+        actor,
+        evidence,
+        a.id,
+        "Test must reject unsafe evidence without touching money.",
+        reviewAt,
+      ),
+    ).rejects.toThrow("penanganan terpisah");
+    expect(
+      await prisma.payment.findUnique({ where: { id: p.id } }),
+    ).toHaveProperty("status", "PENDING_PAYMENT");
+  }
+  expect(
+    await prisma.paymentEvidenceClaim.count({
+      where: { evidence: { sourceId: s.id } },
+    }),
+  ).toBe(0);
+});
+
+it("rejects a foreign tenant, customer management, missing identity and stale workers after disconnect", async () => {
+  vi.stubEnv("STORE_INSTALLATION_ID", "other-store-identity");
+  await expect(acquireSourceLease(source)).rejects.toThrow("tidak ditemukan");
+  vi.stubEnv("STORE_INSTALLATION_ID", scope);
+  await expect(disconnectSource(customer, source)).rejects.toThrow("izin");
+  await expect(
+    createSource(actor, {
+      kind: "GMAIL_BANK",
+      label: "bank fixture",
+      accountRef: "missing",
+    }),
+  ).rejects.toThrow("rekening");
+  const previous = await prisma.paymentEvidenceSource.findUniqueOrThrow({
+    where: { id: source },
+  });
+  await disconnectSource(actor, source);
+  await expect(
+    ingestObservation(
+      source,
+      previous.generation,
+      previous.leaseToken!,
+      observation(randomUUID(), 10001),
+    ),
+  ).rejects.toThrow("Lease");
+  expect(
+    await prisma.paymentEvidenceClaim.count({
+      where: { evidence: { sourceId: source } },
+    }),
+  ).toBe(1);
+  vi.stubEnv("STORE_INSTALLATION_ID", "");
+  await expect(acquireSourceLease(source)).rejects.toThrow("Identitas");
+});
