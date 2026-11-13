@@ -18,6 +18,12 @@ type Status = {
   installedVersion: string;
   checkedAt: number | null;
   catalogError: string | null;
+  availability?: {
+    state: "check_required" | "current" | "blocked" | "available";
+    latest: { version: string; sha: string; notes: string } | null;
+    reason: string | null;
+    steps?: number;
+  };
   release: { version: string; sha: string; notes: string } | null;
   jobs: Job[];
   statusToken?: string;
@@ -48,6 +54,19 @@ const labels: Record<string, string> = {
   recovery_required: "Perlu bantuan operator",
 };
 const errors: Record<string, string> = {
+  carrier_work_pending: "Ada permintaan J&T yang belum selesai atau belum diketahui hasilnya. Operator perlu merekonsiliasinya sebelum update.",
+  active_requests_pending: "Permintaan toko masih berjalan. Update ditahan agar transaksi tidak terputus.",
+  proxy_review_required: "Konfigurasi akses toko perlu ditinjau operator agar route domain lain tetap terlindungi.",
+  schema_drift: "Struktur database berbeda dari baseline yang didukung. Operator perlu memeriksa perbedaannya.",
+  active_source_mismatch: "Aplikasi yang berjalan berbeda dari sumber rilis. Operator perlu memeriksa integritasnya.",
+  installation_not_in_pilot: "Toko belum termasuk kelompok pemasangan yang disetujui. Hubungi operator untuk penjadwalan.",
+  preflight_unavailable: "Pemeriksaan kesiapan server belum berhasil. Coba periksa lagi atau hubungi operator.",
+  worker_upgrade_in_progress: "Peningkatan layanan updater belum selesai. Operator perlu menyelesaikan pemeriksaannya.",
+  external_work_review_required: "Hasil pekerjaan server belum dapat dipastikan. Operator perlu memeriksanya sebelum pemulihan dilanjutkan.",
+  worker_upgrade_required: "Operator perlu meningkatkan layanan updater satu kali sebelum versi ini dapat dipasang.",
+  upgrade_path_unsupported: "Versi asal toko belum memiliki jalur upgrade yang disetujui. Hubungi operator untuk menentukan urutannya.",
+  database_contract_unsupported: "Struktur data toko memerlukan pemeriksaan operator sebelum update.",
+  operator_migration_required: "Versi ini memerlukan migrasi khusus. Operator perlu menyiapkan jalur upgrade dan recovery yang sesuai.",
   insufficient_disk: "Ruang penyimpanan belum cukup.",
   insufficient_resources: "Server sedang kekurangan sumber daya. Coba lagi setelah bebannya berkurang.",
   local_customization:
@@ -238,19 +257,31 @@ export function OneClickUpdate({
             diperiksa kembali.
           </p>
         )}
-        {data?.catalogError && (
+        {data?.catalogError && data.catalogError !== "release_incompatible" && (
           <p role="status">
             Daftar rilis belum dapat diverifikasi. Coba lagi nanti.
           </p>
         )}
-        {data?.checkedAt && !data.catalogError && !data.release && !running && (
+        {data?.availability?.state === "blocked" && !running && (
+          <div role="status" className="space-y-2 rounded-lg bg-zinc-100 p-4">
+            <p className="font-semibold">Versi {data.availability.latest?.version} tersedia, tetapi belum dapat dipasang</p>
+            <p className="text-sm">{errors[data.availability.reason ?? ""] ?? "Hubungi operator untuk memeriksa kompatibilitas toko."}</p>
+          </div>
+        )}
+        {data?.checkedAt && !data.catalogError && !data.release && !running && data.availability?.state === "current" && (
           <p role="status">Versi toko sudah terkini untuk kanal ini.</p>
+        )}
+        {data?.checkedAt && !data.catalogError && !data.release && !running && !data.availability && (
+          <p role="status">Updater lama belum dapat membedakan versi terbaru dari rilis yang tidak kompatibel. Operator perlu memeriksa katalog dan meningkatkan updater.</p>
         )}
       </section>
       {data?.release && !running && (
         <section className="rounded-xl border border-line bg-white p-4 sm:p-5 space-y-3">
           <h2 className="font-bold">Versi {data.release.version} tersedia</h2>
           <p className="whitespace-pre-wrap text-sm">{data.release.notes}</p>
+          {data.availability?.latest && data.availability.latest.version !== data.release.version && (
+            <p className="text-sm">Versi terbaru: {data.availability.latest.version}. Pasang {data.release.version} terlebih dahulu melalui jalur yang didukung, lalu periksa kembali.</p>
+          )}
           <p className="text-sm text-zinc-600">
             Toko berhenti sementara saat pencadangan dan aktivasi. Data toko
             dipertahankan. Anda boleh menutup halaman setelah update dimulai.
@@ -322,6 +353,7 @@ export function OneClickUpdate({
               tidak dipulihkan otomatis dari cadangan lama.
             </p>
           )}
+          <p className="break-all text-xs text-zinc-500">Referensi proses: {job.id}</p>
         </section>
       )}
       {!!data?.jobs.length && (

@@ -1,0 +1,55 @@
+{
+  "freshEmptyServerInstalled": true,
+  "origin": "https://gheverhan.store",
+  "installation": "da49e7ab78f5d18e5f3be0e79dd0a0c4",
+  "installedVersion": "1.8.0",
+  "appSource": "7e81f8e60b27ab5695ac50ac6b653b63095e36d1",
+  "artifactSha256": "2e15208d27a87a4aeae4446404d45a1f91b55fcc5d28da3714dc064aeeaa9223",
+  "appImageDigest": "sha256:f0265de4d2707ea25ab5970c4ad16f78cc568be772c1b8feed9318427233e45b",
+  "runtimeShaMatches": true,
+  "appMountedSocketProbe": {
+    "appMountVerified": true,
+    "readOnlyProbeStatus": 404
+  },
+  "workerVersion": 3,
+  "activeWorkerSource": "1239bec7b8c769810841a4aeb8f719e4770db8fa",
+  "activeWorkerFilesVerified": 35,
+  "initialAutomaticWorkerSource": "4fe334c16657ef6ee9facfa8b20574b64037e803",
+  "workerRevisionSupersedes": "4fe334c16657ef6ee9facfa8b20574b64037e803",
+  "previousReceiptAndCodePreserved": true,
+  "workerReceipt": "complete",
+  "runtimePolicy": {
+    "unit": "single-store-updater.service",
+    "path": "/etc/systemd/system/single-store-updater.service.d/60-store-worker-runtime.conf",
+    "sha256": "f6f3c3053536bcba0da33665a5a784a60bc32d879b147b06401ff7ba04191016",
+    "alreadyPresent": true,
+    "applied": true
+  },
+  "ledger": 30,
+  "counts": {
+    "users": 1,
+    "products": 0,
+    "orders": 0
+  },
+  "jobs": 0,
+  "baselineBackup": {
+    "path": "/var/backups/single-store/20261113-082819-57094a38",
+    "verified": true
+  },
+  "setupTokenRemoved": true,
+  "setupService": "inactive",
+  "hookTimer": "inactive",
+  "workerService": "active",
+  "localTestMode": false,
+  "centralPlatformChanged": false,
+  "productionStoresUpdated": 0,
+  "qaStoresFreshInstalled": 1,
+  "ledgerMatchesPublishedArtifact": true,
+  "unfinishedMigrations": 0,
+  "artifactDigestVerified": true,
+  "runningContainers": [
+    "single-store-app-1",
+    "single-store-db-1",
+    "single-store-proxy-1"
+  ]
+}

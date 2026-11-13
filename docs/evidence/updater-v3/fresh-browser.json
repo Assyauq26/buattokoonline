@@ -1,0 +1,50 @@
+{
+  "ok": true,
+  "target": "43.173.21.197",
+  "origin": "https://gheverhan.store",
+  "freshServer": true,
+  "officialWizard": true,
+  "publicCertificateVerified": true,
+  "localTestMode": false,
+  "installedVersion": "1.8.0",
+  "workerVersion": "Updater v3",
+  "catalogLatest": "1.7.4",
+  "automaticWorkerHook": "complete",
+  "separateOperatorWorkerUpgrade": false,
+  "rehearsalRequiredBoundedRuntimeRepair": true,
+  "actualControlApiVerified": true,
+  "workerLifecycleControlChecks": [
+    "restart",
+    "stop-start"
+  ],
+  "runtimeDirectoryStable": true,
+  "actualSellerLogin": true,
+  "actualSellerLoginForm": true,
+  "anonymousUpdaterRedirectToRealLogin": true,
+  "sellerDashboard": true,
+  "mobileDesktopOverflow": false,
+  "smoke": [
+    {
+      "path": "/",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/ready",
+      "status": 200
+    },
+    {
+      "path": "/admin/products",
+      "status": 200
+    },
+    {
+      "path": "/admin/marketing?tab=flash",
+      "status": 200
+    },
+    {
+      "path": "/admin/marketing?tab=voucher",
+      "status": 200
+    }
+  ],
+  "errors": [],
+  "centralPlatformChanged": false
+}

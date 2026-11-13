@@ -1,0 +1,12 @@
+{
+  "case": "e18a0006",
+  "pendingCarrierBlocksActualPreflight": true,
+  "startDeniedWithoutNewJob": true,
+  "carrierOutcomeRemainsUnknown": true,
+  "duplicateLateWebhookAcknowledgements": 2,
+  "existingTableHashesUnchanged": 80,
+  "externalCarrierRequests": 0,
+  "webhookDurableProcessingImplemented": false,
+  "limitation": "Published webhook is acknowledgement-only; this proves no duplicate mutation, not provider event delivery/replay.",
+  "productionStoresUpdated": 0
+}

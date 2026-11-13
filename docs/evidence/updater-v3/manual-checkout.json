@@ -1,0 +1,11 @@
+{
+  "ok": true,
+  "caseId": "e18a0005",
+  "orderId": "chk_ed0c5d958708e25a63221aa7bf0a1e50aaca8113",
+  "actualCustomerLogin": true,
+  "actualCartAPI": true,
+  "actualShippingQuote": true,
+  "actualCheckoutServerAction": true,
+  "manualPaymentOnly": true,
+  "externalRequests": []
+}

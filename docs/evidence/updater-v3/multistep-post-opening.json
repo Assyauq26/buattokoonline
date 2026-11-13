@@ -1,0 +1,51 @@
+{
+  "case": "e18a0005",
+  "path": [
+    "1.7.3",
+    "1.7.4",
+    "1.8.0"
+  ],
+  "ledgerBefore": 29,
+  "ledgerAfter": 30,
+  "jobState": "succeeded",
+  "processKilledAt": "opening_done",
+  "realManualCheckoutAfterBackup": true,
+  "ordersBeforeRecovery": 1,
+  "ordersAfterRecovery": 1,
+  "postOpeningTableHashesUnchanged": 80,
+  "jntEnabledFlagsPreserved": true,
+  "dbRestoredDuringRecovery": false,
+  "sqlReplayedDuringRecovery": false,
+  "imagesReusedAfterFullSourceInventory": true,
+  "imageReceipts": [
+    {
+      "source": "c3cfb22fb03bc3bea37aadfb6d790c75e805d51b",
+      "target": "tools",
+      "image": "sha256:02ec3a1d13fcfc2e4e0b5544a765757f527956497c580f640525987306f838c0",
+      "filesVerified": 552,
+      "freshBuild": false
+    },
+    {
+      "source": "c3cfb22fb03bc3bea37aadfb6d790c75e805d51b",
+      "target": "runtime",
+      "image": "sha256:eb125314010091dfa0461dc222d2da4f246d4b392b24e7c1ffdc9b10cd37ff7f",
+      "filesVerified": 552,
+      "freshBuild": false
+    },
+    {
+      "source": "7e81f8e60b27ab5695ac50ac6b653b63095e36d1",
+      "target": "tools",
+      "image": "sha256:e76ad802a3db01415cdf450ba0c5a2380a112ec3053d3382ee861b612d648efe",
+      "filesVerified": 566,
+      "freshBuild": false
+    },
+    {
+      "source": "7e81f8e60b27ab5695ac50ac6b653b63095e36d1",
+      "target": "runtime",
+      "image": "sha256:7ce8ffab5a5496b37ca1f216b748ebccce09f7a181856d4eb1f1dfae11100434",
+      "filesVerified": 566,
+      "freshBuild": false
+    }
+  ],
+  "productionStoresUpdated": 0
+}

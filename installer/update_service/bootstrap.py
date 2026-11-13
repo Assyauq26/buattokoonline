@@ -88,6 +88,8 @@ def prepare(source, root_bundle, address, channel='stable', migration_compatibil
             # existing hex representation. Existing updater state is retained above.
             installation = agent_id.replace('-', '')
     candidate, route = plan(core.read_json(core.COMPOSE), env['APP_ORIGIN'], installation, address)
+    from .ui_route import routes
+    route=routes({'statusAddress':address})
     for path in [core.DATA/'updater', core.DATA/'updater/jobs', Path('/var/backups/single-store')]: path.mkdir(mode=0o700, parents=True, exist_ok=True)
     config = {'installation':installation,'origin':env['APP_ORIGIN'],'channel':channel,'catalog':CATALOG,'statusAddress':address,
         'trust':str(folder/'trust.json'),'controlToken':str(folder/'control-token'),'baseline':str(folder/'baseline.json'),
@@ -115,7 +117,7 @@ def prepare(source, root_bundle, address, channel='stable', migration_compatibil
     # Resume an interrupted copy only when every existing byte agrees with this
     # bootstrap. Never replace an independently upgraded worker or follow links.
     sources = {Path('update_service')/p.name:p for p in Path(__file__).parent.glob('*.py')}
-    sources.update({Path(n):Path(__file__).parent.parent/n for n in ['core.py','updater.py']})
+    sources.update({Path(n):Path(__file__).parent.parent/n for n in ['core.py','updater.py','promotions_transition.py','historical_migrations.py']})
     for p in worker.rglob('*'):
         if p.is_symlink() or (p.is_file() and (p.relative_to(worker) not in sources or p.read_bytes()!=sources[p.relative_to(worker)].read_bytes())):
             raise Rejected('existing_updater_review')
