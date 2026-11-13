@@ -1,0 +1,30 @@
+{
+  "ok": true,
+  "caseId": "a1800011",
+  "catalog": "https://buattokosendiri.web.id/api/platform/store-releases",
+  "catalogTransportPatched": false,
+  "from": "1.7.4",
+  "to": "1.8.0",
+  "phases": [
+    "downloading",
+    "preparing",
+    "backing_up",
+    "migrating",
+    "activating",
+    "verifying",
+    "succeeded"
+  ],
+  "smokes": [
+    "/",
+    "/login",
+    "/admin",
+    "/admin/products",
+    "/admin/marketing?tab=flash",
+    "/admin/marketing?tab=voucher",
+    "/account",
+    "/orders"
+  ],
+  "existingSellerAndCustomerLogin": true,
+  "errors": [],
+  "productionShopAppMutations": false
+}

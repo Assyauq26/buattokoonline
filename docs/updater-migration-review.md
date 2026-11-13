@@ -1,5 +1,9 @@
 # Updater v3 release review — 13 November 2026
 
+**Current rollout outcome:** [updater-v3-rollout.md](updater-v3-rollout.md).
+The preparation-only distribution decision below is historical; PR #52 has now
+merged and a limited signed distribution has completed its real public pilot.
+
 Draft PR #52 now wires the actual verified migration executor into the worker.
 The initial prototype checkpoint is retained separately in
 [updater-migration-review-initial.md](updater-migration-review-initial.md); its
