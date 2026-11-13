@@ -5,6 +5,8 @@ or application/config replacement. The operator authenticates the SHA out of
 band; Git hashes alone are integrity checks, not independent signatures.
 """
 import argparse
+import ctypes
+import hashlib
 from contextlib import closing
 import fcntl
 import json
@@ -19,6 +21,26 @@ import time
 import core
 from .state import ACTIVE
 from .trust import Rejected
+
+
+def exchange(a,b):
+    """Linux atomic directory exchange: no missing WorkingDirectory on reboot."""
+    libc=ctypes.CDLL(None,use_errno=True)
+    function=getattr(libc,'renameat2',None)
+    if function is None:raise Rejected('atomic_exchange_unsupported')
+    if function(-100,os.fsencode(a),-100,os.fsencode(b),2)!=0:
+        raise Rejected('atomic_exchange_failed')
+    directory=os.open(Path(a).parent,os.O_RDONLY|os.O_DIRECTORY)
+    try:os.fsync(directory)
+    finally:os.close(directory)
+
+
+def files_digest(folder):
+    result={}
+    for p in Path(folder).rglob('*.py'):
+        if p.is_symlink():raise Rejected('worker_path')
+        result[p.relative_to(folder).as_posix()]=hashlib.sha256(p.read_bytes()).hexdigest()
+    return result
 
 
 def inventory(source, sha):
@@ -75,7 +97,8 @@ def install(source, sha, apply=False):
     if (target/'update_service/__init__.py').read_text().splitlines()[-1].strip() != 'VERSION = 2':
         raise Rejected('worker_version_unsupported')
     idle(config)
-    receipt = {'sourceSha':sha, 'files':len(files), 'applied':False}
+    receipt = {'sourceSha':sha, 'files':len(files), 'applied':False,
+        'beforeFiles':files_digest(target),'afterFiles':{n:hashlib.sha256(v).hexdigest() for n,v in files.items()}}
     if not apply: return receipt
     with open('/run/single-store-operation.lock','a+') as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -90,36 +113,63 @@ def install(source, sha, apply=False):
                 with path.open('xb') as handle:
                     handle.write(data); handle.flush(); os.fsync(handle.fileno())
                 path.chmod(0o600)
+            for directory in sorted([stage,*[p for p in stage.rglob('*') if p.is_dir()]],key=lambda p:len(p.parts),reverse=True):
+                handle=os.open(directory,os.O_RDONLY|os.O_DIRECTORY)
+                try:os.fsync(handle)
+                finally:os.close(handle)
             core.atomic_json(journal, {**receipt, 'phase':'prepared', 'previous':str(previous), 'stage':str(stage)})
             core.run(['systemctl','stop','single-store-updater.service'])
             idle(config)
             core.atomic_json(journal, {**receipt, 'phase':'switching', 'previous':str(previous), 'stage':str(stage)})
-            target.rename(previous)
-            stage.rename(target)
-            directory=os.open(target.parent, os.O_RDONLY | os.O_DIRECTORY)
-            try: os.fsync(directory)
-            finally: os.close(directory)
+            exchange(target,stage)
             core.run(['systemctl','start','single-store-updater.service'])
             health()
+            stage.rename(previous)
             receipt['applied']=True
-            core.atomic_json(journal, {**receipt,'phase':'complete','previous':str(previous)})
+            core.atomic_json(journal, {**receipt,'phase':'complete','previous':str(previous),'stage':str(stage)})
             return receipt
         except BaseException:
             # An interrupted directory switch stays journaled for operator review.
             # A completed, failed health probe can restore the untouched old worker.
-            if previous.exists() and target.exists() and not stage.exists():
+            if stage.exists() and files_digest(target)==receipt['afterFiles'] and files_digest(stage)==receipt['beforeFiles']:
                 core.run(['systemctl','stop','single-store-updater.service'])
-                target.rename(stage); previous.rename(target)
+                exchange(target,stage)
                 core.run(['systemctl','start','single-store-updater.service']); health()
-                core.atomic_json(journal, {**receipt,'phase':'rolled_back'})
+                core.atomic_json(journal, {**receipt,'phase':'rolled_back','previous':str(previous),'stage':str(stage)})
             elif target.exists() and not previous.exists():
                 core.run(['systemctl','start','single-store-updater.service']); health()
             raise
+
+
+def recover(source,sha):
+    if os.geteuid()!=0:raise Rejected('operator_required')
+    new={n:hashlib.sha256(v).hexdigest() for n,v in inventory(source,sha).items()}
+    journal=core.CONFIG/'updater/worker-upgrade.json';j=core.read_json(journal)
+    if j.get('sourceSha')!=sha or j.get('afterFiles')!=new:raise Rejected('worker_source')
+    target=core.ROOT/'updater';stage=Path(j.get('stage',''));previous=Path(j.get('previous',''))
+    if stage.parent!=target.parent or not stage.name.startswith('.worker-') or previous!=target.with_name('updater.before-'+sha):raise Rejected('worker_path')
+    if any(p.is_symlink() for p in (target,stage,previous,*target.parents)):raise Rejected('worker_path')
+    with open('/run/single-store-operation.lock','a+') as lock:
+        fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
+        idle(core.read_json(core.CONFIG/'updater/config.json'))
+        current=files_digest(target)
+        if current not in (j['beforeFiles'],j['afterFiles']):raise Rejected('worker_source_bytes')
+        core.run(['systemctl','start','single-store-updater.service']);health()
+        if current==j['afterFiles']:
+            if stage.exists():
+                if files_digest(stage)!=j['beforeFiles'] or previous.exists():raise Rejected('worker_source_bytes')
+                stage.rename(previous)
+            if not previous.exists() or files_digest(previous)!=j['beforeFiles']:raise Rejected('worker_source_bytes')
+            j.update(phase='complete',applied=True)
+        else:j.update(phase='rolled_back',applied=False)
+        core.atomic_json(journal,j);return {'phase':j['phase'],'sourceSha':sha}
 
 
 if __name__ == '__main__':
     parser=argparse.ArgumentParser()
     parser.add_argument('--source',required=True);parser.add_argument('--sha',required=True)
     parser.add_argument('--apply',action='store_true')
+    parser.add_argument('--recover',action='store_true')
     args=parser.parse_args()
-    print(json.dumps(install(args.source,args.sha,args.apply)))
+    result=recover(args.source,args.sha) if args.recover else install(args.source,args.sha,args.apply)
+    print(json.dumps({k:v for k,v in result.items() if k not in ('beforeFiles','afterFiles')}))

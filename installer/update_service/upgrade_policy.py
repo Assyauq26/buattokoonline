@@ -36,7 +36,7 @@ def authenticate(raw, roots, now=None):
         if result.returncode:
             raise Rejected('policy_signature')
         policy = strict_json(payload)
-        if (policy['format'] != 1 or policy['repository'] != REPO
+        if (policy['format'] not in (1,2) or policy['repository'] != REPO
             or type(policy['sequence']) is not int or policy['sequence'] < 1
             or type(policy['issuedAt']) is not int or type(policy['expiresAt']) is not int
             or not policy['issuedAt'] - 60 <= now < policy['expiresAt']
@@ -66,9 +66,22 @@ def authenticate(raw, roots, now=None):
         if not policy['beforeMigrations'].items() <= policy['afterMigrations'].items():
             raise Rejected('policy_history_changed')
         # No SQL aliases or normalization are accepted in this contract.
-        if set(policy) != {'format','repository','id','sequence','issuedAt','expiresAt',
+        fields = {'format','repository','id','sequence','issuedAt','expiresAt',
             'fromVersion','toVersion','artifactDigest','sourceSha','baselineAppTree',
-            'minimumWorker','failureStrategy','executor','beforeMigrations','afterMigrations'}:
+            'minimumWorker','failureStrategy','executor','beforeMigrations','afterMigrations'}
+        if policy['format'] == 2:
+            fields |= {'fromSourceSha','baselineFiles','baselineSchemaHash','installations'}
+            if not re.fullmatch('[a-f0-9]{40}',policy['fromSourceSha']) or not re.fullmatch('[a-f0-9]{64}',policy['baselineSchemaHash']):
+                raise Rejected('policy_baseline_mismatch')
+            files=policy['baselineFiles']
+            if not isinstance(files,dict) or not 1 <= len(files) <= 5000: raise Rejected('policy_baseline_mismatch')
+            for name,digest in files.items():
+                if not name.startswith('app/') or '..' in name.split('/') or '\\' in name or ':' in name or not re.fullmatch('[a-f0-9]{64}',digest):
+                    raise Rejected('policy_baseline_mismatch')
+            cohort=policy['installations']
+            if not isinstance(cohort,list) or not 1 <= len(cohort) <= 1000 or len(set(cohort)) != len(cohort) or any(not re.fullmatch('[a-f0-9]{32}',i) for i in cohort):
+                raise Rejected('policy_installation')
+        if set(policy) != fields:
             raise Rejected('policy_unknown_fields')
         return policy, hashlib.sha256(payload).hexdigest()
     except Rejected:

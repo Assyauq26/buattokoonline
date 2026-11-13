@@ -6,7 +6,7 @@ must remain visible when its migration cannot be executed by this worker.
 from .trust import version
 
 
-def upgrade_path(catalog, installed, target, channel, worker):
+def upgrade_path(catalog, installed, target, channel, worker, forward_ready=None):
     """Plan only published, nonrevoked, rollback-compatible edges. No apply."""
     queue = [(installed['version'], [])]
     seen = set()
@@ -16,7 +16,7 @@ def upgrade_path(catalog, installed, target, channel, worker):
         if current in seen: continue
         seen.add(current)
         for r in sorted(catalog['releases'], key=lambda r: version(r['version'])):
-            if (r['sha'] not in catalog['revoked'] and r['rollbackCompatible']
+            if (r['sha'] not in catalog['revoked'] and (r['rollbackCompatible'] or (forward_ready is not None and r['sha'] in forward_ready and forward_ready[r['sha']] is None))
                 and r['minimumUpdater'] <= worker and r['dbContract'] == installed['db_contract']
                 and (r['channel'] == 'stable' or channel == 'pilot')
                 and version(current) < version(r['version']) <= version(target)
@@ -25,7 +25,7 @@ def upgrade_path(catalog, installed, target, channel, worker):
     return None
 
 
-def availability(catalog, installed, channel, worker, valid=True):
+def availability(catalog, installed, channel, worker, valid=True, forward_ready=None):
     if not valid:
         return {'state': 'check_required', 'latest': None, 'reason': 'catalog_unavailable'}
     releases = sorted((r for r in catalog['releases']
@@ -44,8 +44,8 @@ def availability(catalog, installed, channel, worker, valid=True):
     elif not version(target['minimumInstalledVersion']) <= version(installed['version']) <= version(target['maximumInstalledVersion']):
         reason = 'upgrade_path_unsupported'
     elif not target['rollbackCompatible']:
-        reason = 'operator_migration_required'
-    path = upgrade_path(catalog, installed, target['version'], channel, worker)
+        reason = (forward_ready or {}).get(target['sha'],'operator_migration_required')
+    path = upgrade_path(catalog, installed, target['version'], channel, worker,forward_ready)
     if reason == 'upgrade_path_unsupported' and path:
         reason = None
     next_release = next((r for r in releases if path and r['sha'] == path[0]), None)

@@ -2,6 +2,7 @@
 import copy, fcntl, hashlib, json, os, shutil, subprocess, sys, time
 from pathlib import Path
 import core, updater
+from . import VERSION
 from .trust import Rejected, download, version
 from .state import ACTIVE
 from .package import extract
@@ -64,8 +65,11 @@ class Engine:
     operator_cutover_guard()
     installed=core.read_json(core.CONFIG/'version.json');old=core.read_json(core.COMPOSE)
     if 'APP_ORIGIN='+self.config['origin'] not in (core.CONFIG/'runtime.env').read_text().splitlines():raise Rejected('installation_mismatch')
-    if version(release['version'])<=version(installed['version']) or not version(release['minimumInstalledVersion'])<=version(installed['version'])<=version(release['maximumInstalledVersion']) or release['minimumUpdater']>2 or installed['db_contract']!=release['dbContract']:raise Rejected('incompatible_release')
-    if not release['rollbackCompatible']:raise Rejected('operator_migration_required')
+    if version(release['version'])<=version(installed['version']) or not version(release['minimumInstalledVersion'])<=version(installed['version'])<=version(release['maximumInstalledVersion']) or release['minimumUpdater']>VERSION or installed['db_contract']!=release['dbContract']:raise Rejected('incompatible_release')
+    if not release['rollbackCompatible']:
+     if not isinstance(release.get('upgradePolicy'),dict):raise Rejected('operator_migration_required')
+     self.forward(job,folder,installed)
+     return
     persistent=int(core.sql("SELECT pg_database_size('store');"))
     persistent+=sum(p.stat().st_size for p in (core.DATA/'media').rglob('*') if p.is_file())
     # Budget both isolated image targets, extraction, compressed backup and a
@@ -142,3 +146,24 @@ class Engine:
    finally:
     current=next((j for j in self.state.jobs() if j['id']==job['id']),None)
     if timer and current and current['state']!='recovery_required':core.run(['systemctl','start','single-store-maintenance.timer'])
+ def forward(self,job,folder,installed):
+  from .policy_feed import fresh
+  from .native_forward import NativeForward
+  from .forward_cutover import ForwardCutover
+  release=json.loads(job['release'])
+  try:
+   policy=fresh(self.config,self.state,release,installed)
+   self.resources();self.baseline()
+   if self.ledger()!=installed['migrations']:raise Rejected('migration_history')
+   persistent=int(core.sql("SELECT pg_database_size('store');"))
+   persistent+=sum(p.stat().st_size for p in (core.DATA/'media').rglob('*') if p.is_file())
+   if shutil.disk_usage(core.ROOT).free < 6*1024**3+2*persistent:raise Rejected('insufficient_disk')
+   self.mark(job,'downloading',downloaded=0,total=release['size'])
+   download(release['url'],folder/'release.tar.gz',release['size'],release['digest'],
+       lambda done,total:self.mark(job,'downloading',downloaded=done,total=total))
+   ForwardCutover(NativeForward(self,job,policy)).apply()
+   self.mark(job,'succeeded',activeVersion=release['version'],finishedAt=int(time.time()))
+  except BaseException as error:
+   reason=str(error) if isinstance(error,Rejected) else 'operation_failed'
+   self.mark(job,'recovery_required' if (folder/'forward.json').exists() else 'failed',error=reason)
+   if not isinstance(error,Exception):raise

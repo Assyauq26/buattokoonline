@@ -31,6 +31,19 @@ class Controller:
     with build_opener(NoRedirect()).open(Request(self.config['catalog'],headers={'User-Agent':'BTOS-Updater/2'}),timeout=8) as r:raw=r.read(1024*1024+1)
     catalog=verify(raw,core.read_json(self.config['trust']))
     self.state.catalog(catalog);self.catalog=catalog;self.catalog_error=None
+    self.forward_ready={}
+    installed=core.read_json(core.CONFIG/'version.json')
+    for release in catalog['releases']:
+     if release['rollbackCompatible'] or version(release['version'])<=version(installed['version']):continue
+     if release['sha'] in catalog['revoked'] or (release['channel']=='pilot' and self.config['channel']!='pilot'):continue
+     try:
+      from .policy_feed import authorized
+      from .native_forward import NativeForward
+      policy=authorized(release,installed,self.config,self.state,catalog)
+      NativeForward(self.engine,{'id':'read-only-preflight','release':json.dumps(release)},policy).preflight(inspect_only=True)
+      self.forward_ready[release['sha']]=None
+     except Rejected as error:self.forward_ready[release['sha']]=str(error)
+     except Exception:self.forward_ready[release['sha']]='preflight_unavailable'
     return catalog
    except Exception:self.catalog_error='catalog_unavailable';raise Rejected('catalog_unavailable') from None
  def status(self):
@@ -40,10 +53,12 @@ class Controller:
   for row in self.state.jobs():
    detail=json.loads(row['detail']);release=json.loads(row['release'])
    jobs.append({k:row[k] for k in ['id','state','created','updated']}|{'version':release['version'],'sha':release['sha'],'detail':{k:v for k,v in detail.items() if k in ['error','downloaded','total','activeVersion','finishedAt']}})
-  discovery=availability(cat,installed,self.config['channel'],VERSION,bool(valid))
+  discovery=availability(cat,installed,self.config['channel'],VERSION,bool(valid),getattr(self,'forward_ready',{}))
   # Do not offer a lower executable release while hiding a newer blocked one.
   offered=discovery['nextRelease'] if discovery['state']=='available' else None
-  return {'installation':self.config['installation'],'updaterVersion':VERSION,'installedVersion':installed['version'],'installedSha':installed['source_sha'],'checkedAt':self.last_check or None,'catalogError':self.catalog_error,'release':offered,'availability':discovery,'jobs':jobs}
+  # Old dashboards must not mistake a blocked latest release for "current".
+  compatibility_error='release_incompatible' if discovery['state']=='blocked' else None
+  return {'installation':self.config['installation'],'updaterVersion':VERSION,'installedVersion':installed['version'],'installedSha':installed['source_sha'],'checkedAt':self.last_check or None,'catalogError':self.catalog_error or compatibility_error,'release':offered,'availability':discovery,'jobs':jobs}
  def command(self,body):
   if not isinstance(body,dict) or set(body)-{'action','installation','actor','sessionVersion','sessionHash','sessionExpires','sha','requestKey'}:raise Rejected('invalid_body')
   if body.get('installation')!=self.config['installation']:raise Rejected('installation_mismatch')
@@ -51,6 +66,9 @@ class Controller:
   self.actor(actor,sv,sh,exp)
   self.state.limit('control',60,60)
   action=body.get('action')
+  worker_journal=core.CONFIG/'updater/worker-upgrade.json'
+  if action=='start' and worker_journal.exists() and core.read_json(worker_journal).get('phase') not in ('complete','rolled_back'):
+   raise Rejected('worker_upgrade_in_progress')
   if action=='check':self.checked(True)
   elif action=='start':
    if not re.fullmatch('[a-f0-9-]{36}',body.get('requestKey','')):raise Rejected('invalid_request_key')
@@ -71,6 +89,9 @@ class Controller:
   while True:
    jobs=self.state.jobs();job=next((j for j in jobs if j['state']=='queued'),None)
    if job:
+    worker_journal=core.CONFIG/'updater/worker-upgrade.json'
+    if worker_journal.exists() and core.read_json(worker_journal).get('phase') not in ('complete','rolled_back'):
+     time.sleep(2);continue
     try:self.engine.process(job)
     except Exception:self.state.set(job['id'],'recovery_required',error='worker_interrupted')
    time.sleep(2)

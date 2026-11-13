@@ -115,7 +115,7 @@ def prepare(source, root_bundle, address, channel='stable', migration_compatibil
     # Resume an interrupted copy only when every existing byte agrees with this
     # bootstrap. Never replace an independently upgraded worker or follow links.
     sources = {Path('update_service')/p.name:p for p in Path(__file__).parent.glob('*.py')}
-    sources.update({Path(n):Path(__file__).parent.parent/n for n in ['core.py','updater.py']})
+    sources.update({Path(n):Path(__file__).parent.parent/n for n in ['core.py','updater.py','promotions_transition.py','historical_migrations.py']})
     for p in worker.rglob('*'):
         if p.is_symlink() or (p.is_file() and (p.relative_to(worker) not in sources or p.read_bytes()!=sources[p.relative_to(worker)].read_bytes())):
             raise Rejected('existing_updater_review')

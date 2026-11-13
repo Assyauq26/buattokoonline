@@ -17,6 +17,18 @@ def reconcile(config, job_id, external_work_stopped=False):
     engine = Engine(state, config)
     with open('/run/single-store-operation.lock', 'w') as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        folder=Path(config['jobs'])/job_id
+        if (folder/'forward.json').exists():
+            from .native_forward import NativeForward
+            from .forward_cutover import ForwardCutover
+            pending=folder/'external-work.json'
+            if pending.exists() and not external_work_stopped:raise Rejected('external_work_review_required')
+            running=core.run(['docker','ps','--format','{{.Names}}']).splitlines()
+            if 'single-store-migrate-'+job_id in running:raise Rejected('migration_running')
+            if external_work_stopped:pending.unlink(missing_ok=True)
+            result=ForwardCutover(NativeForward(engine,job)).reconcile()
+            state.set(job_id,'succeeded' if result['phase']=='complete' else 'rolled_back',activeVersion=json.loads(job['release'])['version'])
+            return
         running = core.run(['docker', 'ps', '--format', '{{.Names}}']).splitlines()
         if 'single-store-migrate-' + job_id in running: raise Rejected('migration_running')
         journal_path = Path(config['jobs']) / job_id / 'operation.json'
