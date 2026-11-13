@@ -20,6 +20,7 @@ class FreshTests(unittest.TestCase):
         for name,value in [('core.CONFIG',self.config),('core.ROOT',self.p/'opt-store'),('core.DATA',self.p/'data-store'),('core.STATE',self.state),
             ('update_service.fresh_worker_hook.HOOK',self.p/'hook'),('update_service.fresh_worker_hook.UNITS',self.units)]:
             p=patch(name,value);p.start();self.addCleanup(p.stop)
+        p=patch('update_service.service_runtime.preserve',return_value={'applied':True});p.start();self.addCleanup(p.stop)
         p=patch.object(os,'geteuid',return_value=0,create=True);p.start();self.addCleanup(p.stop)
     def test_existing_data_refused_before_arming(self):
         self.config.mkdir()

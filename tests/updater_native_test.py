@@ -90,6 +90,7 @@ class WorkerLinuxTests(unittest.TestCase):
             p=patch(name,value);p.start();self.addCleanup(p.stop)
         p=patch('core.run',return_value='');p.start();self.addCleanup(p.stop)
         p=patch.object(worker,'health');p.start();self.addCleanup(p.stop)
+        p=patch('update_service.service_runtime.preserve',return_value={'applied':True});p.start();self.addCleanup(p.stop)
         for name in ('enable','finish','restore'):
             p=patch('update_service.ui_route.'+name);p.start();self.addCleanup(p.stop)
     def test_atomic_install_and_idempotent_recovery(self):

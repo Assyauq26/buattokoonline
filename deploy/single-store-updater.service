@@ -14,6 +14,7 @@ Group=root
 UMask=0077
 RuntimeDirectory=single-store-updater single-store-update-status
 RuntimeDirectoryMode=0755
+RuntimeDirectoryPreserve=yes
 Restart=on-failure
 RestartSec=10
 KillMode=control-group

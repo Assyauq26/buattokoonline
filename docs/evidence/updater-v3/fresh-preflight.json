@@ -1,0 +1,25 @@
+{
+  "host": "43.173.21.197",
+  "ownerReset": true,
+  "providerResetJobStatus": "success",
+  "providerResetJobAt": "2026-11-13T06:43:16.074Z",
+  "ubuntu": "24.04.4 LTS",
+  "bootId": "d147ea5d-4746-44e0-aee6-516a63c769c1",
+  "storePathsAbsentBeforeInstaller": [
+    "/opt/single-store",
+    "/etc/single-store",
+    "/var/lib/single-store"
+  ],
+  "dockerAbsentBeforeInstaller": true,
+  "memoryMiB": 3659,
+  "swapMiB": 1987,
+  "diskAvailableGiB": 52,
+  "dnsA": "43.173.21.197",
+  "origin": "https://gheverhan.store",
+  "sshHostFingerprint": "SHA256:/eWb1Ag4jnxAC+N4MogMtftn8FllNrQBfeYSgPE30Iw",
+  "hostFingerprintIndependentlyVerified": "authenticated Helipod console; then exact comparison with scanned ED25519 key",
+  "strictHostKeyCheckingPreserved": true,
+  "workerSource": "4fe334c16657ef6ee9facfa8b20574b64037e803",
+  "immutableAppSource": "7e81f8e60b27ab5695ac50ac6b653b63095e36d1",
+  "centralPlatformChanged": false
+}

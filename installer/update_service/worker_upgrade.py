@@ -147,6 +147,9 @@ def install(source, sha, apply=False):
                 try:os.fsync(handle)
                 finally:os.close(handle)
             core.atomic_json(journal, {**receipt, 'phase':'prepared', 'previous':str(previous), 'stage':str(stage)})
+            from .service_runtime import preserve
+            receipt['runtimeDirectory']=preserve(SERVICE_UNIT,apply=True)
+            core.atomic_json(journal, {**receipt, 'phase':'prepared', 'previous':str(previous), 'stage':str(stage)})
             core.run(['systemctl','stop',SERVICE_UNIT])
             idle(config)
             core.atomic_json(journal, {**receipt, 'phase':'switching', 'previous':str(previous), 'stage':str(stage)})
@@ -192,6 +195,9 @@ def recover(source,sha):
         idle(core.read_json(core.CONFIG/'updater/config.json'))
         current=files_digest(target)
         if current not in (j['beforeFiles'],j['afterFiles']):raise Rejected('worker_source_bytes')
+        from .service_runtime import preserve
+        j['runtimeDirectory']=preserve(SERVICE_UNIT,apply=True)
+        core.atomic_json(journal,j)
         if current==j['afterFiles'] and not j.get('uiBackup'):
             j['uiBackup']=str(core.CONFIG/('updater/worker-ui-'+sha))
             j['phase']='ui_preparing';core.atomic_json(journal,j)
