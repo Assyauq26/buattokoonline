@@ -522,6 +522,7 @@ model Order {
   @@index([userId])
   @@index([status])
   @@index([couponCode, userId])
+  @@index([userId, createdAt, id])
   resolutions OrderResolution[]
 
 }

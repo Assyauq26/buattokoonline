@@ -1,0 +1,36 @@
+{
+  "ok": true,
+  "productionBuild": true,
+  "disposableDatabase": true,
+  "checks": [
+    {
+      "role": "seller",
+      "oneMagnifier": true,
+      "widths": [
+        390,
+        1440
+      ],
+      "touchTarget44": true,
+      "noOverlapOrOverflow": true,
+      "enterSearch": true,
+      "buttonSearch": true,
+      "tabPreserved": true,
+      "keyboardFocus": true
+    },
+    {
+      "role": "customer",
+      "oneMagnifier": true,
+      "widths": [
+        390,
+        1440
+      ],
+      "touchTarget44": true,
+      "noOverlapOrOverflow": true,
+      "enterSearch": true,
+      "buttonSearch": true,
+      "tabPreserved": true,
+      "keyboardFocus": true
+    }
+  ],
+  "errors": []
+}

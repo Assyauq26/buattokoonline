@@ -20,7 +20,7 @@
   gap: 10px;
   border: 1px solid #ddd;
   border-radius: 12px;
-  padding: 4px 14px;
+  padding: 4px 4px 4px 14px;
   background: #f7f7f7;
 }
 .customer-order-search input {
@@ -35,6 +35,20 @@
   min-height: 44px;
   display: grid;
   place-items: center;
+  flex-shrink: 0;
+  border-radius: 8px;
+  color: #111;
+}
+.customer-order-search:focus-within {
+  outline: 2px solid #111;
+  outline-offset: 2px;
+}
+.customer-order-search button:focus-visible {
+  outline: 2px solid #111;
+  outline-offset: -2px;
+}
+.customer-order-search button:active {
+  background: #e4e4e7;
 }
 .customer-orders nav {
   display: flex;
