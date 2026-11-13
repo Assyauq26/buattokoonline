@@ -3,6 +3,8 @@
 This is a Draft PR #52 procedure, not authorization to install on production or
 publish a catalog. It preserves the published v1.8.0 application and all SQL.
 Use the reviewed final PR commit as `WORKER_SHA`; do not use a moving branch.
+The tested worker code freeze is `1239bec7b8c769810841a4aeb8f719e4770db8fa`;
+documentation-only descendants contain the same worker bytes.
 Execute one installation at a time. Sellers initiate application updates themselves.
 
 ## Existing installation: one operator installation
@@ -46,6 +48,28 @@ Recovery rejects unrelated proxy/config edits or unrecognized worker contents.
 Do not edit the journal to make it pass. While worker installation is incomplete,
 the dashboard must not offer a new application update.
 
+The same command supports a reviewed v3 revision only when the previous completed
+receipt exists and every current worker byte still matches its after-inventory.
+It archives that receipt before preparing the next atomic switch, retains prior
+code, and verifies existing UI routes without duplicating them. Unknown v3 roots,
+local edits or pending receipts remain refused. Do not delete a receipt to force
+a revision installation.
+
+The installer/reconciler also verifies the socket from the actual app container
+and installs a scoped `RuntimeDirectoryPreserve=yes` drop-in before stopping the
+worker. Preserve that drop-in when recovering the worker; it intentionally also
+protects the previous worker after rollback. It changes no socket/token permission.
+The reason is documented in [systemd.exec](https://freedesktop.org/software/systemd/man/latest/systemd.exec.html#RuntimeDirectoryPreserve=): stopping a unit otherwise removes its runtime directory and leaves an existing Docker bind attached to the old directory.
+
+If an old worker has already left a dangling app mount, the installer refuses
+with `worker_socket_mount_review_required`. Preserving the new directory alone
+cannot reattach an old mount. Inspect the actual app/image/source and transaction
+state, take a verified backup, drain/fence under an approved maintenance procedure,
+then reattach the same verified app image and check the authenticated control API.
+Do not restart a busy application merely to clear this error. The bounded
+updater_fresh_repair.py test is pinned to the named empty QA rehearsal and is
+not a production or fleet repair command.
+
 ## New empty server
 
 Use the separately pinned worker entry point and the existing immutable v1.8.0
@@ -53,6 +77,10 @@ archive. This command refuses any existing store root, config or data directory.
 It authenticates the app archive, checks its bytes against the pinned application
 Git worktree, runs the original fresh wizard and installs worker v3 automatically
 after the wizard's completion/activation receipts. The one-time timer then stops.
+It creates the runtime-preservation policy before the old unit starts and binds
+STORE_BUILD_SHA in generated compose configuration before bootstrap, after all
+copied app bytes match the authenticated artifact. It refuses an already-started
+bootstrap or a conflicting runtime identity rather than relabelling it.
 
 ```sh
 cd /opt/store-worker-source/installer
@@ -137,6 +165,11 @@ automatically restores an old database. A separately approved disaster restore
 requires a consistent verified backup and a reconciliation plan for orders or
 external operations since that backup. Do not discard transactions to obtain a
 green health check.
+Include `/etc/systemd/system/single-store-updater.service.d/60-store-worker-runtime.conf`
+with service configuration backups. Its reviewed content can also be recreated
+through the pinned `update_service.service_runtime` helper before starting a
+restored worker. The fresh QA baseline backup is local and scratch-restore
+verified; it is not a claim of an off-site backup.
 
 ## Pilot and fleet accounting
 

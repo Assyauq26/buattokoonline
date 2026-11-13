@@ -7,14 +7,23 @@ unregistered-executor/worker-v2 statements describe that earlier commit only.
 This document and the evidence below supersede those implementation statements.
 
 Scope remains implementation, isolated verification and pilot preparation.
-No production worker installation, signed production catalog publication, merge,
-public tag/release or fleet deployment was performed in this follow-up.
+The user additionally authorized a full fresh installation on the reset QA VPS.
+One QA store is now installed and verified. No central platform modification,
+production catalog publication, merge, public release or fleet deployment occurred.
 
 ## Baseline and immutable application release
 
 - Base main: `e5b6764e90ec2071f19518bc3020a6caeed9badd`.
 - Worker implementation exercised in the native browser/reboot lab:
   `51a29da04d429a645be868a2abccf159a5dd62e4`.
+- The first fresh rehearsal automatically installed worker source
+  `4fe334c16657ef6ee9facfa8b20574b64037e803`. Runtime lifecycle/identity fixes
+  are recorded at `576ead12b48c6eb6285d9c3180ca034ca4d72a13` and final follow-up.
+- Final worker code freeze and active QA source:
+  `1239bec7b8c769810841a4aeb8f719e4770db8fa`, 35 Python files verified against
+  pinned Git and the completed receipt. Later documentation-only commits do not
+  change these worker bytes. The real v3 revision used the official atomic helper;
+  prior completed receipt/code and reversible route snapshots were preserved.
 - Published v1.8.0 app source: `7e81f8e60b27ab5695ac50ac6b653b63095e36d1`.
   Archive 4,398,817 bytes, SHA256
   `2e15208d27a87a4aeae4446404d45a1f91b55fcc5d28da3714dc064aeeaa9223`.
@@ -108,10 +117,38 @@ Release notes use textContent, nonce CSP, no-store and frame/referrer restrictio
 For an empty new server, the pinned fresh-worker entry point authenticates the
 immutable v1.8.0 artifact/source and arms one-time worker installation after the
 original wizard's completion/activation receipts. It refuses any existing store
-paths. Existing-store installation and crash recovery were exercised on Linux;
-the entire original fresh wizard has not yet been exercised in an empty-server
-namespace. Unit tests cover wait/disarm/idempotency/refusal, not a fresh-server
-deployment claim.
+paths. The full original wizard was exercised on the user-reset Ubuntu 24.04
+server using real public DNS/HTTPS, real build/bootstrap, automatic worker v3,
+actual seller login, dashboard and mobile/desktop status checks.
+
+That rehearsal exposed two real integration defects: systemd removed the mounted
+socket directory during worker restart, and the immutable wizard omitted runtime
+STORE_BUILD_SHA. The launcher now preserves runtime directories before the original
+unit starts and initializes generated source env before the first build, only
+after copied app bytes match the authenticated archive. Existing-worker install
+and reconcile also preserve directories and verify the socket from the actual
+unprivileged app before/after switching. Already dangling mounts fail shut with
+worker_socket_mount_review_required, instead of reporting a successful upgrade.
+
+The first QA rehearsal needed a bounded repair after these findings: 566 runtime
+files were authenticated, the same app image was reattached under the existing
+drain/fence primitives, and source env was bound only after proof. All 30 full
+ledger rows and 80 table projections stayed identical; no migration, bootstrap
+rerun or active DB restore occurred. The fixed pre-bootstrap initializer was then
+tested against 671 actual files copied by the original wizard, without modifying
+the real store configuration. This is an incremental debug/recovery rehearsal,
+not a claim of a second uninterrupted fresh bootstrap with the later fixes.
+
+Actual systemd + read-only Docker-bind regression reproduces the old ENOENT and
+proves directory inode/socket continuity with the fix. On the real fresh store,
+authenticated application control checks pass after both restart and separate
+stop/start. Runtime socket mode 0660, app UID/GID and token authentication remain.
+The command and status sockets are deliberately distinct: the host health probe
+gets unauthenticated 401 from the read-only status socket, while the app-mounted
+command socket rejects the read-only GET probe with 404. Real authenticated
+control POSTs are verified separately. Anonymous update-page visits now redirect
+to the actual `/login?redirectTo=...` route and the real Masuk Seller form; the
+browser filled/submitted that form and reached the authenticated updater.
 
 | Before | After |
 | --- | --- |
@@ -139,8 +176,8 @@ not normalization in the updater, a production repair or a ledger rewrite.
 
 | Check | Evidence/result |
 | --- | --- |
-| Local updater suite | 84 tests, PASS; 6 Linux-only skips |
-| Linux updater suite | 84 tests, PASS; 3 Node-host-only skips covered locally |
+| Local updater suite | 96 tests PASS (10 platform skips); final control/status probe correction also passed its 8-test targeted suite |
+| Linux final code-freeze suite | 96 tests PASS (3 Node-host-only skips covered locally) |
 | Existing React UI unit tests | 4 PASS; build/typecheck previously passed on implementation |
 | Real PostgreSQL 16 rehearsal | Published 1.8.0 SQL, upgrade/restore/history/constraint and lock-failure checks PASS |
 | Real native Docker cutover, lab case 3 | Full download/build/fence/backup/restore/migration/activation succeeded |
@@ -158,6 +195,11 @@ not normalization in the updater, a production repair or a ledger rewrite.
 | Reopen UI while app fenced | Recovery visible, new start hidden, then success after official reconciliation |
 | Post-recovery smoke | Storefront, login, products, Flash Sale/voucher pages, account and orders: HTTP 200 |
 | Mobile/desktop UI | 390/1440 screenshots, no horizontal overflow |
+| Full fresh Ubuntu 24.04 QA installation | Official immutable v1.8.0 wizard, real HTTPS, build/bootstrap, automatic v3, seller login/dashboard and HTTP smoke PASS after documented runtime repair |
+| Real worker restart / stop-start | Actual authenticated application control API PASS on both; same mounted directory inode |
+| Real reviewed v3 -> v3 revision | Official dry-run/apply, exact prior file inventory, archived receipt, atomic switch, existing-route verification and app-mounted control checks PASS |
+| Anonymous updater -> actual seller login form | Correct redirect, actual form submission and authenticated dashboard/updater PASS |
+| Fresh baseline backup | Verified scratch restore; 0 products, 1 user, 1 identity; media/config extracted |
 
 Sanitized receipts and screenshots are in [evidence/updater-v3](evidence/updater-v3).
 The browser harness initially aborted on an 8-second transport timeout during
@@ -170,39 +212,41 @@ retag already-built matching images; they do not claim new full Docker builds.
 Case 4 performed the real native builds. A 29-test policy/orchestration check and
 the complete local 84-test suite passed again after the final docstring edit.
 
-The source QA store was checked again after the rehearsals: still 1.7.4/c3cfb22,
+The source QA store was checked again before the owner's reset: still 1.7.4/c3cfb22,
 all original 29 complete ledger rows identical, original worker active, and only
 its original app/db/proxy containers running. Lab containers were stopped while
 their private data, backups and journals were retained. The deliberately uncertain
-case-8 test remains fenced/stopped rather than falsely reconciled.
+case-8 test was left fenced/stopped rather than falsely reconciled.
+
+The owner subsequently reset that dedicated VM, explicitly authorizing a fresh
+installation. Helipod reported the reset succeeded; the new SSH fingerprint was
+independently read from its authenticated console and pinned with strict checking.
+All three store paths and Docker were absent before installation. Old lab data,
+backups and the old QA installation ID were retired by that owner-performed reset.
+The retired unsigned policy/inventory are historical specimens only: **do not sign
+or publish them**. Current QA ID is `da49e7ab78f5d18e5f3be0e79dd0a0c4`, already
+on 1.8.0. Current backup/identity/service receipts are in fresh-final.json.
 
 No CI was dispatched. Commits retain `[skip ci]`; no workflow was disabled.
 Actual production stores updated by this follow-up: **0**. Successful lab copies
 do not establish eligibility of Gheverhan, Hubify or any other seller installation.
 
-## Remaining release gates
+## Decision and remaining distribution gates
 
-- Complete the full empty-server wizard/hook integration rehearsal or retain an
-  explicit new-install rollout restriction until independently verified.
-- Refresh final source/PR/checks and immutable tag/artifact/catalog observations.
-- Before a production pilot: authorized review/merge, per-installation live
-  baseline, pinned worker delivery, owner-signed allowlisted policy plus higher
-  signed catalog sequence, and a seller-initiated pilot with nonmutating smoke.
+**GO for technical review and a controlled pilot candidate on the documented
+profiles.** Native migration/recovery, transaction preservation, legacy worker
+installation, fresh installation and actual post-restart control are verified.
+Unsupported versions/customizations/unknown carrier state remain ineligible.
 
-Production/fleet decision remains **NO-GO until those gates are closed**. This is
-not a missing-signing-key shortcut: all available implementation and lab work
-continues before requesting the owner's final signing/publication action.
+**NO-GO for unreviewed general distribution or production catalog publication.**
+The owner explicitly requested no changes to the central platform. The public
+catalog still lists 1.7.4 as its newest entry, so existing sellers will not discover
+1.8.0 merely by refreshing. That is a distribution gate, not a claim that the QA
+installation is still 1.7.4: its installed app is 1.8.0/7e81f8e and worker is v3.
 
-The existing-store canonical path has passed the above technical rehearsals;
-this is a candidate for reviewed pilot preparation, not a production rollout.
-The read-only QA pilot inventory identifies installation
-`6b64ce6e38b242488d9d6fb2da7f3450` (43.173.21.197, explicitly dedicated QA).
-`qa-pilot-policy-UNSIGNED.json` binds only that ID and both immutable artifacts.
-It is an expiring, unsigned review specimen; regenerate from a fresh inventory
-and sequence before signing. Do not publish a test key or broaden the cohort.
-
-For an empty-server integration run, another empty Ubuntu 24.04 test host is
-needed: the available VM's existing QA store/data are preserved, and neither its
-directories nor global services will be replaced to simulate a fresh server.
-No production private key is needed for that test. Production signing remains
-on its owner's host via the existing signer; secrets must not be sent in chat.
+The remaining owner process is review/merge, a fresh per-installation inventory
+for a selected legacy pilot, pinned worker delivery, and owner-signed allowlisted
+policy plus a higher signed catalog sequence using the existing signer. Keep
+private keys on the signing host; never send secrets through chat. Expand only
+after that seller's initiated update and smoke test pass. No tenant update is
+started automatically and no other store's state is inferred from this QA server.
