@@ -8,6 +8,7 @@ from . import VERSION
 from .engine import Engine
 from .state import State, ACTIVE
 from .trust import Rejected, verify, version
+from .availability import availability
 
 class NoRedirect(HTTPRedirectHandler):
  def redirect_request(self,*args,**kwargs):raise Rejected('catalog_redirect')
@@ -35,13 +36,14 @@ class Controller:
  def status(self):
   installed=core.read_json(core.CONFIG/'version.json');cat=self.catalog
   valid=cat and cat['expiresAt']>time.time() and not self.catalog_error
-  available=[] if not valid else [r for r in cat['releases'] if r['sha'] not in cat['revoked'] and r['minimumUpdater']<=VERSION and r['dbContract']==installed['db_contract'] and r['rollbackCompatible'] and version(r['minimumInstalledVersion'])<=version(installed['version'])<=version(r['maximumInstalledVersion']) and version(r['version'])>version(installed['version']) and (r['channel']=='stable' or self.config['channel']=='pilot')]
-  available.sort(key=lambda r:version(r['version']),reverse=True)
   jobs=[]
   for row in self.state.jobs():
    detail=json.loads(row['detail']);release=json.loads(row['release'])
    jobs.append({k:row[k] for k in ['id','state','created','updated']}|{'version':release['version'],'sha':release['sha'],'detail':{k:v for k,v in detail.items() if k in ['error','downloaded','total','activeVersion','finishedAt']}})
-  return {'installation':self.config['installation'],'updaterVersion':VERSION,'installedVersion':installed['version'],'installedSha':installed['source_sha'],'checkedAt':self.last_check or None,'catalogError':self.catalog_error,'release':None if not available else {k:available[0][k] for k in ['version','sha','notes']},'jobs':jobs}
+  discovery=availability(cat,installed,self.config['channel'],VERSION,bool(valid))
+  # Do not offer a lower executable release while hiding a newer blocked one.
+  offered=discovery['nextRelease'] if discovery['state']=='available' else None
+  return {'installation':self.config['installation'],'updaterVersion':VERSION,'installedVersion':installed['version'],'installedSha':installed['source_sha'],'checkedAt':self.last_check or None,'catalogError':self.catalog_error,'release':offered,'availability':discovery,'jobs':jobs}
  def command(self,body):
   if not isinstance(body,dict) or set(body)-{'action','installation','actor','sessionVersion','sessionHash','sessionExpires','sha','requestKey'}:raise Rejected('invalid_body')
   if body.get('installation')!=self.config['installation']:raise Rejected('installation_mismatch')

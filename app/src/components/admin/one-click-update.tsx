@@ -18,6 +18,11 @@ type Status = {
   installedVersion: string;
   checkedAt: number | null;
   catalogError: string | null;
+  availability?: {
+    state: "check_required" | "current" | "blocked" | "available";
+    latest: { version: string; sha: string; notes: string } | null;
+    reason: string | null;
+  };
   release: { version: string; sha: string; notes: string } | null;
   jobs: Job[];
   statusToken?: string;
@@ -48,6 +53,10 @@ const labels: Record<string, string> = {
   recovery_required: "Perlu bantuan operator",
 };
 const errors: Record<string, string> = {
+  worker_upgrade_required: "Operator perlu meningkatkan layanan updater satu kali sebelum versi ini dapat dipasang.",
+  upgrade_path_unsupported: "Versi asal toko belum memiliki jalur upgrade yang disetujui. Hubungi operator untuk menentukan urutannya.",
+  database_contract_unsupported: "Struktur data toko memerlukan pemeriksaan operator sebelum update.",
+  operator_migration_required: "Versi ini memerlukan migrasi khusus. Operator perlu menyiapkan jalur upgrade dan recovery yang sesuai.",
   insufficient_disk: "Ruang penyimpanan belum cukup.",
   insufficient_resources: "Server sedang kekurangan sumber daya. Coba lagi setelah bebannya berkurang.",
   local_customization:
@@ -243,8 +252,17 @@ export function OneClickUpdate({
             Daftar rilis belum dapat diverifikasi. Coba lagi nanti.
           </p>
         )}
-        {data?.checkedAt && !data.catalogError && !data.release && !running && (
+        {data?.availability?.state === "blocked" && !running && (
+          <div role="status" className="space-y-2 rounded-lg bg-zinc-100 p-4">
+            <p className="font-semibold">Versi {data.availability.latest?.version} tersedia, tetapi belum dapat dipasang</p>
+            <p className="text-sm">{errors[data.availability.reason ?? ""] ?? "Hubungi operator untuk memeriksa kompatibilitas toko."}</p>
+          </div>
+        )}
+        {data?.checkedAt && !data.catalogError && !data.release && !running && data.availability?.state === "current" && (
           <p role="status">Versi toko sudah terkini untuk kanal ini.</p>
+        )}
+        {data?.checkedAt && !data.catalogError && !data.release && !running && !data.availability && (
+          <p role="status">Updater lama belum dapat membedakan versi terbaru dari rilis yang tidak kompatibel. Operator perlu memeriksa katalog dan meningkatkan updater.</p>
         )}
       </section>
       {data?.release && !running && (

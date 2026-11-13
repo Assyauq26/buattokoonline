@@ -50,6 +50,15 @@ class State:
    c.execute('INSERT INTO jobs(id,installation,actor,request_key,state,release,created,updated) VALUES(?,?,?,?,?,?,?,?)',(job,self.installation,actor,key,'queued',json.dumps(release),now,now))
    c.execute('INSERT INTO events(job,state,at) VALUES(?,?,?)',(job,'queued',now))
    return dict(c.execute('SELECT * FROM jobs WHERE id=?',(job,)).fetchone())
+ def policy(self,policy,digest):
+  # Authenticate first; sequence is global for this policy feed, not per id.
+  with self.db() as c:
+   prior=c.execute("SELECT value FROM meta WHERE key='policy_sequence'").fetchone()
+   old=c.execute("SELECT value FROM meta WHERE key='policy_digest'").fetchone()
+   if prior and int(prior['value'])>policy['sequence']:raise Rejected('policy_replay')
+   if prior and int(prior['value'])==policy['sequence'] and old and old['value']!=digest:raise Rejected('policy_equivocation')
+   for key,value in [('policy_sequence',str(policy['sequence'])),('policy_digest',digest)]:
+    c.execute('INSERT OR REPLACE INTO meta VALUES(?,?)',(key,value))
  def prior(self,actor,key,sha):
   with self.db() as c:
    row=c.execute('SELECT * FROM jobs WHERE request_key=?',(key,)).fetchone()
