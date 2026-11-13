@@ -175,8 +175,11 @@ def context(case):
         for p in ('/','/login','/api/v1/ready'):run(['curl','--fail','--silent','--max-time','15','http://127.0.0.1:3088'+p])
     class Transport:
         def open(self,*a,**k):return io.BytesIO((root/'catalog.json').read_bytes())
-    def fresh(config,state,release,installed):
+    def catalog(config,state):
         cat=verify((root/'catalog.json').read_bytes(),core.read_json(config['trust']));state.catalog(cat)
+        return cat
+    def fresh(config,state,release,installed):
+        cat=catalog(config,state)
         return authorized(release,installed,config,state,cat)
     def backup(engine,folder):
         value=updater.backup();updater.verify_backup(value);return value
@@ -203,6 +206,7 @@ def context(case):
         for name,value in [('core.ROOT',root),('core.CONFIG',config),('core.DATA',root/'data'),('core.COMPOSE',root/'compose.json'),
             ('core.STATE',config/'setup.json'),('updater.BACKUPS',root/'backups'),('core.run',run),('core.public_health',public),
             ('update_service.server.build_opener',lambda *a:Transport()),('update_service.policy_feed.fresh',fresh),
+            ('update_service.policy_feed.current_catalog',catalog),
             ('update_service.native_forward.fresh',fresh),('update_service.native_forward.NativeForward.active',active),
             ('update_service.native_forward.NativeForward.drain',drain),
             ('update_service.native_forward.NativeForward.save',save),

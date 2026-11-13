@@ -1,0 +1,39 @@
+{
+  "ok": true,
+  "caseId": "e18a0004",
+  "version": "1.8.0",
+  "jobState": "succeeded",
+  "reopenWhileFenced": true,
+  "smoke": [
+    {
+      "path": "/",
+      "status": 200
+    },
+    {
+      "path": "/login",
+      "status": 200
+    },
+    {
+      "path": "/admin/products",
+      "status": 200
+    },
+    {
+      "path": "/admin/marketing?tab=flash",
+      "status": 200
+    },
+    {
+      "path": "/admin/marketing?tab=voucher",
+      "status": 200
+    },
+    {
+      "path": "/account",
+      "status": 200
+    },
+    {
+      "path": "/orders",
+      "status": 200
+    }
+  ],
+  "errors": [],
+  "blocked": []
+}

@@ -1,7 +1,7 @@
-"""Forward-only orchestration contract, intentionally not registered in Engine.
+"""Forward-only orchestration used by Engine's authenticated native adapter.
 
 A native adapter must prove ingress fencing, carrier drain, restored backup,
-ledger identity and readiness before registration. A policy is not executable
+ledger identity and readiness before activation. A policy is not executable
 code and cannot supply shell commands. Caller holds the global operation lock.
 """
 from .trust import Rejected

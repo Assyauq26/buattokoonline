@@ -1,0 +1,13 @@
+{
+  "sequence": 5,
+  "expiresAt": 1794627899,
+  "versions": [
+    "1.7.0",
+    "1.7.2",
+    "1.7.3",
+    "1.7.4"
+  ],
+  "v180Present": false,
+  "signatureVerified": true,
+  "publishedByThisTask": false
+}

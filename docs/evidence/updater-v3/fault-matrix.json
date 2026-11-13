@@ -1,0 +1,62 @@
+[
+  {
+    "case": "e18a0006",
+    "fault": "prepare_done",
+    "realLinuxProcessKill": true,
+    "actualBackupFailure": false,
+    "expected": "rolled_back",
+    "state": "rolled_back",
+    "recoveryReason": null,
+    "installedVersion": "1.7.4",
+    "ledgerRows": 29,
+    "sqlReplayed": false,
+    "imagesReusedAfterSourceInventory": true,
+    "productionStoresUpdated": 0,
+    "activeDatabaseRestoreDuringRecovery": false
+  },
+  {
+    "case": "e18a0007",
+    "fault": "backup_failure",
+    "realLinuxProcessKill": false,
+    "actualBackupFailure": true,
+    "expected": "rolled_back",
+    "state": "rolled_back",
+    "recoveryReason": null,
+    "installedVersion": "1.7.4",
+    "ledgerRows": 29,
+    "sqlReplayed": false,
+    "imagesReusedAfterSourceInventory": true,
+    "productionStoresUpdated": 0,
+    "activeDatabaseRestoreDuringRecovery": false
+  },
+  {
+    "case": "e18a0008",
+    "fault": "migration",
+    "realLinuxProcessKill": true,
+    "actualBackupFailure": false,
+    "expected": "migration_uncertain",
+    "state": "recovery_required",
+    "recoveryReason": "migration_uncertain",
+    "installedVersion": "1.7.4",
+    "ledgerRows": 29,
+    "sqlReplayed": false,
+    "imagesReusedAfterSourceInventory": true,
+    "productionStoresUpdated": 0,
+    "activeDatabaseRestoreDuringRecovery": false
+  },
+  {
+    "case": "e18a0009",
+    "fault": "activation_done",
+    "realLinuxProcessKill": true,
+    "actualBackupFailure": false,
+    "expected": "succeeded",
+    "state": "succeeded",
+    "recoveryReason": null,
+    "installedVersion": "1.8.0",
+    "ledgerRows": 30,
+    "sqlReplayed": false,
+    "imagesReusedAfterSourceInventory": true,
+    "productionStoresUpdated": 0,
+    "activeDatabaseRestoreDuringRecovery": false
+  }
+]
