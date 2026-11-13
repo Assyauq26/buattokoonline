@@ -133,7 +133,7 @@ class Handler(BaseHTTPRequestHandler):
    self.response(200,self.server.controller.status())
   except Rejected as e:
    if self.path=='/admin/settings/updates' and str(e) in ('session_expired','access_denied'):
-    self.send_response(303);self.send_header('Location','/seller/login?next=%2Fadmin%2Fsettings%2Fupdates');self.send_header('Cache-Control','private, no-store');self.send_header('Content-Length','0');self.end_headers();return
+    self.send_response(303);self.send_header('Location','/login?redirectTo=%2Fadmin%2Fsettings%2Fupdates');self.send_header('Cache-Control','private, no-store');self.send_header('Content-Length','0');self.end_headers();return
    self.response(401 if str(e) in ['session_expired','access_denied'] else 429,{'error':'status_unavailable'})
   except Exception:self.response(503,{'error':'status_unavailable'})
  def do_POST(self):

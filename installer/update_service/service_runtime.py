@@ -17,6 +17,18 @@ SYSTEMD=Path('/etc/systemd/system')
 CONTENT=b'[Service]\nRuntimeDirectoryPreserve=yes\n'
 
 
+def verify_mount(directory=Path('/run/single-store-updater')):
+    """Read-only proof from the actual unprivileged app, not just the host socket."""
+    try:
+        import json
+        host=Path(directory).stat()
+        script="""const f=require('fs'),h=require('http'),s=f.statSync('/run/store-updater');const q=h.get({socketPath:'/run/store-updater/control.sock',path:'/api/local-updater/status'},r=>{r.resume();r.on('end',()=>console.log(JSON.stringify({directory:[s.dev,s.ino],status:r.statusCode})))});q.setTimeout(2000,()=>q.destroy());q.on('error',()=>process.exit(2));"""
+        actual=json.loads(core.dc(['exec','-T','app','node','-e',script],timeout=10))
+        if actual!={'directory':[host.st_dev,host.st_ino],'status':401}:raise ValueError()
+        return {'appMountVerified':True,'unauthenticatedStatus':401}
+    except Exception:raise Rejected('worker_socket_mount_review_required') from None
+
+
 def preserve(unit='single-store-updater.service',apply=False):
     if os.geteuid()!=0:raise Rejected('operator_required')
     if not re.fullmatch(r'[a-z0-9-]{1,90}\.service',unit):raise Rejected('worker_service_review_required')

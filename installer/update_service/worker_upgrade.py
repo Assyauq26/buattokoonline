@@ -120,21 +120,38 @@ def install(source, sha, apply=False):
     if any(p.is_symlink() for p in (target, *target.parents)): raise Rejected('worker_path')
     secure_path(target)
     config = core.read_json(core.CONFIG/'updater/config.json')
-    # First rollout supports only the audited v2 family; unknown roots fail shut.
-    if (target/'update_service/__init__.py').read_text().splitlines()[-1].strip() != 'VERSION = 2':
-        raise Rejected('worker_version_unsupported')
+    prior=None
+    version=(target/'update_service/__init__.py').read_text().splitlines()[-1].strip()
+    if version=='VERSION = 3':
+        pointer=core.CONFIG/'updater/worker-upgrade.json'
+        if not pointer.is_file() or pointer.is_symlink():raise Rejected('worker_version_unsupported')
+        prior=core.read_json(pointer)
+        if prior.get('phase')!='complete' or prior.get('applied') is not True or files_digest(target)!=prior.get('afterFiles'):
+            raise Rejected('worker_source_bytes')
+        if not re.fullmatch('[a-f0-9]{40}',prior.get('sourceSha','')):raise Rejected('worker_source')
+        if prior['sourceSha']==sha:raise Rejected('worker_already_installed')
+    elif version!='VERSION = 2':raise Rejected('worker_version_unsupported')
     idle(config)
+    from .service_runtime import verify_mount
+    verify_mount(HEALTH_SOCKET.parent)
     receipt = {'sourceSha':sha, 'files':len(files), 'applied':False,
         'configurationHash':hashlib.sha256((core.CONFIG/'updater/config.json').read_bytes()).hexdigest(),
         'proxyHash':hashlib.sha256((core.CONFIG/'Caddyfile').read_bytes()).hexdigest(),
         'beforeFiles':files_digest(target),'afterFiles':{n:hashlib.sha256(v).hexdigest() for n,v in files.items()}}
+    if prior:receipt['supersedes']=prior['sourceSha']
     if not apply: return receipt
     with open(OPERATION_LOCK,'a+') as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         idle(config)
         previous = target.with_name('updater.before-'+sha)
         journal = core.CONFIG/'updater/worker-upgrade.json'
-        if previous.exists() or journal.exists(): raise Rejected('worker_upgrade_requires_review')
+        if previous.exists():raise Rejected('worker_upgrade_requires_review')
+        if journal.exists():
+            if not prior or core.read_json(journal)!=prior or files_digest(target)!=prior['afterFiles']:raise Rejected('worker_upgrade_requires_review')
+            history=journal.parent/'worker-upgrade-history';history.mkdir(mode=0o700,exist_ok=True);secure_path(history)
+            archived=history/(prior['sourceSha']+'.json')
+            if archived.is_symlink() or (archived.exists() and core.read_json(archived)!=prior):raise Rejected('worker_upgrade_requires_review')
+            if not archived.exists():core.atomic_json(archived,prior)
         stage = Path(tempfile.mkdtemp(prefix='.worker-', dir=target.parent))
         try:
             for name, data in files.items():
@@ -156,12 +173,14 @@ def install(source, sha, apply=False):
             exchange(target,stage)
             core.run(['systemctl','start',SERVICE_UNIT])
             health()
+            verify_mount(HEALTH_SOCKET.parent)
             from . import ui_route
             ui_backup=core.CONFIG/('updater/worker-ui-'+sha)
             receipt['uiBackup']=str(ui_backup)
             core.atomic_json(journal,{**receipt,'phase':'ui_preparing','previous':str(previous),'stage':str(stage)})
-            ui_route.enable(config,ui_backup)
+            ui_route.enable(config,ui_backup,existing=bool(prior))
             core.run(['systemctl','restart',SERVICE_UNIT]);health()
+            verify_mount(HEALTH_SOCKET.parent)
             stage.rename(previous)
             receipt['applied']=True
             core.atomic_json(journal, {**receipt,'phase':'complete','previous':str(previous),'stage':str(stage)})
@@ -209,9 +228,11 @@ def recover(source,sha):
                 if (backup/'Caddyfile.after').is_file() and (backup/'config.after.json').is_file():ui_route.finish(backup)
                 else:
                     if hashlib.sha256((core.CONFIG/'Caddyfile').read_bytes()).hexdigest()!=j['proxyHash'] or hashlib.sha256((core.CONFIG/'updater/config.json').read_bytes()).hexdigest()!=j['configurationHash']:raise Rejected('configuration_changed')
-                    ui_route.enable(core.read_json(core.CONFIG/'updater/config.json'),backup,resume=backup.exists())
+                    ui_route.enable(core.read_json(core.CONFIG/'updater/config.json'),backup,resume=backup.exists(),existing=bool(j.get('supersedes')))
             else:ui_route.restore(backup)
         core.run(['systemctl','restart',SERVICE_UNIT]);health()
+        from .service_runtime import verify_mount
+        verify_mount(HEALTH_SOCKET.parent)
         if current==j['afterFiles']:
             if stage.exists():
                 if files_digest(stage)!=j['beforeFiles'] or previous.exists():raise Rejected('worker_source_bytes')

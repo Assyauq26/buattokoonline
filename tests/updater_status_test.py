@@ -70,7 +70,8 @@ class StatusTests(unittest.TestCase):
             response=client.getresponse();self.assertEqual(response.status,200);response.read()
             client.request('POST','/command',body='{}');response=client.getresponse();self.assertEqual(response.status,404);response.read()
             self.controller.command.assert_not_called()
-            client.request('GET','/admin/settings/updates');response=client.getresponse();self.assertEqual(response.status,303);response.read();client.close()
+            client.request('GET','/admin/settings/updates');response=client.getresponse();self.assertEqual(response.status,303)
+            self.assertEqual(response.getheader('Location'),'/login?redirectTo=%2Fadmin%2Fsettings%2Fupdates');response.read();client.close()
         finally:server.shutdown();server.server_close();thread.join()
 
 
@@ -98,3 +99,17 @@ class RouteTests(unittest.TestCase):
             (self.p/'Caddyfile').write_text('operator changed this')
             with self.assertRaises(Rejected):ui_route.restore(backup)
             self.assertEqual((self.p/'Caddyfile').read_text(),'operator changed this')
+    def test_verified_v3_revision_does_not_duplicate_routes(self):
+        def write(text):(self.p/'Caddyfile').write_bytes(text.encode())
+        with patch.object(ui_route,'validate_proxy'),patch.object(ui_route,'write_proxy',side_effect=write):
+            ui_route.enable(self.cfg,self.p/'first')
+            cfg=json.loads((self.p/'updater/config.json').read_text());before=(self.p/'Caddyfile').read_bytes()
+            ui_route.enable(cfg,self.p/'revision',existing=True)
+            self.assertEqual((self.p/'Caddyfile').read_bytes(),before)
+            self.assertEqual(before.decode().count('/admin/settings/updates'),1)
+    def test_v3_revision_rejects_unreviewed_proxy_hashes(self):
+        def write(text):(self.p/'Caddyfile').write_bytes(text.encode())
+        with patch.object(ui_route,'validate_proxy'),patch.object(ui_route,'write_proxy',side_effect=write):
+            ui_route.enable(self.cfg,self.p/'first');cfg=json.loads((self.p/'updater/config.json').read_text())
+            cfg['approvedProxyHashes']['live']='0'*64;(self.p/'updater/config.json').write_text(json.dumps(cfg))
+            with self.assertRaises(Rejected):ui_route.enable(cfg,self.p/'revision',existing=True)

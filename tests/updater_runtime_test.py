@@ -27,6 +27,13 @@ class RuntimeTests(unittest.TestCase):
         directory=self.root/'single-store-updater.service.d';directory.mkdir();path=directory/'60-store-worker-runtime.conf';path.write_text('custom policy')
         with self.assertRaises(Rejected):runtime.preserve(apply=True)
         self.assertEqual(path.read_text(),'custom policy')
+    def test_mount_probe_checks_container_directory_and_unauthenticated_socket(self):
+        host=self.root.stat()
+        with patch('core.dc',return_value=json.dumps({'directory':[host.st_dev,host.st_ino],'status':401})):
+            self.assertTrue(runtime.verify_mount(self.root)['appMountVerified'])
+        for value in ({'directory':[0,0],'status':401},{'directory':[host.st_dev,host.st_ino],'status':200}):
+            with patch('core.dc',return_value=json.dumps(value)):
+                with self.assertRaises(Rejected):runtime.verify_mount(self.root)
     @unittest.skipUnless(os.name=='posix','Directory fsync on Linux')
     def test_atomic_policy_idempotency_and_effective_setting(self):
         (self.root/'single-store-updater.service').write_text('[Service]\n')

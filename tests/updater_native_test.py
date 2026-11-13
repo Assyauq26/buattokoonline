@@ -91,6 +91,7 @@ class WorkerLinuxTests(unittest.TestCase):
         p=patch('core.run',return_value='');p.start();self.addCleanup(p.stop)
         p=patch.object(worker,'health');p.start();self.addCleanup(p.stop)
         p=patch('update_service.service_runtime.preserve',return_value={'applied':True});p.start();self.addCleanup(p.stop)
+        p=patch('update_service.service_runtime.verify_mount',return_value={'appMountVerified':True});p.start();self.addCleanup(p.stop)
         for name in ('enable','finish','restore'):
             p=patch('update_service.ui_route.'+name);p.start();self.addCleanup(p.stop)
     def test_atomic_install_and_idempotent_recovery(self):
@@ -102,6 +103,19 @@ class WorkerLinuxTests(unittest.TestCase):
             with self.assertRaises(Rejected):worker.install(self.source,self.sha,True)
         self.assertEqual(worker.files_digest(self.target),self.before)
         self.assertEqual(json.loads((self.cfg/'updater/worker-upgrade.json').read_text())['phase'],'rolled_back')
+    def test_reviewed_v3_revision_preserves_prior_receipt(self):
+        worker.install(self.source,self.sha,True);old=self.sha
+        (self.source/'installer/core.py').write_text('# reviewed revision\n')
+        subprocess.run(['git','-C',str(self.source),'add','.'],check=True,stdout=subprocess.DEVNULL)
+        subprocess.run(['git','-C',str(self.source),'-c','user.name=Test','-c','user.email=test@example.invalid','commit','-m','revision'],check=True,stdout=subprocess.DEVNULL)
+        new=subprocess.check_output(['git','-C',str(self.source),'rev-parse','HEAD']).decode().strip()
+        receipt=worker.install(self.source,new,True)
+        self.assertEqual(receipt['supersedes'],old)
+        archived=json.loads((self.cfg/'updater/worker-upgrade-history'/(old+'.json')).read_text())
+        self.assertEqual(archived['sourceSha'],old);self.assertEqual(archived['phase'],'complete')
+    def test_tampered_v3_revision_refused(self):
+        worker.install(self.source,self.sha,True);(self.target/'core.py').write_text('# local customization\n')
+        with self.assertRaises(Rejected):worker.install(self.source,self.sha,True)
     def crash(self,point):
         real_json=worker.core.atomic_json;real_exchange=worker.exchange
         pid=os.fork()

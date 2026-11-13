@@ -19,7 +19,7 @@ def routes(config,include_ticket=True):
     return ''.join('  handle '+p+' {\n    reverse_proxy '+str(address)+':'+str(port)+'\n  }\n' for p in paths)
 
 
-def enable(config,backup,resume=False):
+def enable(config,backup,resume=False,existing=False):
     backup=Path(backup);backup.mkdir(mode=0o700,exist_ok=resume)
     proxy=core.CONFIG/'Caddyfile';cfg=core.CONFIG/'updater/config.json'
     previous=proxy.read_bytes();old=cfg.read_bytes()
@@ -29,12 +29,17 @@ def enable(config,backup,resume=False):
     (backup/'Caddyfile').write_bytes(previous);core.atomic_json(backup/'config.json',json.loads(old))
     text=previous.decode();marker=config['origin']+' {'
     if text.count(marker)!=1 or text.count('/api/local-updater/status')!=1:raise Rejected('proxy_review_required')
-    if any(path in text for path in PATHS):raise Rejected('proxy_review_required')
-    candidate=text.replace(marker,marker+'\n'+routes(config,False),1)
+    if existing:
+        if any(text.count(path)!=1 for path in PATHS):raise Rejected('proxy_review_required')
+        candidate=text
+    else:
+        if any(path in text for path in PATHS):raise Rejected('proxy_review_required')
+        candidate=text.replace(marker,marker+'\n'+routes(config,False),1)
     handle=b'  handle {\n    reverse_proxy app:3000\n  }\n'
     if candidate.encode().count(handle)!=1:raise Rejected('proxy_review_required')
     maintenance=candidate.encode().replace(handle,b'  handle {\n    respond "Toko sedang disiapkan oleh pemilik server." 503\n  }\n',1)
     new={**config,'approvedProxyHashes':{'live':hashlib.sha256(candidate.encode()).hexdigest(),'maintenance':hashlib.sha256(maintenance).hexdigest()}}
+    if existing and config.get('approvedProxyHashes')!=new['approvedProxyHashes']:raise Rejected('proxy_review_required')
     if (backup/'Caddyfile.after').exists() and (backup/'Caddyfile.after').read_bytes()!=candidate.encode():raise Rejected('proxy_changed_requires_review')
     if (backup/'config.after.json').exists() and core.read_json(backup/'config.after.json')!=new:raise Rejected('configuration_changed')
     (backup/'Caddyfile.after').write_bytes(candidate.encode());core.atomic_json(backup/'config.after.json',new)
