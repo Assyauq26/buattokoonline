@@ -28,6 +28,8 @@ import {
   completeGoogleOAuth,
 } from "@/modules/payments/evidence/google";
 import { unseal } from "@/modules/payments/evidence/secrets";
+import { ingestBluEmailReview } from "@/modules/payments/evidence/blu-ingestion";
+import { BLU_HTML, syntheticBluEml } from "../fixtures/blu-email";
 
 const url = new URL(process.env.DATABASE_URL || "http://invalid");
 if (
@@ -574,6 +576,116 @@ it("holds delayed, partial, excess, unknown, refund, missing identity, untrusted
       where: { evidence: { sourceId: s.id } },
     }),
   ).toBe(0);
+});
+
+it("deduplicates blu MIME across parallel/retry deliveries and holds same-amount events without a bank ID", async () => {
+  const s = await prisma.paymentEvidenceSource.create({
+    data: {
+      storeScope: scope,
+      kind: "GMAIL_BANK",
+      label: "Synthetic blu MIME only",
+      accountRef: randomUUID(),
+    },
+  });
+  const lease = (await acquireSourceLease(s.id))!;
+  const event = new Date(Date.now() + 120_000 + 7 * 3600_000);
+  const months = [
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "Mei",
+    "Jun",
+    "Jul",
+    "Agu",
+    "Sep",
+    "Okt",
+    "Nov",
+    "Des",
+  ];
+  const time = `${event.getUTCDate()} ${months[event.getUTCMonth()]} ${event.getUTCFullYear()} ${[event.getUTCHours(), event.getUTCMinutes(), event.getUTCSeconds()].map((n) => String(n).padStart(2, "0")).join(":")} WIB`;
+  const html = BLU_HTML.replace("14 Nov 2026 10:20:30 WIB", time);
+  const raw = syntheticBluEml({ html });
+  const input = {
+    sourceId: s.id,
+    generation: lease.generation,
+    leaseToken: lease.token,
+    raw,
+  };
+  const pair = await Promise.all([
+    ingestBluEmailReview({ ...input, apiMessageId: "gmailCopyA" }),
+    ingestBluEmailReview({ ...input, apiMessageId: "gmailCopyB" }),
+  ]);
+  expect(pair[0].evidenceId).toBe(pair[1].evidenceId);
+  expect(pair[0].disposition).toBe("REVIEW_REQUIRED");
+  const e = await prisma.incomingPaymentEvidence.findUniqueOrThrow({
+    where: { id: pair[0].evidenceId },
+  });
+  expect(e).toMatchObject({
+    amount: 125001,
+    bankTxId: null,
+    reason: "MISSING_STABLE_TRANSACTION_ID",
+    trusted: false,
+    providerStatus: "UNKNOWN",
+  });
+  const coldClient = new PrismaClient();
+  expect(
+    await coldClient.incomingPaymentEvidence.count({
+      where: { sourceId: s.id },
+    }),
+  ).toBe(1);
+  await coldClient.$disconnect();
+  expect(
+    (await ingestBluEmailReview({ ...input, apiMessageId: "gmailCopyA" }))
+      .evidenceId,
+  ).toBe(e.id);
+  const sameAmount = await ingestBluEmailReview({
+    ...input,
+    raw: syntheticBluEml({
+      html,
+      messageId: "<synthetic-independent-blu@example.test>",
+    }),
+    apiMessageId: "gmailOther",
+  });
+  expect(sameAmount.evidenceId).not.toBe(e.id);
+  expect(
+    await prisma.incomingPaymentEvidence.count({ where: { sourceId: s.id } }),
+  ).toBe(2);
+  await prisma.paymentEvidenceSource.update({
+    where: { id: s.id },
+    data: { accountRef: e.accountRef },
+  });
+  const p = await makePayment(125001);
+  const a = await prisma.$transaction((tx) =>
+    allocateAttempt(tx, {
+      sourceId: s.id,
+      paymentId: p.id,
+      baseAmount: 125000,
+      expiresAt: new Date(now.getTime() + 600_000),
+    }),
+  );
+  for (const evidenceId of [e.id, sameAmount.evidenceId])
+    await expect(
+      claimEvidence(
+        actor,
+        evidenceId,
+        a.id,
+        "A matching amount alone is not a bank transaction identity.",
+      ),
+    ).rejects.toThrow("penanganan terpisah");
+  expect(
+    await prisma.payment.findUnique({ where: { id: p.id } }),
+  ).toHaveProperty("status", "PENDING_PAYMENT");
+  expect(
+    await prisma.paymentEvidenceClaim.count({
+      where: { evidence: { sourceId: s.id } },
+    }),
+  ).toBe(0);
+  vi.stubEnv("STORE_INSTALLATION_ID", "foreign-email-store");
+  await expect(ingestBluEmailReview(input)).rejects.toThrow("tidak ditemukan");
+  vi.stubEnv("STORE_INSTALLATION_ID", scope);
+  await disconnectSource(actor, s.id);
+  await expect(ingestBluEmailReview(input)).rejects.toThrow("Lease");
 });
 
 it("rejects a foreign tenant, customer management, missing identity and stale workers after disconnect", async () => {

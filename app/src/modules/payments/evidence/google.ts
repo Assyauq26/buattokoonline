@@ -9,6 +9,7 @@ import { assertStaffPermission } from "@/modules/orders/transaction-locks";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { lockSource, requirePreview, storeScope } from "./repository";
 import { seal, unseal } from "./secrets";
+import { MAX_BLU_EMAIL_BYTES } from "./blu-email";
 
 const SCOPE = "https://www.googleapis.com/auth/gmail.readonly";
 function config() {
@@ -338,4 +339,48 @@ export async function listGmailMessages(
       nextPageToken: z.string().max(4096).optional(),
     })
     .parse(await boundedJson(response));
+}
+
+/** Read-only, fixed-origin raw retrieval. Gmail IDs identify mailbox messages,
+ * never bank transfers. Fetched Authentication-Results is still not trusted. */
+export async function getGmailRawMessage(access: string, id: string) {
+  if (!/^[A-Za-z0-9_-]{1,256}$/.test(id))
+    throw new HttpError("Identitas pesan Gmail tidak valid", 422);
+  const url = new URL(
+    `https://gmail.googleapis.com/gmail/v1/users/me/messages/${encodeURIComponent(id)}`,
+  );
+  url.searchParams.set("format", "raw");
+  const response = await fetch(url, {
+    headers: { Authorization: `Bearer ${access}` },
+    signal: AbortSignal.timeout(10_000),
+    redirect: "error",
+    cache: "no-store",
+  });
+  if (!response.ok)
+    throw new HttpError(
+      response.status === 401
+        ? "Gmail meminta hubungkan ulang"
+        : "Gmail sementara tidak tersedia",
+      response.status === 401 ? 409 : 503,
+    );
+  const data = z
+    .object({
+      id: z.literal(id),
+      raw: z
+        .string()
+        .min(1)
+        .max(Math.ceil(MAX_BLU_EMAIL_BYTES / 3) * 4)
+        .regex(/^[A-Za-z0-9_-]+={0,2}$/),
+    })
+    .safeParse(await boundedJson(response));
+  if (!data.success)
+    throw new HttpError("Respons pesan Gmail tidak valid", 502);
+  const raw = Buffer.from(data.data.raw, "base64url");
+  if (
+    !raw.length ||
+    raw.length > MAX_BLU_EMAIL_BYTES ||
+    raw.toString("base64url") !== data.data.raw.replace(/=+$/, "")
+  )
+    throw new HttpError("Ukuran atau encoding pesan Gmail tidak valid", 502);
+  return { apiMessageId: id, raw };
 }

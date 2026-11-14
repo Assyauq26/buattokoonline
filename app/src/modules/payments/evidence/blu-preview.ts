@@ -1,7 +1,8 @@
-/** Screenshot-derived TEXT preview only, not a production bank parser.
- * No Observation is emitted: sender provenance and stable bank ID are missing.
- * Do not use these fields to allocate, claim or settle a payment. */
-export function recognizeBluPreview(message: {
+import { createHash } from "node:crypto";
+
+/** Shared bounded content validation. Receiver digits are hashed, never returned.
+ * This parses content, not sender authenticity or a bank transaction identity. */
+export function readBluNotificationFields(message: {
   subject: string;
   text: string;
 }) {
@@ -27,7 +28,7 @@ export function recognizeBluPreview(message: {
     return matches[0][1];
   }
   const amountText = field(
-    /^Nominal Transfer\s*\nRp\s+(\d{1,3}(?:\.\d{3})*|\d+),00\s*$/gm,
+    /^Nominal Transfer\s*\nRp[ \t\u00a0]*(\d{1,3}(?:\.\d{3})*|\d+),00\s*$/gm,
     "Nominal",
   );
   const amount = Number(amountText.replaceAll(".", ""));
@@ -90,7 +91,27 @@ export function recognizeBluPreview(message: {
     direction: "CREDIT",
     occurredAt: new Date(local.getTime() - 7 * 3600_000),
     recipientLast4: account.slice(-4),
+    accountRef: createHash("sha256")
+      .update(JSON.stringify(["IDR", account]))
+      .digest("hex"),
     transferType,
+  };
+}
+
+/** Legacy screenshot preview; never emits an Observation or a paid result. */
+export function recognizeBluPreview(message: {
+  subject: string;
+  text: string;
+}) {
+  const f = readBluNotificationFields(message);
+  return {
+    bank: f.bank,
+    amount: f.amount,
+    currency: f.currency,
+    direction: f.direction,
+    occurredAt: f.occurredAt,
+    recipientLast4: f.recipientLast4,
+    transferType: f.transferType,
     trusted: false as const,
     bankTxId: null,
     status: "UNKNOWN" as const,
