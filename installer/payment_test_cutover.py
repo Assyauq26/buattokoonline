@@ -260,6 +260,6 @@ class PreparedAuthNative(AuthNative):
         # from the immutable factory image, under an unprivileged read-only root.
         paths=package.runtime_paths(files)
         js="const fs=require('fs'),c=require('crypto');let s='';process.stdin.on('data',v=>s+=v);process.stdin.on('end',()=>{let o={};for(const p of JSON.parse(s)){try{o[p]=c.createHash('sha256').update(fs.readFileSync('/app/'+p.slice(4))).digest('hex')}catch{o[p]=null}}console.log(JSON.stringify(o))})"
-        observed=json.loads(core.run(['docker','run','--rm','-i','--network','none','--read-only','--cap-drop','ALL','--security-opt','no-new-privileges','--user','65534:65534','--entrypoint','node',image,'-e',js],input=json.dumps(sorted(paths)).encode()))
+        observed=json.loads(core.run(['docker','run','--rm','-i','--network','none','--read-only','--cap-drop','ALL','--security-opt','no-new-privileges','--user','node','--entrypoint','node',image,'-e',js],input=json.dumps(sorted(paths)).encode()))
         check(set(observed)==paths and all(observed[p]==digest(files[p]) for p in paths),'prepared image source bytes changed')
         return image
