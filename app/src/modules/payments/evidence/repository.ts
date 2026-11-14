@@ -284,10 +284,16 @@ export async function ingestObservation(
   });
 }
 
-export async function acquireSourceLease(sourceId: string, now = new Date()) {
+export async function acquireSourceLease(
+  sourceId: string,
+  now = new Date(),
+  expectedGeneration?: number,
+) {
   return prisma.$transaction(async (tx) => {
     const s = await lockSource(tx, sourceId);
     if (
+      (expectedGeneration !== undefined &&
+        s.generation !== expectedGeneration) ||
       (s.leaseUntil && s.leaseUntil > now) ||
       (s.nextPollAt && s.nextPollAt > now)
     )

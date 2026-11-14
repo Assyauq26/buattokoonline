@@ -24,13 +24,13 @@ try {
     await db.rolePermission.upsert({ where: { roleId_permissionId: { roleId: role.id, permissionId: permission.id } }, update: {}, create: { roleId: role.id, permissionId: permission.id } });
   }
   const admin = await db.user.create({ data: { name: 'Fixture seller', email: `${run}@example.test`, passwordHash: 'disabled-browser-fixture', roles: { create: { roleId: role.id } } } });
-  const source = await db.paymentEvidenceSource.create({ data: { storeScope: installation, kind: 'GMAIL_BANK', label: 'Notifikasi rekening toko', accountRef: 'synthetic-incoming-' + run } });
+  const source = await db.paymentEvidenceSource.create({ data: { storeScope: installation, kind: 'GMAIL_BANK', label: 'Notifikasi rekening toko', accountRef: 'synthetic-incoming-' + run, encryptedSecret: 'synthetic-ui-fixture-never-used-for-network', health: 'CONNECTED_PARSER_BLOCKED' } });
   const windowStart = new Date(), expiresAt = new Date(+windowStart + 5 * 60000), orderNumber = 'PAYMENT-WINDOW-' + run.slice(0,8);
   const payment = await db.payment.create({ data: { amount: 45341, order: { create: { orderNumber, userId: admin.id, subtotal: 45000, total: 45341, expiresAt } } } });
   await db.paymentEvidenceAttempt.create({ data: { sourceId: source.id, paymentId: payment.id, baseAmount: 45000, uniqueCode: 341, payable: 45341, expiresAt, retainUntil: new Date(+expiresAt + 7*86400000) } });
   const evidence = await db.incomingPaymentEvidence.create({ data: { sourceId: source.id, externalId: 'synthetic-1', fingerprint: 'synthetic-only', amount: 45341, occurredAt: new Date(+windowStart + 30000), currency: 'IDR', direction: 'CREDIT', providerStatus: 'UNKNOWN', accountRef: source.accountRef, trusted: false, reason: 'MISSING_STABLE_TRANSACTION_ID' } });
   const log = createWriteStream(resolve(out, 'server.log'));
-  child = spawn(process.execPath, ['node_modules/next/dist/bin/next', 'start', '-H', '127.0.0.1', '-p', '3018'], { cwd: resolve('app'), env: { ...process.env, NODE_ENV: 'production', APP_ORIGIN: origin, JWT_SECRET: secret, DIRECT_URL: process.env.DATABASE_URL, STORE_INSTALLATION_ID: installation, PAYMENT_EVIDENCE_PREVIEW: 'true', PAYMENT_GMAIL_OAUTH_TEST: 'false', PAYMENT_GOOGLE_CLIENT_ID: '', PAYMENT_GOOGLE_CLIENT_SECRET: '', PAYMENT_INTEGRATION_ENCRYPTION_KEY: '', PAYMENT_PROVIDER: 'manual', MAINTENANCE_MODE: '0', REGION_DATA_MODE: 'snapshot' }, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+  child = spawn(process.execPath, ['node_modules/next/dist/bin/next', 'start', '-H', '127.0.0.1', '-p', '3018'], { cwd: resolve('app'), env: { ...process.env, NODE_ENV: 'production', APP_ORIGIN: origin, JWT_SECRET: secret, DIRECT_URL: process.env.DATABASE_URL, STORE_INSTALLATION_ID: installation, PAYMENT_EVIDENCE_PREVIEW: 'true', PAYMENT_EVIDENCE_ADMIN_IDS: admin.id, PAYMENT_GMAIL_OAUTH_TEST: 'false', PAYMENT_GOOGLE_CLIENT_ID: '', PAYMENT_GOOGLE_CLIENT_SECRET: '', PAYMENT_INTEGRATION_ENCRYPTION_KEY: '', PAYMENT_PROVIDER: 'manual', MAINTENANCE_MODE: '0', REGION_DATA_MODE: 'snapshot' }, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
   child.stdout.pipe(log); child.stderr.pipe(log);
   let ready = false;
   for (let i = 0; i < 60; i++) {
@@ -80,7 +80,8 @@ try {
   assert.equal(await page.getByRole('button', { name: /Kaitkan bukti/ }).count(), 0);
   checks.push('Untrusted evidence has no association/paid action');
   await page.goto(origin + '/admin/settings/payment-methods/gmail-bank');
-  assert.ok(await page.getByRole('button', { name: 'Hubungkan Google' }).isDisabled());
+  assert.ok(await page.getByRole('button', { name: 'Hubungkan ulang Google' }).isDisabled());
+  assert.ok(await page.getByRole('button', { name: 'Baca notifikasi blu' }).isDisabled());
   checks.push('Google connection unavailable without operator setup');
   const badOrigin = await context.request.post(origin + '/api/v1/admin/payment-evidence', { headers: { Origin: 'https://untrusted.example.test' }, data: { action: 'disconnect', sourceId: source.id } });
   assert.equal(badOrigin.status(), 403); checks.push('Cross-origin mutation rejected');
@@ -89,6 +90,17 @@ try {
   const unauth = await browser.newContext();
   const denied = await unauth.request.post(origin + '/api/v1/admin/payment-evidence', { headers: { Origin: origin }, data: { action: 'disconnect', sourceId: source.id } });
   assert.equal(denied.status(), 401); checks.push('Anonymous mutation rejected');
+  const otherAdmin = await db.user.create({ data: { name: 'Unenrolled admin fixture', email: `${randomUUID()}@example.test`, passwordHash: 'disabled', roles: { create: { roleId: role.id } } } });
+  const otherToken = await new SignJWT({ email: otherAdmin.email, ver: 0 }).setProtectedHeader({ alg: 'HS256' }).setSubject(otherAdmin.id).setJti(randomUUID()).setIssuedAt().setIssuer(origin).setAudience('storefront').setExpirationTime('30m').sign(new TextEncoder().encode(secret));
+  await unauth.addCookies([{ name: 'store_session', value: otherToken, url: origin, httpOnly: true, sameSite: 'Lax' }]);
+  assert.equal((await unauth.request.post(origin + '/api/v1/admin/payment-evidence', { headers: { Origin: origin }, data: { action: 'read-google', sourceId: source.id } })).status(), 403);
+  assert.equal((await unauth.request.get(origin + '/admin/settings/payment-methods/gmail-bank')).status(), 404);
+  assert.equal((await unauth.request.get(origin + `/admin/payments/evidence/${evidence.id}`)).status(), 404);
+  checks.push('Unenrolled Admin cannot read pilot pages or invoke Gmail API action');
+  const claim = await context.request.post(origin + '/api/v1/admin/payment-evidence', { headers: { Origin: origin }, data: { action: 'claim', evidenceId: evidence.id, attemptId: 'fixture', reason: 'Cannot associate during pilot' } });
+  assert.equal(claim.status(), 422); checks.push('Pilot API has no financial association action');
+  const read = await context.request.post(origin + '/api/v1/admin/payment-evidence', { headers: { Origin: origin }, data: { action: 'read-google', sourceId: source.id } });
+  assert.equal(read.status(), 503); checks.push('Manual Gmail read stays blocked until operator OAuth configuration');
   assert.equal(await db.paymentEvidenceSource.count({ where: { storeScope: installation, enabled: true } }), 0);
   assert.deepEqual(errors, []);
   writeFileSync(resolve(out, 'results.json'), JSON.stringify({ passed: checks, runtimeErrors: errors, fixtureSessions: true, actualLoginTested: false, realMerchantOrBankTraffic: false, productionWrites: false }, null, 2));

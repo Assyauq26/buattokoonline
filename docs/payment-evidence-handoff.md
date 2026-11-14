@@ -1,4 +1,28 @@
-# Resumed review — 2026-11-14
+# Hubify pilot continuation — 2026-11-14
+
+The latest owner attachment authorizes a Hubify-only observational deployment
+after safety gates, with no new checkout method or automatic PAID. That overrides
+the earlier preparation-only deployment restriction, but never overrides guards.
+See [payment-evidence-hubify-pilot.md](payment-evidence-hubify-pilot.md) for current
+status, exact production baseline, configuration, migration/backup and recovery.
+
+Current status: **BLOCKED / NO-GO deployment**. Existing live app remains v1.8.0
+at 7e81f8e; 30 completed migrations, healthy, J&T Production flags preserved.
+Installed staging preflight explicitly rejects active Production J&T. Candidate
+needs 30→32 (including the released order index), a separately reviewed official
+executor/checksum edge and disk headroom (4.90 GiB available vs 6 GiB + data budget).
+Google OAuth client/key/flags are absent; owner has no Google Cloud project yet.
+No production/central-platform mutation, merge, tag, public artifact or catalog change.
+
+New code adds fail-closed enrolled-Admin access and manual blu email reads (five
+per page, one-minute cooldown), persistent pagination/dedup and disconnect fencing.
+The pilot UI/API cannot associate or settle payments. 111 tests, 21 local browser
+checks, build/typecheck/scoped lint passed. Fresh synthetic schema30→32 rehearsal
+and pre-upgrade backup restore preserved snapshot a93743cf2b921b6d23ebb2375dcffa3f4d833bcb5b384e9c3a14dbb34230b5fe.
+Live read-only baseline smoke passed; neither actual password login nor live
+Gmail consent/read/new transfer was tested. Do not claim a deployment occurred.
+
+## Earlier resumed review
 
 The owner resumed work from saved checkpoint 7b8f438 by saying "lanjutkan".
 The prior laptop-shutdown pause is no longer active. Worktree/branch remains

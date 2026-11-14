@@ -1,5 +1,24 @@
 # Payment evidence methods — draft, defaults OFF
 
+## Current Hubify pilot request — 2026-11-14
+
+The owner now authorizes a Hubify-only observational deployment after safety gates.
+Earlier preparation-only statements below describe the historical foundation,
+not the current authorization. Deployment is still **BLOCKED** by the installed
+J&T staging guard, the unreviewed 30→32 executor/checksum edge and disk budget.
+No production apply, migration or configuration mutation was attempted.
+
+Explicit Admin enrollment, dashboard-triggered bounded Gmail reads, durable
+pagination/retry and generation fencing are implemented. No association API,
+checkout activation or settlement is offered by the pilot. Final validation:
+111 tests, 21 browser checks, build/typecheck/scoped lint and isolated 30→32 plus
+backup-restore rehearsal passed. Live baseline read-only smoke also passed, using
+signed probes rather than real password login. Gmail remains unconfigured and
+untested; the owner confirmed there is no Google Cloud project yet.
+
+Authoritative rollout evidence, configuration steps, blockers and recovery:
+[payment-evidence-hubify-pilot.md](payment-evidence-hubify-pilot.md).
+
 ## Scope and audit (2026-11-13)
 
 Base: seller `main` e885ca4. No production deployment, merchant login, bank changes,

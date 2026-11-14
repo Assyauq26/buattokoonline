@@ -11,6 +11,8 @@ if (
   ![
     "/hubify_payment_evidence_test",
     "/hubify_payment_evidence_restore_test",
+    "/hubify_payment_evidence_upgrade30_test",
+    "/hubify_payment_evidence_restore30_test",
   ].includes(target.pathname)
 )
   throw new Error("Isolated local payment evidence DB required");

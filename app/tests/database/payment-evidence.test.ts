@@ -27,7 +27,9 @@ import {
   beginGoogleOAuth,
   completeGoogleOAuth,
 } from "@/modules/payments/evidence/google";
-import { unseal } from "@/modules/payments/evidence/secrets";
+import { seal, unseal } from "@/modules/payments/evidence/secrets";
+import { reviewGmailNow } from "@/modules/payments/evidence/gmail-review";
+import { parseBluEmail } from "@/modules/payments/evidence/blu-email";
 import { ingestBluEmailReview } from "@/modules/payments/evidence/blu-ingestion";
 import { BLU_HTML, syntheticBluEml } from "../fixtures/blu-email";
 import { evidenceCandidateSuggestions } from "@/modules/payments/evidence/candidate-suggestions";
@@ -112,6 +114,206 @@ afterAll(async () => {
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
   await prisma.$disconnect();
+});
+
+async function reviewFixture() {
+  vi.stubEnv("STORE_INSTALLATION_ID", scope);
+  vi.stubEnv("PAYMENT_EVIDENCE_PREVIEW", "true");
+  vi.stubEnv("PAYMENT_GMAIL_OAUTH_TEST", "true");
+  vi.stubEnv(
+    "PAYMENT_INTEGRATION_ENCRYPTION_KEY",
+    Buffer.alloc(32, 9).toString("base64"),
+  );
+  const account = randomUUID().replace(/\D/g, "").padEnd(12, "0").slice(0, 12);
+  const raw = Buffer.from(
+    syntheticBluEml({
+      html: BLU_HTML.replace("0000 1111 2222", account),
+      messageId: `<${randomUUID()}@example.test>`,
+    }),
+  );
+  const parsed = await parseBluEmail(raw);
+  const source = await prisma.paymentEvidenceSource.create({
+    data: {
+      storeScope: scope,
+      kind: "GMAIL_BANK",
+      label: "Synthetic manual read",
+      accountRef: parsed.observation.accountRef,
+    },
+  });
+  await prisma.paymentEvidenceSource.update({
+    where: { id: source.id },
+    data: {
+      encryptedSecret: seal(
+        JSON.stringify({
+          access: "synthetic-access",
+          refresh: "synthetic-refresh",
+          expiresAt: Date.now() + 3600_000,
+        }),
+        scope,
+        source.id,
+        "google-tokens",
+      ),
+    },
+  });
+  return { source, raw };
+}
+
+it("manual Gmail read persists untrusted candidates once across retry and paginated restart without settling payments", async () => {
+  const { source: s, raw } = await reviewFixture();
+  const before = await prisma.payment.findMany({
+    select: { id: true, status: true, amount: true },
+    orderBy: { id: "asc" },
+  });
+  let page = 0;
+  const fetcher = vi.fn(async (input: string | URL) => {
+    const url = new URL(String(input));
+    expect(url.origin).toBe("https://gmail.googleapis.com");
+    if (url.pathname.endsWith("/messages")) {
+      expect(url.searchParams.get("maxResults")).toBe("5");
+      expect(url.searchParams.get("q")).toContain("blubybcadigital.id");
+      if (page++)
+        expect(url.searchParams.get("pageToken")).toBe("synthetic-page-2");
+      return new Response(
+        JSON.stringify({
+          messages: [{ id: "synthetic-message" }],
+          ...(page === 1 ? { nextPageToken: "synthetic-page-2" } : {}),
+        }),
+      );
+    }
+    return new Response(
+      JSON.stringify({
+        id: "synthetic-message",
+        raw: raw.toString("base64url"),
+      }),
+    );
+  });
+  vi.stubGlobal("fetch", fetcher);
+  expect(await reviewGmailNow(actor, s.id)).toEqual({
+    count: 1,
+    limited: true,
+    reviewOnly: true,
+  });
+  await expect(reviewGmailNow(actor, s.id)).rejects.toThrow("jeda");
+  await prisma.paymentEvidenceSource.update({
+    where: { id: s.id },
+    data: { nextPollAt: null },
+  });
+  expect(await reviewGmailNow(actor, s.id)).toEqual({
+    count: 1,
+    limited: false,
+    reviewOnly: true,
+  });
+  expect(
+    await prisma.incomingPaymentEvidence.count({ where: { sourceId: s.id } }),
+  ).toBe(1);
+  expect(
+    await prisma.incomingPaymentEvidence.findFirst({
+      where: { sourceId: s.id },
+    }),
+  ).toMatchObject({ trusted: false, amount: 125001, bankTxId: null });
+  expect(
+    await prisma.paymentEvidenceSource.findUnique({ where: { id: s.id } }),
+  ).toMatchObject({
+    enabled: false,
+    cursor: "",
+    health: "REVIEW_ONLY",
+    leaseToken: null,
+  });
+  expect(
+    await prisma.payment.findMany({
+      select: { id: true, status: true, amount: true },
+      orderBy: { id: "asc" },
+    }),
+  ).toEqual(before);
+  expect(
+    await prisma.paymentEvidenceClaim.count({
+      where: { evidence: { sourceId: s.id } },
+    }),
+  ).toBe(0);
+  vi.unstubAllGlobals();
+});
+
+it("manual Gmail read cannot persist after disconnect during the remote request", async () => {
+  const { source: s, raw } = await reviewFixture();
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: string | URL) => {
+      const url = new URL(String(input));
+      if (url.hostname === "oauth2.googleapis.com") return new Response("");
+      if (url.pathname.endsWith("/messages"))
+        return new Response(
+          JSON.stringify({ messages: [{ id: "synthetic-message" }] }),
+        );
+      await disconnectSource(actor, s.id);
+      return new Response(
+        JSON.stringify({
+          id: "synthetic-message",
+          raw: raw.toString("base64url"),
+        }),
+      );
+    }),
+  );
+  await expect(reviewGmailNow(actor, s.id)).rejects.toThrow("koneksi berubah");
+  expect(
+    await prisma.incomingPaymentEvidence.count({ where: { sourceId: s.id } }),
+  ).toBe(0);
+  expect(
+    await prisma.paymentEvidenceSource.findUnique({ where: { id: s.id } }),
+  ).toMatchObject({
+    health: "DISCONNECTED",
+    encryptedSecret: null,
+    leaseToken: null,
+  });
+  vi.unstubAllGlobals();
+});
+
+it("manual Gmail errors redact provider bodies, preserve cursor and enforce tenant/permission/flag fences", async () => {
+  const { source: s } = await reviewFixture();
+  const fetcher = vi
+    .fn()
+    .mockResolvedValue(
+      new Response("PRIVATE_PROVIDER_BODY_TOKEN", { status: 503 }),
+    );
+  vi.stubGlobal("fetch", fetcher);
+  await expect(reviewGmailNow(customer, s.id)).rejects.toThrow("izin");
+  vi.stubEnv("STORE_INSTALLATION_ID", "other-installation");
+  await expect(reviewGmailNow(actor, s.id)).rejects.toThrow("tidak ditemukan");
+  vi.stubEnv("STORE_INSTALLATION_ID", scope);
+  vi.stubEnv("PAYMENT_GMAIL_OAUTH_TEST", "false");
+  await expect(reviewGmailNow(actor, s.id)).rejects.toThrow(
+    "belum dikonfigurasi",
+  );
+  expect(fetcher).not.toHaveBeenCalled();
+  vi.stubEnv("PAYMENT_GMAIL_OAUTH_TEST", "true");
+  await expect(reviewGmailNow(actor, s.id)).rejects.toThrow(
+    "Pembacaan Gmail belum selesai",
+  );
+  expect(
+    await prisma.paymentEvidenceSource.findUnique({ where: { id: s.id } }),
+  ).toMatchObject({
+    cursor: null,
+    leaseToken: null,
+    enabled: false,
+    health: "TEMPORARILY_UNAVAILABLE",
+    failures: 1,
+  });
+  vi.unstubAllGlobals();
+});
+
+it("stale generations cannot acquire a lease or change disconnected source health", async () => {
+  const { source: s } = await reviewFixture();
+  await prisma.paymentEvidenceSource.update({
+    where: { id: s.id },
+    data: {
+      generation: { increment: 1 },
+      encryptedSecret: null,
+      health: "DISCONNECTED",
+    },
+  });
+  expect(await acquireSourceLease(s.id, new Date(), s.generation)).toBeNull();
+  expect(
+    await prisma.paymentEvidenceSource.findUnique({ where: { id: s.id } }),
+  ).toMatchObject({ leaseToken: null, health: "DISCONNECTED" });
 });
 
 it("binds official OAuth state to browser/actor/source, consumes once, encrypts tokens and reports failed remote revoke", async () => {

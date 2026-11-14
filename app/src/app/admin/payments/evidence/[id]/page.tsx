@@ -3,12 +3,10 @@ import { formatIDR } from "@/lib/money";
 import { evidenceReasonLabel } from "@/modules/payments/evidence/presentation";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { requireBackofficeUser } from "@/modules/admin/backoffice-access";
-import { PERMISSIONS } from "@/lib/auth/permissions";
+import { requireEvidenceAdmin } from "@/modules/payments/evidence/access";
 import { prisma } from "@/lib/prisma";
 import { previewEnabled } from "@/modules/payments/evidence/policy";
 import { storeScope } from "@/modules/payments/evidence/repository";
-import { PaymentEvidenceReview } from "@/components/admin/payment-evidence-review";
 
 export const dynamic = "force-dynamic";
 export default async function Page({
@@ -16,7 +14,7 @@ export default async function Page({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const user = await requireBackofficeUser(PERMISSIONS.PAYMENT_READ);
+  await requireEvidenceAdmin(true);
   if (!previewEnabled()) notFound();
   const { id } = await params,
     now = new Date();
@@ -38,11 +36,6 @@ export default async function Page({
     },
   });
   if (!e) notFound();
-  const canClaim =
-    !e.claim &&
-    e.reason === "SELLER_REVIEW_REQUIRED" &&
-    e.trusted &&
-    !!e.occurredAt;
   const candidates = e.claim
     ? []
     : await evidenceCandidateSuggestions(e.id, now);
@@ -129,22 +122,11 @@ export default async function Page({
           </p>
         </section>
       )}
-      {canClaim && user.permissions.includes(PERMISSIONS.PAYMENT_VERIFY) ? (
-        <PaymentEvidenceReview
-          evidenceId={e.id}
-          candidates={candidates.map((c) => ({
-            id: c.id,
-            payable: c.payable,
-            orderNumber: c.payment.order.orderNumber,
-          }))}
-        />
-      ) : (
-        !e.claim && (
-          <p className="rounded-xl bg-zinc-100 p-4 text-sm">
-            Pencocokan ini belum memproses pembayaran. Fitur belum aktif di
-            checkout.
-          </p>
-        )
+      {!e.claim && (
+        <p className="rounded-xl bg-zinc-100 p-4 text-sm">
+          Pencocokan ini belum memproses pembayaran. Fitur belum aktif di
+          checkout.
+        </p>
       )}
     </div>
   );

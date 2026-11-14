@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, Info, ShieldCheck } from "lucide-react";
-import { requireBackofficeUser } from "@/modules/admin/backoffice-access";
+import { requireEvidenceAdmin } from "@/modules/payments/evidence/access";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/prisma";
 import { previewEnabled } from "@/modules/payments/evidence/policy";
@@ -16,7 +16,7 @@ export default async function Page({
   params: Promise<{ method: string }>;
   searchParams: Promise<{ oauth?: string }>;
 }) {
-  const user = await requireBackofficeUser(PERMISSIONS.PAYMENT_READ);
+  const user = await requireEvidenceAdmin(true);
   const { method } = await params,
     { oauth } = await searchParams;
   if (!["gopay-qris", "gmail-bank"].includes(method)) notFound();
@@ -100,7 +100,7 @@ export default async function Page({
       {oauth && (
         <p role="status" className="rounded-xl bg-zinc-100 p-4 text-sm">
           {oauth === "connected"
-            ? "Akses Gmail tersimpan. Parser bank dan checkout tetap nonaktif."
+            ? "Akses Gmail tersimpan. Gunakan Baca notifikasi blu untuk pemeriksaan; checkout tetap nonaktif."
             : "Google belum terhubung. Coba hubungkan ulang dari halaman ini."}
         </p>
       )}

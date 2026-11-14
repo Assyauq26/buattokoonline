@@ -1,6 +1,8 @@
 "use client";
 import { useState, type FormEvent } from "react";
-import { Loader2, LockKeyhole, Unplug, Mail } from "lucide-react";
+import { Loader2, LockKeyhole, Unplug, Mail, RefreshCw } from "lucide-react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 interface Source {
   id: string;
@@ -12,7 +14,7 @@ interface Source {
 const healthLabels: Record<string, string> = {
   NOT_CONNECTED: "Belum terhubung",
   DISCONNECTED: "Terputus",
-  CONNECTED_PARSER_BLOCKED: "Gmail terhubung · parser belum tersedia",
+  CONNECTED_PARSER_BLOCKED: "Gmail terhubung · menunggu pembacaan manual",
   RECONNECT_REQUIRED: "Hubungkan ulang",
   REVIEW_ONLY: "Hanya pemeriksaan seller",
   TEMPORARILY_UNAVAILABLE: "Sementara tidak tersedia",
@@ -30,6 +32,7 @@ export function PaymentEvidenceSettings({
   canManage: boolean;
   oauthEnabled: boolean;
 }) {
+  const router = useRouter();
   const [pending, setPending] = useState(false),
     [message, setMessage] = useState("");
   async function send(body: unknown) {
@@ -55,7 +58,12 @@ export function PaymentEvidenceSettings({
         window.location.assign(result.url);
         return;
       }
-      if (result.disconnected && !result.remoteRevoked)
+      if (result.reviewOnly) {
+        setMessage(
+          `${result.count} email diperiksa. ${result.limited ? "Masih ada halaman berikutnya; baca lagi setelah satu menit." : "Pembacaan selesai."} Semua hasil perlu pemeriksaan manual; pesanan tidak dilunasi.`,
+        );
+        router.refresh();
+      } else if (result.disconnected && !result.remoteRevoked)
         setMessage(
           "Koneksi lokal diputus. Cabut juga akses Hubify dari halaman Keamanan Akun Google karena pencabutan jarak jauh belum terkonfirmasi.",
         );
@@ -84,7 +92,7 @@ export function PaymentEvidenceSettings({
     });
   }
   const button =
-    "inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-950 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black disabled:cursor-not-allowed disabled:opacity-50";
+    "inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-950 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black motion-safe:active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50";
   return (
     <div className="space-y-5" aria-busy={pending}>
       <p role="status" aria-live="polite" className="text-sm text-zinc-700">
@@ -131,21 +139,49 @@ export function PaymentEvidenceSettings({
                 </button>
               )}
               {s.connected && (
-                <button
-                  className={button}
-                  disabled={pending}
-                  onClick={() =>
-                    void perform({ action: "disconnect", sourceId: s.id })
-                  }
-                >
-                  <Unplug size={16} aria-hidden="true" />
-                  Putuskan koneksi
-                </button>
+                <>
+                  {kind === "GMAIL_BANK" && (
+                    <button
+                      className={button}
+                      disabled={pending || !oauthEnabled}
+                      onClick={() =>
+                        void perform({ action: "read-google", sourceId: s.id })
+                      }
+                    >
+                      <RefreshCw size={16} aria-hidden="true" />
+                      Baca notifikasi blu
+                    </button>
+                  )}
+                  <button
+                    className={button}
+                    disabled={pending}
+                    onClick={() =>
+                      void perform({ action: "disconnect", sourceId: s.id })
+                    }
+                  >
+                    <Unplug size={16} aria-hidden="true" />
+                    Putuskan koneksi
+                  </button>
+                </>
               )}
             </div>
           )}
         </section>
       ))}
+      {kind === "GMAIL_BANK" && (
+        <p className="rounded-xl bg-zinc-50 p-3 text-sm text-zinc-600">
+          Pembacaan manual hanya mencari notifikasi blu dalam 24 jam terakhir,
+          hingga lima email per halaman. Lanjutkan halaman berikutnya setelah
+          jeda satu menit. Nominal dan waktu adalah kandidat pencocokan, bukan
+          bukti pasti asal dana atau konfirmasi lunas.{" "}
+          <Link
+            href="/admin/payments/evidence"
+            className="font-medium text-zinc-950 underline underline-offset-4"
+          >
+            Lihat hasil pemeriksaan
+          </Link>
+        </p>
+      )}
       {canManage && (
         <form onSubmit={create} className="settings-card space-y-4">
           <h2 className="!mb-0">Simpan konfigurasi draf</h2>

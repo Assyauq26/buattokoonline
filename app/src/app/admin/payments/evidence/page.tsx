@@ -1,14 +1,13 @@
 import { evidenceReasonLabel } from "@/modules/payments/evidence/presentation";
 import Link from "next/link";
 import { ArrowLeft, ClipboardCheck } from "lucide-react";
-import { requireBackofficeUser } from "@/modules/admin/backoffice-access";
-import { PERMISSIONS } from "@/lib/auth/permissions";
+import { requireEvidenceAdmin } from "@/modules/payments/evidence/access";
 import { prisma } from "@/lib/prisma";
 import { previewEnabled } from "@/modules/payments/evidence/policy";
 import { storeScope } from "@/modules/payments/evidence/repository";
 export const dynamic = "force-dynamic";
 export default async function Page() {
-  await requireBackofficeUser(PERMISSIONS.PAYMENT_READ);
+  await requireEvidenceAdmin(true);
   const rows = previewEnabled()
     ? await prisma.incomingPaymentEvidence.findMany({
         where: { source: { storeScope: storeScope() } },

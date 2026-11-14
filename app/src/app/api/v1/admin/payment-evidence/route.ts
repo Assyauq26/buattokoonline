@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { handle, ok } from "@/lib/response";
-import { requirePermission } from "@/lib/auth/session";
-import { PERMISSIONS } from "@/lib/auth/permissions";
+import { requireEvidenceAdmin } from "@/modules/payments/evidence/access";
+import { reviewGmailNow } from "@/modules/payments/evidence/gmail-review";
 import { assertSameOrigin } from "@/lib/mutation-origin";
 import {
   createSource,
@@ -11,7 +11,6 @@ import {
   beginGoogleOAuth,
   boundedJson,
 } from "@/modules/payments/evidence/google";
-import { claimEvidence } from "@/modules/payments/evidence/repository";
 
 export const dynamic = "force-dynamic";
 const command = z.discriminatedUnion("action", [
@@ -30,17 +29,15 @@ const command = z.discriminatedUnion("action", [
     .strict(),
   z
     .object({
-      action: z.literal("claim"),
-      evidenceId: z.string().min(1).max(100),
-      attemptId: z.string().min(1).max(100),
-      reason: z.string().min(15).max(1000),
+      action: z.literal("read-google"),
+      sourceId: z.string().min(1).max(100),
     })
     .strict(),
 ]);
 export async function POST(req: Request) {
   return handle(async () => {
     assertSameOrigin(req);
-    const user = await requirePermission(PERMISSIONS.PAYMENT_READ);
+    const user = await requireEvidenceAdmin();
     const input = command.parse(await boundedJson(req, 16_000));
     if (input.action === "create")
       return ok(await createSource(user.id, input.input), 201);
@@ -48,13 +45,6 @@ export async function POST(req: Request) {
       return ok(await disconnectSource(user.id, input.sourceId));
     if (input.action === "connect-google")
       return ok({ url: await beginGoogleOAuth(user.id, input.sourceId) });
-    return ok(
-      await claimEvidence(
-        user.id,
-        input.evidenceId,
-        input.attemptId,
-        input.reason,
-      ),
-    );
+    return ok(await reviewGmailNow(user.id, input.sourceId));
   });
 }

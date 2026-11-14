@@ -200,6 +200,9 @@ export async function completeGoogleOAuth(
           enabled: false,
           leaseToken: null,
           leaseUntil: null,
+          cursor: null,
+          nextPollAt: null,
+          failures: 0,
         },
       });
       await tx.paymentEvidenceReview.create({
@@ -303,13 +306,14 @@ export async function listGmailMessages(
   access: string,
   since: Date,
   pageToken?: string,
+  bluReview = false,
 ) {
   const url = new URL(
     "https://gmail.googleapis.com/gmail/v1/users/me/messages",
   );
   url.search = new URLSearchParams({
-    maxResults: "50",
-    q: `after:${Math.floor(since.getTime() / 1000)}`,
+    maxResults: bluReview ? "5" : "50",
+    q: `after:${Math.floor(since.getTime() / 1000)}${bluReview ? ' from:(blubybcadigital.id) subject:("Info Transaksi Masuk")' : ""}`,
     ...(pageToken ? { pageToken } : {}),
   }).toString();
   const response = await fetch(url, {

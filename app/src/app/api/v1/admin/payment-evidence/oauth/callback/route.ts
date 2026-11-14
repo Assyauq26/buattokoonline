@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/lib/auth/session";
-import { PERMISSIONS } from "@/lib/auth/permissions";
+import { requireEvidenceAdmin } from "@/modules/payments/evidence/access";
 import { storeOrigin } from "@/lib/store-config";
 import { completeGoogleOAuth } from "@/modules/payments/evidence/google";
 
@@ -11,7 +10,7 @@ export async function GET(req: Request) {
     storeOrigin(),
   );
   try {
-    const user = await requirePermission(PERMISSIONS.BANK_MANAGE);
+    const user = await requireEvidenceAdmin();
     const params = new URL(req.url).searchParams;
     if (params.has("error")) throw new Error("Consent refused");
     await completeGoogleOAuth(
