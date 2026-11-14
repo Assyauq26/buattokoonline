@@ -97,6 +97,7 @@ def bounded_url(value):
  return urlunsplit((*parts[:3],urlencode(query),parts.fragment))
 
 class Native(official.Native):
+ proxy_hashes = {'live':'ac63c99445a588136f2b451080b7d17f2223d9e7086b6f93b061044e84d56cc7','maintenance':'ca35e38c98a199763d778b66922eb703c9f5e3472ad9bdb5a54e1fa5b1384380'}
  def __init__(self, repository, archive, archive_digest, sha, baseline):
   super().__init__(repository,archive,archive_digest,sha,baseline)
   self.folder=core.ROOT/'releases'/('hubify-payment-pilot-'+sha[:12]+'-'+archive_digest[:12])
@@ -136,7 +137,7 @@ class Native(official.Native):
   check(env.get('STORE_INSTALLATION_ID')==history.INSTALLATION and env.get('PAYMENT_PROVIDER','manual')=='manual','runtime installation/manual provider')
   check(not any(env.get(k) for k in ['PAYMENT_EVIDENCE_PREVIEW','PAYMENT_GMAIL_OAUTH_TEST','PAYMENT_GOOGLE_CLIENT_SECRET','PAYMENT_INTEGRATION_ENCRYPTION_KEY']),'existing payment runtime requires review')
   self.google_client()
-  core.preserved_caddy_content(True,official.PROXY_HASHES)
+  core.preserved_caddy_content(True,self.proxy_hashes)
   from update_service.engine import Engine
   Engine(None,{}).resources()
   persistent=int(core.sql("SELECT pg_database_size('store');"))+sum(p.stat().st_size for root in [core.DATA/'media',core.CONFIG] for p in root.rglob('*') if p.is_file())
@@ -147,6 +148,11 @@ class Native(official.Native):
   from update_service.worker_upgrade import files_digest
   receipt=core.read_json(core.CONFIG/'updater/worker-upgrade.json')
   check(receipt.get('phase')=='complete' and receipt.get('applied') is True and receipt.get('afterFiles')==files_digest(core.ROOT/'updater'),'installed worker receipt/inventory')
+  backup=Path(receipt['uiBackup']);before=(backup/'Caddyfile').read_bytes();after=(backup/'Caddyfile.after').read_bytes()
+  from update_service.ui_route import routes
+  cfg=core.read_json(core.CONFIG/'updater/config.json')
+  expected=before.decode().replace(cfg['origin']+' {',cfg['origin']+' {\n'+routes(cfg,False),1).encode()
+  check(digest(before)==official.PROXY_HASHES['live'] and after==expected==(core.CONFIG/'Caddyfile').read_bytes() and cfg==core.read_json(backup/'config.after.json'),'authenticated updater proxy additions')
   self.bundle=bundle
   return {'transition_accepted':True,'production_mutations':False,'source_sha':self.sha,'digest':self.digest,'guards':self.file_guards(),'equivalence':result,'free_disk':shutil.disk_usage(core.ROOT).free}
 

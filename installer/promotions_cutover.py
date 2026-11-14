@@ -171,6 +171,7 @@ class Cutover:
 
 
 class Native:
+    proxy_hashes = PROXY_HASHES
     def __init__(self, repository, package, digest, sha, baseline):
         self.repository = Path(repository).resolve()
         self.package = Path(package).resolve()
@@ -230,7 +231,7 @@ class Native:
         check(self.flags() == {k: 'yes' for k in FLAGS} == report['observed_production_guards'], 'Production approval mismatch')
         import promotions_smoke
         promotions_smoke.verify(include_promotions=False)
-        core.preserved_caddy_content(True, PROXY_HASHES)
+        core.preserved_caddy_content(True, self.proxy_hashes)
         size = int(core.sql("SELECT pg_database_size('store');"))
         size += sum(p.stat().st_size for p in (core.DATA / 'media').rglob('*') if p.is_file())
         size += sum(p.stat().st_size for p in core.CONFIG.rglob('*') if p.is_file())
@@ -307,7 +308,7 @@ class Native:
 
     def fence(self, journal):
         check(self.flags() == journal['flags'], 'Production flags changed')
-        core.write_caddy(core.read_json(core.STATE), live=False, preserve_extra_sites=True, approved_proxy_hashes=PROXY_HASHES)
+        core.write_caddy(core.read_json(core.STATE), live=False, preserve_extra_sites=True, approved_proxy_hashes=self.proxy_hashes)
         deadline = time.monotonic() + 180
         while not self.carrier_idle():
             check(time.monotonic() < deadline, 'carrier mutation still pending; app is not killed')
@@ -400,7 +401,7 @@ class Native:
             'deployment': 'hubify-production', 'previous_source_sha': transition.BASE_SOURCE})
 
     def open_traffic(self, journal):
-        core.write_caddy(core.read_json(core.STATE), live=True, preserve_extra_sites=True, approved_proxy_hashes=PROXY_HASHES)
+        core.write_caddy(core.read_json(core.STATE), live=True, preserve_extra_sites=True, approved_proxy_hashes=self.proxy_hashes)
         core.public_health(core.read_json(core.STATE))
 
     def resume_workers(self, journal):
@@ -415,7 +416,7 @@ class Native:
             core.atomic_json(core.COMPOSE, journal['old_compose'])
             core.dc(['up', '-d', '--no-deps', '--no-build', '--wait', '--wait-timeout', '90', 'app'])
             core.healthy()
-            core.write_caddy(core.read_json(core.STATE), live=True, preserve_extra_sites=True, approved_proxy_hashes=PROXY_HASHES)
+            core.write_caddy(core.read_json(core.STATE), live=True, preserve_extra_sites=True, approved_proxy_hashes=self.proxy_hashes)
             core.public_health(core.read_json(core.STATE))
         self.resume_workers(journal)
 

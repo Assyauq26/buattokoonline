@@ -69,6 +69,14 @@ timer, wait for active maintenance/carrier work to drain, fence only Hubify's ap
 proxy handle, stop the app gracefully and verify DB writers are gone. Shared
 platform/proxy routes remain preserved by exact reviewed proxy hashes.
 
+The first dry-run correctly refused the older v1.8.0 proxy pair: worker v3 had
+since added `/admin/settings/updates` and `/api/local-updater/session-status`.
+Review verified current proxy bytes against the completed worker UI receipt and
+reproduced the additions from the original d9bcf3 proxy and official route builder.
+This edge pins live `ac63c99445a588136f2b451080b7d17f2223d9e7086b6f93b061044e84d56cc7`
+and maintenance `ca35e38c98a199763d778b66922eb703c9f5e3472ad9bdb5a54e1fa5b1384380`;
+the original executor's proxy defaults remain unchanged. Unknown proxy edits fail.
+
 While the updater is stopped, an exact additional journal check is inserted into
 its existing operator guard (manager/updater engine bytes are separately pinned).
 All surrounding worker bytes are preserved, compiled and backed up; before/after

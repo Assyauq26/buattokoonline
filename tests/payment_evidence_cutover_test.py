@@ -99,6 +99,10 @@ class DriverContracts(unittest.TestCase):
   self.assertIs(pilot.official.Cutover,official.Cutover)
  def test_expected_ledger_preserves_original_hashes(self):
   d=object.__new__(pilot.Native);self.assertEqual(d.expected_ledger({'from':{'migrations':{'old':'digest'}}}),{'old':'digest',**pilot.ADDITIONS})
+ def test_old_proxy_policy_stays_pinned_and_new_edge_uses_reviewed_worker_routes(self):
+  self.assertEqual(official.Native.proxy_hashes,official.PROXY_HASHES)
+  self.assertNotEqual(pilot.Native.proxy_hashes,official.Native.proxy_hashes)
+  self.assertEqual(pilot.Native.proxy_hashes['live'],'ac63c99445a588136f2b451080b7d17f2223d9e7086b6f93b061044e84d56cc7')
  def test_migration_requires_verified_backup(self):
   d=object.__new__(pilot.Native)
   with self.assertRaises(core.StoreError):d.migrate({'backup_verified':False})
