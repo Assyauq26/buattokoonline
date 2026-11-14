@@ -29,6 +29,22 @@ def same_schema(old, new, old_files, new_files):
     paths += ['app/prisma/migrations/'+n+'/migration.sql' for n in old['migrations']]
     check(all(old_files[p] == new_files[p] for p in paths), 'schema or historical SQL changed')
 
+PREPARED_SHA = '5c3ff6dc8d58da68b18d707f83175daeeeecc2d0'
+PREPARED_DIGEST = '14e24eeddafb14856ac066651174ed80f27fa197e35bdbd082238303670b7e9c'
+PREPARED_IMAGE = 'sha256:4f4618b3fdbc141649f6d80c16d2250f3329e1fc6a973811dc5c6d041c1d3404'
+PREPARED_TREE = 'b970cb299ffd660a7a9ebc3a5ad77ce7cb85510c'
+
+def review_prepared(receipt, prepared, candidate):
+    check(receipt.get('phase')=='rolled_back' and receipt.get('sha')==PREPARED_SHA and receipt.get('digest')==PREPARED_DIGEST
+        and receipt.get('image')==PREPARED_IMAGE and receipt.get('candidate') and not receipt.get('fence_started')
+        and not receipt.get('migration_started') and not receipt.get('traffic_may_have_opened'), 'prepared build receipt not eligible')
+    check(receipt.get('manifest')==prepared and prepared.get('source_sha')==PREPARED_SHA, 'prepared artifact receipt mismatch')
+    before={p:h for p,h in prepared['files'].items() if p.startswith('app/')}
+    after={p:h for p,h in candidate['files'].items() if p.startswith('app/')}
+    check(before and before==after, 'prepared application tree changed')
+    check(prepared['version']==candidate['version']=='1.8.1' and prepared['migrations']==candidate['migrations'], 'prepared release contract changed')
+    return PREPARED_IMAGE
+
 class Native(official.Native):
     proxy_hashes = pilot.Native.proxy_hashes
     base_sha, base_digest, base_image, base_tree = BASE_SHA, BASE_DIGEST, BASE_IMAGE, pilot.APP_TREE
@@ -36,6 +52,8 @@ class Native(official.Native):
     journal_name = 'hubify-payment-test-cutover.json'
     previous_guard, next_guard = GUARD, NEXT_GUARD
     deployment_name = 'hubify-blu-transfer-test'
+
+    def prepared_image(self): return None
 
     def __init__(self, repository, archive, archive_digest, sha, baseline):
         super().__init__(repository, archive, archive_digest, sha, baseline)
@@ -85,7 +103,8 @@ class Native(official.Native):
         from update_service.engine import Engine
         Engine(None,{}).resources()
         persistent=int(core.sql("SELECT pg_database_size('store');"))+sum(p.stat().st_size for root in [core.DATA/'media',core.CONFIG] for p in root.rglob('*') if p.is_file())
-        check(shutil.disk_usage(core.ROOT).free>=official.disk_budget(persistent, images_prepared=own_journal), 'insufficient safe disk budget')
+        prepared=self.prepared_image()
+        check(shutil.disk_usage(core.ROOT).free>=official.disk_budget(persistent, images_prepared=own_journal or bool(prepared)), 'insufficient safe disk budget')
         self.bundle=bundle
         return {'transition_accepted':True,'production_mutations':False,'source_sha':self.sha,'digest':self.digest,'guards':self.file_guards(),'migration_count':32,'schema_unchanged':True}
 
@@ -105,9 +124,13 @@ class Native(official.Native):
         core.atomic_json(source/'release.json',self.manifest)
         core.atomic_json(source/'.hubify-provenance.json',{'source_sha':self.sha,'app_tree':core.run(['git','-C',str(self.repository),'rev-parse',self.sha+':app']),'archive_sha256':self.digest})
         candidate=copy.deepcopy(journal['old_compose'])
-        image='single-store-app:hubify-blu-test-'+self.sha[:12]
-        from update_service.engine import Engine
-        Engine(None,{}).build(source,image,'runtime')
+        image=self.prepared_image()
+        if image:
+            journal['reused_build']={'source_sha':PREPARED_SHA,'artifact_sha256':PREPARED_DIGEST,'app_tree':PREPARED_TREE,'image':image}
+        else:
+            image='single-store-app:hubify-blu-test-'+self.sha[:12]
+            from update_service.engine import Engine
+            Engine(None,{}).build(source,image,'runtime')
         candidate['services']['app'].update(image=image,build={'context':str(source/'app'),'target':'runtime'})
         candidate['services']['app'].setdefault('environment',{}).update(STORE_BUILD_SHA=self.sha,STORE_UPDATE_CHANNEL='hubify-development')
         journal['candidate']=candidate
@@ -205,3 +228,37 @@ class AuthNative(Native):
     previous_guard = NEXT_GUARD
     deployment_name = 'hubify-blu-signature-review'
     next_guard = NEXT_GUARD.replace(b"'hubify-payment-test-cutover.json')", b"'hubify-payment-test-cutover.json','hubify-blu-auth-cutover.json')")
+
+
+class PreparedAuthNative(AuthNative):
+    """Reuse one authenticated successful build after its pre-outage disk refusal.
+
+    The full unchanged app tree and immutable image are verified before using the
+    existing images-prepared disk budget. No retry receipt is rewritten.
+    """
+    journal_name = 'hubify-blu-auth-retry-cutover.json'
+    next_guard = AuthNative.next_guard.replace(b"'hubify-blu-auth-cutover.json')", b"'hubify-blu-auth-cutover.json','hubify-blu-auth-retry-cutover.json')")
+
+    def file_guards(self):
+        guards=super().file_guards()
+        path=core.CONFIG/'hubify-blu-auth-cutover.json'
+        guards[str(path)]=digest(path.read_bytes())
+        return guards
+
+    def prepared_image(self):
+        path=core.CONFIG/'hubify-blu-auth-cutover.json'
+        check(path.is_file() and not path.is_symlink(),'prepared receipt missing')
+        receipt=core.read_json(path)
+        archive=core.ROOT/'operator-packages/hubify-blu-auth-5c3ff6dc8d58.tar.gz'
+        manifest,files=package.package(archive,PREPARED_DIGEST,PREPARED_SHA,'1.8.1')
+        official.verify_git_package(self.repository,PREPARED_SHA,manifest,files,expected_tree=PREPARED_TREE)
+        check(core.run(['git','-C',str(self.repository),'rev-parse',self.sha+':app'])==PREPARED_TREE,'prepared target app tree changed')
+        image=review_prepared(receipt,manifest,self.manifest)
+        check(core.run(['docker','image','inspect','--format','{{.Id}}',image])==image,'prepared image identity changed')
+        # No bind mounts, network, secrets or app execution: only source hashes
+        # from the immutable factory image, under an unprivileged read-only root.
+        paths=package.runtime_paths(files)
+        js="const fs=require('fs'),c=require('crypto');let s='';process.stdin.on('data',v=>s+=v);process.stdin.on('end',()=>{let o={};for(const p of JSON.parse(s)){try{o[p]=c.createHash('sha256').update(fs.readFileSync('/app/'+p.slice(4))).digest('hex')}catch{o[p]=null}}console.log(JSON.stringify(o))})"
+        observed=json.loads(core.run(['docker','run','--rm','-i','--network','none','--read-only','--cap-drop','ALL','--security-opt','no-new-privileges','--user','65534:65534','--entrypoint','node',image,'-e',js],input=json.dumps(sorted(paths)).encode()))
+        check(set(observed)==paths and all(observed[p]==digest(files[p]) for p in paths),'prepared image source bytes changed')
+        return image

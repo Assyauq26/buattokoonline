@@ -53,4 +53,20 @@ class TestCutover(unittest.TestCase):
         self.assertEqual(pilot.AuthNative.next_guard.replace(b",'hubify-blu-auth-cutover.json'",b''),pilot.NEXT_GUARD)
         self.assertNotEqual(pilot.AuthNative.journal_name,pilot.AuthNative.previous_receipt)
 
+    def test_prepared_requires_exact_receipt_and_identical_app_bytes(self):
+        manifest={'source_sha':pilot.PREPARED_SHA,'version':'1.8.1','migrations':{'old':'same'},'files':{'app/source':'hash','installer/code':'old'}}
+        candidate={**manifest,'source_sha':'b'*40,'files':{'app/source':'hash','installer/code':'new'}}
+        receipt={'phase':'rolled_back','sha':pilot.PREPARED_SHA,'digest':pilot.PREPARED_DIGEST,'image':pilot.PREPARED_IMAGE,
+            'manifest':manifest,'candidate':{'services':{}},'fence_started':False,'migration_started':False}
+        self.assertEqual(pilot.review_prepared(receipt,manifest,candidate),pilot.PREPARED_IMAGE)
+        for patch in [{'phase':'recovery_required'},{'sha':'wrong'},{'digest':'wrong'},{'image':'wrong'},{'fence_started':True},{'migration_started':True},{'traffic_may_have_opened':True}]:
+            with self.assertRaises(core.StoreError):pilot.review_prepared({**receipt,**patch},manifest,candidate)
+        for patch in [{'files':{'app/source':'changed'}},{'version':'1.8.2'},{'migrations':{}}]:
+            with self.assertRaises(core.StoreError):pilot.review_prepared(receipt,manifest,{**candidate,**patch})
+
+    def test_prepared_uses_distinct_receipt_and_retains_all_operator_guards(self):
+        self.assertNotEqual(pilot.PreparedAuthNative.journal_name,pilot.AuthNative.journal_name)
+        self.assertEqual(pilot.PreparedAuthNative.next_guard.replace(b",'hubify-blu-auth-retry-cutover.json'",b''),pilot.AuthNative.next_guard)
+        self.assertIsNone(object.__new__(pilot.Native).prepared_image())
+
 if __name__=='__main__':unittest.main()

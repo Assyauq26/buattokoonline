@@ -58,6 +58,38 @@ The candidate also includes the minimum/default base correction to Rp10,000.
 Actual deployment SHA/package/image and actual live signature results belong in
 PR56 and the complete journal, not assumed from these predeployment tests.
 
+### Prepared-image retry after the post-build capacity guard
+
+The 5c3ff6d image built successfully, but the second disk check refused before
+drain/fence/activation; the attempt ended rolled_back and e6cc5eb stayed healthy.
+The original receipt is retained. `hubify-blu-auth-retry.py` selects a distinct
+PreparedAuthNative receipt/guard rather than relabelling or replaying that intent.
+
+Reuse is pinned to that exact package/source/image and a pre-outage rolled-back
+receipt. Both full app-file inventories and Git app trees must be identical to
+the newly packaged operator-source commit. Runtime source bytes are independently
+hashed inside the immutable image with no network/mount/secrets, an unprivileged
+user, read-only filesystem and dropped capabilities. Changed app code, version,
+SQL, receipt, image or a prior fence/migration/opened traffic all reject reuse.
+Only installer/tests/docs may differ. The new journal records the actual build
+source separately from the final source. No app rebuild is represented as having
+occurred on the final commit.
+
+The existing disk_budget(images_prepared=True) is used only after that proof; the
+budget function, checksum/baseline/backup/ledger/Production guards are unchanged.
+This avoids a second build allocation while retaining the original 2 GiB plus
+twice persistent-data backup/scratch-restore reserve. The normal unprepared path
+still requires the original 6 GiB budget. The original aeb4846/e6cc5eb paths remain
+unchanged and the old failed receipt remains terminal and guarded.
+
+Independent public-v1.8.1 rehearsal also passed 31→32 with old ledger/financial
+snapshots unchanged. Before canonical schema is 09f36fc359787459a2ab0b9511e326e0c4c08ced7e7afd5df7ca5c540df287cf;
+after is 72f1aa730f8c992605fba501f50ffb27e779dd7a786532904f0d6830aa46b02a.
+An initial lab serializer used JS's unescaped Unicode instead of Python's ASCII
+escaping. Every catalog row and ordering were identical; a fresh isolated run
+with the correct canonical format passed. No production schema/guard hash was
+modified to reconcile that lab-only diagnostic difference.
+
 ## Public-release gate remains separate
 
 Current public v1.8.1 has 31 migrations. This candidate has 32. The existing v3
