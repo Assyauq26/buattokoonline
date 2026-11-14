@@ -17,7 +17,7 @@ new issuance and cannot be retrofitted onto a new order. No claim/PAID was creat
 
 1. Enrolled Admin opens Gmail settings and selects **Uji transfer blu**. Gmail
    must be connected, the receiving bank version active, and a read successful.
-2. Choose a base amount Rp1,000–Rp50,000 and 5 or 10 minutes. Issue once. The
+2. Choose a base amount Rp10,000–Rp50,000 and 5 or 10 minutes. Issue once. The
    server adds Rp1–Rp999 under the receiving source lock, reserves the exact total
    for seven days beyond expiry, and creates a new clearly marked BLU-TEST order
    and payment in the same transaction. There are no items, stock, coupons,

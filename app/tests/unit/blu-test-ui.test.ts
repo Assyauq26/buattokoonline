@@ -4,8 +4,8 @@ import { afterEach, expect, it, vi } from "vitest";
 import { cleanup, render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { BluTransferTest } from "@/components/admin/blu-transfer-test";
 const now = new Date().toISOString();
-const test = { id: "test-a", sourceId: "source-a", orderNumber: "BLU-TEST-SYNTHETIC", baseAmount: 1000,
-  uniqueCode: 1, payable: 1001, createdAt: now, expiresAt: new Date(Date.now()+600000).toISOString(), closed: false,
+const test = { id: "test-a", sourceId: "source-a", orderNumber: "BLU-TEST-SYNTHETIC", baseAmount: 10000,
+  uniqueCode: 1, payable: 10001, createdAt: now, expiresAt: new Date(Date.now()+600000).toISOString(), closed: false,
   matches: [] as string[], bank: { name: "Synthetic bank", number: "0000000000", holder: "Fixture only" } };
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 function view(tests = [] as typeof test[], sources = [{ id: "source-a", label: "Synthetic source" }]) {
@@ -14,10 +14,12 @@ function view(tests = [] as typeof test[], sources = [{ id: "source-a", label: "
 it("does not call Gmail in the background or issue on render", () => {
   const fetch = vi.fn();vi.stubGlobal("fetch",fetch);view();expect(fetch).not.toHaveBeenCalled();
   expect(screen.getByRole("button",{name:"Terbitkan nominal uji"})).toBeDefined();
+  const amount = screen.getByRole("spinbutton", { name: "Nominal dasar (Rp)" }) as HTMLInputElement;
+  expect(amount.min).toBe("10000"); expect(amount.value).toBe("10000");
 });
 it("blocks another issuance while an attempt is active", () => {
   view([test]);expect((screen.getByRole("button",{name:"Masih ada uji aktif"}) as HTMLButtonElement).disabled).toBe(true);
-  expect(screen.getByText("Rp 1.001",{exact:false})).toBeDefined();
+  expect(screen.getByText("Rp 10.001",{exact:false})).toBeDefined();
 });
 it("does not offer transfer/copy after expiry and explains late reads", () => {
   view([{...test,expiresAt:new Date(Date.now()-1000).toISOString()}]);
@@ -39,6 +41,6 @@ it("issues with one stable UUID and refreshes after success", async () => {
   fireEvent.click(screen.getByRole("button",{name:"Terbitkan nominal uji"}));
   await waitFor(()=>expect(screen.getByText(/Pesanan uji diterbitkan/)).toBeDefined());
   const body=JSON.parse(fetch.mock.calls[0][1].body);
-  expect(body.action).toBe("create-test");expect(body.input.baseAmount).toBe(1000);
+  expect(body.action).toBe("create-test");expect(body.input.baseAmount).toBe(10000);
   expect(body.input.windowMinutes).toBe(10);expect(body.input.requestId).toMatch(/^[a-f0-9-]{36}$/);
 });

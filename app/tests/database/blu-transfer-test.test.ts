@@ -30,14 +30,19 @@ beforeAll(async () => {
     bankAccountId: bank.id, accountRef, encryptedSecret: "unused-synthetic-value", health: "REVIEW_ONLY" } })).id;
 });
 afterAll(async () => { vi.unstubAllEnvs(); await prisma.$disconnect(); });
-const input = () => ({ sourceId, requestId, baseAmount: 1000, windowMinutes: 10 });
+const input = () => ({ sourceId, requestId, baseAmount: 10000, windowMinutes: 10 });
+it("rejects a base below the bank minimum before creating any order", async () => {
+  const before = await prisma.order.count();
+  await expect(createBluTestOrder(actor, { ...input(), baseAmount: 9999 })).rejects.toMatchObject({ name: "ZodError" });
+  expect(await prisma.order.count()).toBe(before);
+});
 it("issues atomically and retries without creating duplicate orders, stock or shipment", async () => {
   const before = { inventory: await prisma.inventory.count(), shipments: await prisma.shipment.count(), items: await prisma.orderItem.count() };
   const result = await createBluTestOrder(actor, input());
   const retry = await createBluTestOrder(actor, input());
   expect(retry).toEqual({ id: result.id, replayed: true });
   const a = await prisma.paymentEvidenceAttempt.findUniqueOrThrow({ where: { id: result.id }, include: { payment: { include: { order: true } } } });
-  expect(a.payable).toBe(1001); expect(a.uniqueCode).toBe(1);
+  expect(a.payable).toBe(10001); expect(a.uniqueCode).toBe(1);
   expect(+a.expiresAt - +a.createdAt).toBe(600000);
   expect(a.payment.amount).toBe(a.payable); expect(a.payment.order.total).toBe(a.payable);
   expect(a.payment.status).toBe("PENDING_PAYMENT"); expect(a.payment.order.orderNumber).toMatch(/^BLU-TEST-/);
@@ -45,12 +50,12 @@ it("issues atomically and retries without creating duplicate orders, stock or sh
   await expect(approvePayment(a.payment.id, actor)).rejects.toThrow("Pesanan uji blu");
   await expect(submitConfirmation(actor, a.payment.orderId, { senderBank: "Fixture", senderName: "Fixture", amount: a.payable,
     transferDate: new Date(), proofPath: "fixture", proofMime: "image/png" })).rejects.toThrow("Pesanan uji blu");
-  await expect(createBluTestOrder(actor, { ...input(), baseAmount: 2000 })).rejects.toThrow("data berbeda");
+  await expect(createBluTestOrder(actor, { ...input(), baseAmount: 20000 })).rejects.toThrow("data berbeda");
 });
 it("serializes concurrent issuances per account and rejects a second active test", async () => {
   const results = await Promise.allSettled([createBluTestOrder(other, { ...input(), requestId: randomUUID() }), createBluTestOrder(other, { ...input(), requestId: randomUUID() })]);
   expect(results.filter(r => r.status === "fulfilled")).toHaveLength(1);
-  const rows = await listBluTestOrders(other); expect(rows).toHaveLength(1); expect(rows[0].payable).toBe(1002);
+  const rows = await listBluTestOrders(other); expect(rows).toHaveLength(1); expect(rows[0].payable).toBe(10002);
   expect((await listBluTestOrders(actor)).some(t => t.id === rows[0].id)).toBe(false);
 });
 it("only matches a newly issued exact amount in its transaction time window", async () => {

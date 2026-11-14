@@ -10,7 +10,7 @@ import { BLU_TEST_METHOD, testEvidenceMatches } from "./test-policy";
 export const testOrderInput = z.object({
   sourceId: z.string().min(1).max(100),
   requestId: z.string().uuid(),
-  baseAmount: z.number().int().min(1000).max(50000),
+  baseAmount: z.number().int().min(10000).max(50000),
   windowMinutes: z.union([z.literal(5), z.literal(10)]),
 }).strict();
 
