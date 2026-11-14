@@ -52,13 +52,13 @@ def operation_lock(path='/run/single-store-operation.lock'):
         yield
 
 
-def verify_git_package(repository, sha, manifest, files):
+def verify_git_package(repository, sha, manifest, files, expected_tree=TARGET_TREE):
     def read_git(*args):
         result = subprocess.run(['git', '-C', str(repository), *args], capture_output=True, text=True)
         check(result.returncode == 0, 'Git source verification')
         return result.stdout.strip()
     check(read_git('rev-parse', 'HEAD') == sha, 'executor source SHA')
-    check(read_git('rev-parse', 'HEAD:app') == TARGET_TREE, 'reviewed application tree')
+    check(read_git('rev-parse', 'HEAD:app') == expected_tree, 'reviewed application tree')
     read_git('diff', '--exit-code', 'HEAD')
     raw = subprocess.check_output(['git', '-C', str(repository), 'ls-tree', '-rz', '--full-tree', sha])
     objects = {}
