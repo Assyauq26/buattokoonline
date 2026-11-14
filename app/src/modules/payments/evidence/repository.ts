@@ -8,6 +8,7 @@ import {
   lockPaymentOrder,
 } from "@/modules/orders/transaction-locks";
 import { PERMISSIONS } from "@/lib/auth/permissions";
+import { paymentWindow, type PaymentWindowMinutes } from "./amount-window";
 import {
   allocateAmount,
   evidenceReason,
@@ -68,8 +69,9 @@ export async function allocateAttempt(
   if (
     payment.order.status !== "PENDING_PAYMENT" ||
     payment.status !== "PENDING_PAYMENT" ||
+    !Number.isFinite(+input.expiresAt) ||
     input.expiresAt <= now ||
-    input.expiresAt.getTime() - now.getTime() > 24 * 3600_000
+    input.expiresAt.getTime() - now.getTime() > 10 * 60_000
   )
     throw new HttpError("Percobaan pembayaran tidak valid", 409);
   const occupied = await tx.paymentEvidenceAttempt.findMany({
@@ -109,20 +111,28 @@ export async function allocateNewAttempt(
   input: {
     sourceId: string;
     baseAmount: number;
-    expiresAt: Date;
+    expiresAt?: Date;
+    windowMinutes?: PaymentWindowMinutes;
     maxCode?: number;
   },
-  createNewPayment: (payable: number) => Promise<{
+  createNewPayment: (
+    payable: number,
+    expiresAt: Date,
+  ) => Promise<{
     id: string;
     amount: number;
-    order: { total: number; status: string };
+    order: { total: number; status: string; expiresAt: Date | null };
   }>,
   now = new Date(),
 ) {
+  const issued = paymentWindow(now, input.windowMinutes);
+  const expiresAt = input.expiresAt ?? issued.expiresAt;
   await lockSource(tx, input.sourceId);
   if (
-    input.expiresAt <= now ||
-    input.expiresAt.getTime() - now.getTime() > 24 * 3600_000
+    !Number.isFinite(+expiresAt) ||
+    expiresAt <= now ||
+    +expiresAt - +now > 10 * 60_000 ||
+    (input.windowMinutes !== undefined && +expiresAt !== +issued.expiresAt)
   )
     throw new HttpError("Tenggat pembayaran tidak valid", 422);
   const occupied = await tx.paymentEvidenceAttempt.findMany({
@@ -134,11 +144,13 @@ export async function allocateNewAttempt(
     new Set(occupied.map((a) => a.payable)),
     input.maxCode,
   );
-  const payment = await createNewPayment(amount.payable);
+  const payment = await createNewPayment(amount.payable, new Date(expiresAt));
   if (
     payment.amount !== amount.payable ||
     payment.order.total !== amount.payable ||
-    payment.order.status !== "PENDING_PAYMENT"
+    payment.order.status !== "PENDING_PAYMENT" ||
+    !payment.order.expiresAt ||
+    +payment.order.expiresAt !== +expiresAt
   )
     throw new HttpError(
       "Total pembayaran belum mencakup kode unik secara konsisten",
@@ -149,8 +161,8 @@ export async function allocateNewAttempt(
       sourceId: input.sourceId,
       paymentId: payment.id,
       ...amount,
-      expiresAt: input.expiresAt,
-      retainUntil: new Date(input.expiresAt.getTime() + 7 * 86400_000),
+      expiresAt,
+      retainUntil: new Date(expiresAt.getTime() + 7 * 86400_000),
     },
   });
 }

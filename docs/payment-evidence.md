@@ -42,15 +42,29 @@ copy that login flow or ask sellers to provide passwords/cookies.
 5. Test safety invariants using synthetic fixtures and isolated local DB only;
    document missing real-account checks separately. Draft PR only, no version/tag.
 
-## Financial policy
+## Matching policy — updated by owner 2026-11-14
 
-Amount + time (even a unique amount) is not identity or proof of an order link.
-All connector observations require seller review; there is NO automatic paid path.
-Unknown/refund/partial/non-credit/non-IDR/untrusted mailbox observations are held
-with reasons. A durable source transaction ID is required for a permanent claim.
-Duplicate messages cannot be used as new money. A seller must independently check
-their merchant/bank record and supply a reason. Expired/cancelled/refunded orders
-cannot be settled; handle late money through a separate operator refund process.
+The MAIN order-matching criteria are only the exact total including unique code
+and the transaction timestamp inside the issued payment window. Example:
+Rp45.000 + Rp341 unique code = Rp45.341. Payer name and bank reference are NOT
+required for matching. The issued window is 5 or 10 minutes (default 10), includes
+its start and excludes its expiry. No rounding or approximate amount matching.
+Zero candidates means no match; more than one distinct candidate is ambiguous.
+
+The total, not the suffix alone, must be unique among retained source attempts,
+including cross-base collisions and the late-payment retention window. Allocation
+and issued order/attempt deadlines share a transaction. No existing order is repriced.
+Read-only source suggestions are now shown even when an email lacks a bank reference.
+They respect installation/account routing and exclude closed/already-paid orders.
+
+Matching and financial mutation remain separate. All new methods are OFF and no
+new automatic PAID path is installed. Source authentication, currency/direction,
+durable duplicate handling, lease fencing and lifecycle checks remain system
+safeguards, not extra identity fields requested from buyers. The legacy manual
+association API still has its stricter evidence contract; it is not the matching
+engine and is not invoked to settle blu suggestions. Do not fabricate a bank ID
+from email Message-ID to satisfy that API. Financial activation requires the
+separately agreed end-to-end tests and operational rollout; no deployment here.
 
 ## Google deployment architecture and gates
 
@@ -90,9 +104,9 @@ An interrupted ingest retries by stable source identity, not by assuming new mon
 
 - GoPay: auditable authorized login/refresh contract, real merchant status/ID and
   pagination fixtures, terms/risk acceptance, limited authorized transaction tests.
-- Bank: named bank, redacted original notification samples including trusted
-  delivery/authentication provenance, stable transaction identity and account match.
-  From and arbitrary Authentication-Results headers are never trusted alone.
+- Bank: first blu original format examined; validate further variants and live
+  per-message authentication/deduplication. No payer name or bank reference is
+  required for amount/window matching. From/header claims alone remain untrusted.
 - Google: actual client/registered redirect, OAuth revoke/refresh/reconnect smoke,
   verification/exception and data retention policy.
 - Checkout activation: explicit payable/unique-code accounting and refund policy,
@@ -105,10 +119,10 @@ This is a reviewable foundation, NOT two operational payment gateways. Existing
 manual checkout, proof approval, stock settlement and webhook behavior are unchanged.
 The new association endpoint deliberately never updates Payment/Order to PAID,
 commits inventory, sends paid notifications or manufactures a transfer proof.
-No checkout selector, live GoPay login, live bank parser, mailbox body ingestion,
-automatic settlement, installed timer or scheduler activation is shipped here.
-Only the scoped paginated polling primitive/lease persistence and Gmail message-list
-transport exist; linking a real mailbox to bank events remains blocked on samples.
+No active checkout selector, live GoPay login, automatic settlement, installed timer
+or scheduler activation is shipped here. Scoped polling/lease primitives, Gmail
+message-list/raw retrieval and a review-only blu MIME ingestion seam exist. No live
+authorized mailbox test or continuous bank ingestion has been run.
 
 New customer QR/countdown/unique-code instruction UI and accounting/refund wiring
 remain blocked behind the live-method gates. Buyers continue to see manual transfer;
@@ -165,7 +179,7 @@ All primary actions use black/white styling; labelled fields, focus outlines,
 44px minimum actions and live status feedback support keyboard/mobile operation.
 No decorative page animations; pending spinner respects reduced motion.
 
-## Verification evidence
+## Historical foundation verification evidence
 
 All checks use synthetic data, mock provider responses, or local PostgreSQL 16.
 No merchant/bank/OAuth account was contacted or configured. No production VM,
@@ -229,7 +243,70 @@ outside this Git worktree; synthetic data is not included in installer/runtime U
 
 ## Status and remaining operator inputs
 
-### First bank selected: blu by BCA Digital
+### EML and resumed matching review — 2026-11-14
+
+The complete owner-provided email was examined locally as data. Its actual MIME
+is multipart/mixed with one UTF-8 text/html part, quoted-printable transfer encoding
+and no text/plain alternative. The IDR amount is split across nested inline spans;
+the decoder now preserves those spans as one visual amount and ignores inert HTML
+resources/hidden content without executing scripts or loading images/links.
+The observed fields are an incoming bluAccount notice, nominal, recipient account,
+WIB transaction time and BI-FAST type. A reliable bank transaction reference was
+not identified. RFC Message-ID and References exist; the former identifies an email,
+not money, and the latter is threading metadata, not evidence of forwarding.
+
+Public From/Return-Path/DKIM domain: blubybcadigital.id. The file claims mx.google.com
+SPF/DKIM/DMARC pass. Separately, the ORIGINAL unchanged file passed an independent
+mailauth 8.0.6 DKIM/current-DNS check: bank-aligned rsa-sha256 signature, full body
+hash match, valid signature time, no partial-body limit. An in-memory tampered copy
+was rejected. SPF/DMARC were not independently verified. This single historical
+receipt audit is not a new transfer or a live Gmail/Google consent test.
+
+The original EML, private identities/accounts, full headers/signature values and
+body are NOT committed. Fixtures are minimal synthetic MIME/DOM reconstructions,
+including quoted-printable/base64, plain/HTML alternatives and malformed/forwarded
+cases. The local opt-in original-file test prints only booleans/codes and privately
+cross-checks its labelled amount; ordinary CI has no private original attached.
+Runtime parsing does not turn an Authentication-Results string into trust, even
+if it says mx.google.com/pass. Gmail can also contain inserted/imported messages;
+authenticated API retrieval alone is not proof of their provenance. Before a live
+pilot, independently verify original bank-aligned signatures/complete signed content
+or establish a separately reviewed trusted delivery channel. No caller-controlled
+trust flag or spoofable header alone is sufficient.
+
+References: [RFC 8601 trust boundary](https://www.rfc-editor.org/rfc/rfc8601.html#section-1.2),
+[Gmail raw format](https://developers.google.com/workspace/gmail/api/reference/rest/v1/Format),
+[Gmail insertion semantics](https://developers.google.com/workspace/gmail/api/reference/rest/v1/users.messages/insert),
+[postal-mime](https://github.com/postalsys/postal-mime),
+[parse5](https://github.com/inikulin/parse5),
+[mailauth audit library](https://github.com/postalsys/mailauth).
+
+The raw Gmail transport is read-only, fixed-origin, bounded and checks response ID
+and canonical base64url. Decoding/ingestion is scoped per source/installation and
+guarded by persistent leases/generations. A hashed RFC Message-ID deduplicates repeat
+email observations across mailbox copies/retries; it is never called a bank ID.
+Missing/ambiguous/truncated/unknown body data is held for review. Distinct email IDs
+with identical amounts remain distinct observations; no receipt is automatically
+used to settle two orders. No worker timer or production mailbox is activated.
+
+Latest targeted run: 106 tests passed across 9 files, including private original
+parsing, actual local PostgreSQL concurrency/isolation, shared 5/10-minute deadlines,
+exclusive expiry, exact Rp45.341 matching without payer/reference, no/multiple matches,
+under/over/late events and blocked financial mutation. TypeScript and scoped ESLint
+passed. Final production build and all 18 authenticated responsive browser checks
+passed at 390px/1440px with zero runtime errors or horizontal overflow. The seller
+page shows the exact base + unique-code total without bank-reference/name gating.
+Final visual evidence is in audit-tools/payment-evidence-window-browser-final
+outside Git. Existing order/payment/SKU/inventory/voucher/history baseline snapshot
+still matches 50d6493f32f03d7b4d845e28d193fce4faead7339ee6fc2bffa38adbb27ac17d.
+
+| Before | After | Why |
+| --- | --- | --- |
+| Missing bank ID hid candidate orders | Amount/time matches visible without bank reference | Apply the owner's matching rule without conflating it with settlement |
+| Review showed only declared amount | Show base amount + unique code = exact total | Seller can inspect the Rp45.341-style match directly |
+| Untested deadline helper | Shared 5/10-minute issuance and expiry boundary tests | Order/attempt use one deadline; exact expiry is excluded |
+
+### Initial screenshot assessment — 2026-11-13 (historical)
 
 The owner selected blu and supplied a cropped Gmail screenshot on 2026-11-13.
 It shows an incoming bluAccount notification, Indonesian IDR formatting, recipient
@@ -240,30 +317,29 @@ into repository fixtures. `blu-preview.ts` recognizes synthetic screenshot-shape
 plain text only, returns UNKNOWN/untrusted/no bankTxId, and is deliberately not
 connected to ingestion or checkout. It cannot establish that funds arrived.
 
-blu is the first validation target; other banks remain undecided. A full original
-notification's MIME/text/HTML structure and redacted headers are needed for parser
-development. Sender authenticity must later be checked on original messages via
-the authorized mailbox, not inferred from edited headers or the displayed name.
+blu is the first validation target; other banks remain undecided. The first complete EML has since been examined privately; see the 2026-11-14 audit
+above. Further notification variants and live mailbox delivery remain untested.
 The production-supported bank list remains empty; no new source is activated.
 Incremental validation: 14 new blu-preview cases plus 36 existing payment-evidence
 unit cases passed (50 targeted tests); TypeScript and scoped ESLint passed. This
-does not replace the missing original-email, trusted-delivery or live-bank tests.
+was the pre-EML baseline; the 2026-11-14 audit above adds original-email checks.
+Live trusted-delivery and new-transfer tests are still outstanding.
 
 | Feature | Status | Required before pilot |
 | --- | --- | --- |
 | Durable evidence/claims, local QR and preview seller UI | SIAP REVIEW | Review SQL, permissions, financial policy and operating procedures |
 | Official Gmail OAuth code | SIAP REVIEW; live BLOCKED | Real client/redirect, authorized consent/refresh/revoke test and verification/exception |
 | GoPay login/refresh and live mutations | BLOCKED | Auditable authorized protocol, merchant fixtures and limited real tests |
-| Bank notification interpretation | BLOCKED; blu preview/synthetic fixture only | Complete blu notification and validated delivery/authentication provenance |
+| blu MIME parsing and amount/window matching | SIAP REVIEW; live BLOCKED | Live OAuth delivery, per-message authentication and operational tests |
 | New checkout methods and scheduler | BLOCKED | Validated source, accounting/refund policy, end-to-end stock/order checks and updater migration/quiescence support |
 
 No feature is labelled SIAP PILOT or ready for production. Do not reuse the same
 receiving merchant/bank account across independently installed stores for automatic
-matching: this draft has no cross-VPS global transaction-claim registry. Amount/time
-association is insufficient even when each local claim is unique.
+matching: this draft has no cross-VPS global transaction-claim registry. Within an
+installation, the matching rule remains exact unique total plus its issued window.
 
-Needed from the owner: complete redacted authentic blu notifications (other banks
-can follow later),
+Needed next: authorized Google OAuth client/redirect setup and mailbox pilot access,
+additional blu notification variants (other banks can follow later),
 Google project/verification decision, an auditable authorized GoPay access contract
 and test account availability, and the business policy for unique-code collection
 and late/refund accounting. Do not provide passwords/OTP/private tokens in chat.

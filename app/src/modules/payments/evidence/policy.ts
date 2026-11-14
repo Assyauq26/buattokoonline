@@ -68,7 +68,7 @@ export function matchReason(
     return "FUTURE_TIME_REVIEW";
   if (!o.occurredAt || o.occurredAt < a.createdAt)
     return "OUTSIDE_ATTEMPT_WINDOW";
-  if (o.occurredAt > a.expiresAt || now > a.expiresAt)
+  if (o.occurredAt >= a.expiresAt || now >= a.expiresAt)
     return "LATE_PAYMENT_REVIEW";
   if (o.amount !== a.payable)
     return o.amount && o.amount < a.payable ? "UNDERPAYMENT" : "OVERPAYMENT";

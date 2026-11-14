@@ -30,6 +30,7 @@ import {
 import { unseal } from "@/modules/payments/evidence/secrets";
 import { ingestBluEmailReview } from "@/modules/payments/evidence/blu-ingestion";
 import { BLU_HTML, syntheticBluEml } from "../fixtures/blu-email";
+import { evidenceCandidateSuggestions } from "@/modules/payments/evidence/candidate-suggestions";
 
 const url = new URL(process.env.DATABASE_URL || "http://invalid");
 if (
@@ -360,6 +361,67 @@ it("serializes equal-base allocations from concurrent transactions and retains c
   const p3 = await makePayment(10003);
   expect(await attempt(p3.id)).toHaveProperty("payable", 10003);
 });
+it.each([5, 10] as const)(
+  "issues a canonical %s-minute deadline to both new order and attempt",
+  async (windowMinutes) => {
+    const issuedAt = new Date();
+    const s = await prisma.paymentEvidenceSource.create({
+      data: {
+        storeScope: scope,
+        kind: "GMAIL_BANK",
+        label: "Window fixture",
+        accountRef: randomUUID(),
+      },
+    });
+    const attempt = await prisma.$transaction((tx) =>
+      allocateNewAttempt(
+        tx,
+        { sourceId: s.id, baseAmount: 45000, windowMinutes },
+        (amount, expiresAt) =>
+          tx.payment.create({
+            data: {
+              amount,
+              order: {
+                create: {
+                  orderNumber: randomUUID(),
+                  userId: customer,
+                  subtotal: 45000,
+                  total: amount,
+                  expiresAt,
+                },
+              },
+            },
+            include: { order: true },
+          }),
+        issuedAt,
+      ),
+    );
+    expect(+attempt.expiresAt - +issuedAt).toBe(windowMinutes * 60000);
+    const p = await prisma.payment.findUniqueOrThrow({
+      where: { id: attempt.paymentId },
+      include: { order: true },
+    });
+    expect(+p.order.expiresAt!).toBe(+attempt.expiresAt);
+    const create = vi.fn(async () => p);
+    await expect(
+      prisma.$transaction((tx) =>
+        allocateNewAttempt(
+          tx,
+          {
+            sourceId: s.id,
+            baseAmount: 45000,
+            windowMinutes,
+            expiresAt: new Date(+issuedAt + 3600000),
+          },
+          create,
+          issuedAt,
+        ),
+      ),
+    ).rejects.toThrow("Tenggat");
+    expect(create).not.toHaveBeenCalled();
+  },
+);
+
 it("rejects inconsistent payable totals atomically without rewriting the order", async () => {
   const p = await makePayment(10000);
   await expect(attempt(p.id)).rejects.toThrow("Total pembayaran");
@@ -664,6 +726,29 @@ it("deduplicates blu MIME across parallel/retry deliveries and holds same-amount
       expiresAt: new Date(now.getTime() + 600_000),
     }),
   );
+  // No bank transaction reference or payer-name field is needed to find a match.
+  expect((await evidenceCandidateSuggestions(e.id)).map((c) => c.id)).toEqual([
+    a.id,
+  ]);
+  expect(
+    (await evidenceCandidateSuggestions(sameAmount.evidenceId)).map(
+      (c) => c.id,
+    ),
+  ).toEqual([a.id]);
+  await prisma.incomingPaymentEvidence.update({
+    where: { id: e.id },
+    data: { occurredAt: a.expiresAt },
+  });
+  expect(await evidenceCandidateSuggestions(e.id)).toEqual([]);
+  await prisma.incomingPaymentEvidence.update({
+    where: { id: e.id },
+    data: { occurredAt: e.occurredAt, amount: 125002 },
+  });
+  expect(await evidenceCandidateSuggestions(e.id)).toEqual([]);
+  await prisma.incomingPaymentEvidence.update({
+    where: { id: e.id },
+    data: { amount: 125001 },
+  });
   for (const evidenceId of [e.id, sameAmount.evidenceId])
     await expect(
       claimEvidence(
@@ -682,6 +767,7 @@ it("deduplicates blu MIME across parallel/retry deliveries and holds same-amount
     }),
   ).toBe(0);
   vi.stubEnv("STORE_INSTALLATION_ID", "foreign-email-store");
+  expect(await evidenceCandidateSuggestions(e.id)).toEqual([]);
   await expect(ingestBluEmailReview(input)).rejects.toThrow("tidak ditemukan");
   vi.stubEnv("STORE_INSTALLATION_ID", scope);
   await disconnectSource(actor, s.id);

@@ -25,7 +25,10 @@ try {
   }
   const admin = await db.user.create({ data: { name: 'Fixture seller', email: `${run}@example.test`, passwordHash: 'disabled-browser-fixture', roles: { create: { roleId: role.id } } } });
   const source = await db.paymentEvidenceSource.create({ data: { storeScope: installation, kind: 'GMAIL_BANK', label: 'Notifikasi rekening toko', accountRef: 'synthetic-incoming-' + run } });
-  const evidence = await db.incomingPaymentEvidence.create({ data: { sourceId: source.id, externalId: 'synthetic-1', fingerprint: 'synthetic-only', amount: 25001, currency: 'IDR', direction: 'CREDIT', providerStatus: 'UNKNOWN', accountRef: source.accountRef, trusted: false, reason: 'UNVERIFIED_PROVENANCE' } });
+  const windowStart = new Date(), expiresAt = new Date(+windowStart + 5 * 60000), orderNumber = 'PAYMENT-WINDOW-' + run.slice(0,8);
+  const payment = await db.payment.create({ data: { amount: 45341, order: { create: { orderNumber, userId: admin.id, subtotal: 45000, total: 45341, expiresAt } } } });
+  await db.paymentEvidenceAttempt.create({ data: { sourceId: source.id, paymentId: payment.id, baseAmount: 45000, uniqueCode: 341, payable: 45341, expiresAt, retainUntil: new Date(+expiresAt + 7*86400000) } });
+  const evidence = await db.incomingPaymentEvidence.create({ data: { sourceId: source.id, externalId: 'synthetic-1', fingerprint: 'synthetic-only', amount: 45341, occurredAt: new Date(+windowStart + 30000), currency: 'IDR', direction: 'CREDIT', providerStatus: 'UNKNOWN', accountRef: source.accountRef, trusted: false, reason: 'MISSING_STABLE_TRANSACTION_ID' } });
   const log = createWriteStream(resolve(out, 'server.log'));
   child = spawn(process.execPath, ['node_modules/next/dist/bin/next', 'start', '-H', '127.0.0.1', '-p', '3018'], { cwd: resolve('app'), env: { ...process.env, NODE_ENV: 'production', APP_ORIGIN: origin, JWT_SECRET: secret, DIRECT_URL: process.env.DATABASE_URL, STORE_INSTALLATION_ID: installation, PAYMENT_EVIDENCE_PREVIEW: 'true', PAYMENT_GMAIL_OAUTH_TEST: 'false', PAYMENT_GOOGLE_CLIENT_ID: '', PAYMENT_GOOGLE_CLIENT_SECRET: '', PAYMENT_INTEGRATION_ENCRYPTION_KEY: '', PAYMENT_PROVIDER: 'manual', MAINTENANCE_MODE: '0', REGION_DATA_MODE: 'snapshot' }, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
   child.stdout.pipe(log); child.stderr.pipe(log);
@@ -54,6 +57,13 @@ try {
       const response = await page.goto(origin + path);
       assert.equal(response.status(), 200, path);
       await page.getByRole('heading', { name: heading, exact: true }).waitFor();
+      if (name === 'detail') {
+        await page.getByRole('heading', { name: 'Pencocokan nominal & waktu' }).waitFor();
+        await page.getByText(orderNumber, { exact: true }).waitFor();
+        await page.getByText(/kode unik Rp 341/).waitFor();
+        assert.equal(await page.getByRole('button', { name: /Kaitkan bukti/ }).count(), 0);
+        checks.push(`${viewport.width}: Rp45.341 matches without payer/reference and without paid action`);
+      }
       assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), `No horizontal overflow ${path} ${viewport.width}`);
       await page.screenshot({ path: resolve(out, `${name}-${viewport.width}.png`), fullPage: true });
       checks.push(`${viewport.width}: ${path}`);
