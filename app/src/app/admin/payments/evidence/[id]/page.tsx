@@ -7,6 +7,7 @@ import { requireEvidenceAdmin } from "@/modules/payments/evidence/access";
 import { prisma } from "@/lib/prisma";
 import { previewEnabled } from "@/modules/payments/evidence/policy";
 import { storeScope } from "@/modules/payments/evidence/repository";
+import { signatureAuditState } from "@/modules/payments/evidence/signature-audit";
 
 export const dynamic = "force-dynamic";
 export default async function Page({
@@ -36,6 +37,11 @@ export default async function Page({
     },
   });
   if (!e) notFound();
+  const signatureRecord = await prisma.paymentEvidenceReview.findFirst({
+    where: { sourceId: e.sourceId, evidenceId: e.id, action: "BLU_SIGNATURE_CHECK" },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }], select: { reason: true },
+  });
+  const signature = signatureAuditState(e, signatureRecord?.reason);
   const candidates = e.claim
     ? []
     : await evidenceCandidateSuggestions(e.id, now);
@@ -77,7 +83,11 @@ export default async function Page({
             : evidenceReasonLabel(e.reason)}
         </p>
         <p className="text-sm text-zinc-600">
-          {e.trusted
+          {signature.verified
+            ? "Tanda tangan email dari domain blu terverifikasi, termasuk isi email secara utuh. Ini bukan konfirmasi saldo atau pelunasan pesanan."
+            : signature.retry
+              ? "Kunci tanda tangan email belum dapat diperiksa. Coba baca email lagi; hasil tetap memerlukan pemeriksaan manual."
+            : e.trusted
             ? "Catatan sumber tersedia untuk pemeriksaan pembayaran."
             : "Keaslian sumber belum diverifikasi untuk pemrosesan pembayaran di sistem."}
         </p>

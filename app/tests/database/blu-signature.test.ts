@@ -1,0 +1,50 @@
+import { generateKeyPairSync, randomUUID } from "node:crypto";
+import { Resolver } from "node:dns/promises";
+import { afterAll, beforeAll, expect, it, vi } from "vitest";
+vi.mock("server-only", () => ({}));
+import { dkimSign } from "mailauth";
+import { prisma } from "@/lib/prisma";
+import { parseBluEmail } from "@/modules/payments/evidence/blu-email";
+import { ingestBluEmailReview } from "@/modules/payments/evidence/blu-ingestion";
+import { acquireSourceLease } from "@/modules/payments/evidence/repository";
+import { signatureAuditState } from "@/modules/payments/evidence/signature-audit";
+import { syntheticBluEml } from "../fixtures/blu-email";
+const target = new URL(process.env.DATABASE_URL || "http://invalid");
+if (target.hostname !== "127.0.0.1" || !["5568", "5432"].includes(target.port) || target.pathname !== "/hubify_payment_evidence_test") throw new Error("Isolated evidence DB required");
+const scope = `blu-signature-${randomUUID()}`;
+const key = generateKeyPairSync("rsa", { modulusLength: 2048 });
+const pub = key.publicKey.export({ type: "spki", format: "der" }).toString("base64");
+let raw: Buffer, sourceId: string, lease: { token: string; generation: number }, evidenceId: string;
+beforeAll(async () => {
+  vi.stubEnv("PAYMENT_EVIDENCE_PREVIEW", "true");vi.stubEnv("STORE_INSTALLATION_ID", scope);
+  vi.spyOn(Resolver.prototype, "resolveTxt").mockResolvedValue([[`v=DKIM1; k=rsa; p=${pub}`]]);
+  const unsigned = syntheticBluEml({ messageId: `<${randomUUID()}@example.test>`, headers: [`Date: ${new Date().toUTCString()}`] });
+  const signature = await dkimSign(unsigned, { headerList: ["From", "Date", "Subject", "Message-ID", "MIME-Version", "Content-Type"],
+    signatureData: [{ signingDomain: "blubybcadigital.id", selector: "synthetic", privateKey: key.privateKey.export({ type: "pkcs8", format: "pem" }) }] });
+  raw = Buffer.concat([Buffer.from(signature.signatures), unsigned]);
+  const parsed = await parseBluEmail(raw);
+  sourceId = (await prisma.paymentEvidenceSource.create({ data: { storeScope: scope, kind: "GMAIL_BANK", label: "Synthetic signature fixture", accountRef: parsed.observation.accountRef } })).id;
+  lease = (await acquireSourceLease(sourceId))!;
+});
+afterAll(async () => { vi.restoreAllMocks();vi.unstubAllEnvs();await prisma.$disconnect(); });
+const input = () => ({ sourceId, raw, generation: lease.generation, leaseToken: lease.token, apiMessageId: "syntheticSignedBankMessage" });
+it("persists independently verified signature audit without promoting trust, activating source, claiming or settling", async () => {
+  evidenceId = (await ingestBluEmailReview(input())).evidenceId;
+  const e = await prisma.incomingPaymentEvidence.findUniqueOrThrow({ where: { id: evidenceId } });
+  const audit = await prisma.paymentEvidenceReview.findFirstOrThrow({ where: { evidenceId, action: "BLU_SIGNATURE_CHECK" } });
+  expect(signatureAuditState(e, audit.reason).verified).toBe(true);
+  expect(e).toMatchObject({ trusted: false, bankTxId: null, providerStatus: "UNKNOWN", reason: "MISSING_STABLE_TRANSACTION_ID" });
+  expect((await prisma.paymentEvidenceSource.findUniqueOrThrow({ where: { id: sourceId } })).enabled).toBe(false);
+  expect(await prisma.paymentEvidenceClaim.count({ where: { evidenceId } })).toBe(0);
+  expect(audit.reason).not.toContain("@example.test"); expect(audit.reason).not.toContain("BEGIN PRIVATE KEY");
+});
+it("deduplicates identical audit replays and does not carry a previous pass over tampered bytes", async () => {
+  await ingestBluEmailReview(input());
+  expect(await prisma.paymentEvidenceReview.count({ where: { evidenceId, action: "BLU_SIGNATURE_CHECK" } })).toBe(1);
+  await ingestBluEmailReview({ ...input(), raw: Buffer.concat([raw, Buffer.from("\r\nSynthetic tamper control\r\n")]) });
+  const e = await prisma.incomingPaymentEvidence.findUniqueOrThrow({ where: { id: evidenceId } });
+  const audit = await prisma.paymentEvidenceReview.findFirstOrThrow({ where: { evidenceId, action: "BLU_SIGNATURE_CHECK" }, orderBy: [{ createdAt: "desc" }, { id: "desc" }] });
+  expect(signatureAuditState(e, audit.reason).verified).toBe(false);
+  expect(e.trusted).toBe(false);
+  expect(await prisma.paymentEvidenceClaim.count({ where: { evidenceId } })).toBe(0);
+});

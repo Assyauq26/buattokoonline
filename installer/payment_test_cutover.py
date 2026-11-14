@@ -31,12 +31,17 @@ def same_schema(old, new, old_files, new_files):
 
 class Native(official.Native):
     proxy_hashes = pilot.Native.proxy_hashes
+    base_sha, base_digest, base_image, base_tree = BASE_SHA, BASE_DIGEST, BASE_IMAGE, pilot.APP_TREE
+    previous_receipt = 'hubify-payment-evidence-cutover.json'
+    journal_name = 'hubify-payment-test-cutover.json'
+    previous_guard, next_guard = GUARD, NEXT_GUARD
+    deployment_name = 'hubify-blu-transfer-test'
 
     def __init__(self, repository, archive, archive_digest, sha, baseline):
         super().__init__(repository, archive, archive_digest, sha, baseline)
         self.folder = core.ROOT/'releases'/('hubify-blu-test-'+sha[:12]+'-'+archive_digest[:12])
-        self.journal_path = core.CONFIG/'hubify-payment-test-cutover.json'
-        self.old_manifest, self.old_files = package.package(baseline, BASE_DIGEST, BASE_SHA, '1.8.1')
+        self.journal_path = core.CONFIG/self.journal_name
+        self.old_manifest, self.old_files = package.package(baseline, self.base_digest, self.base_sha, '1.8.1')
         self.manifest, self.files = package.package(archive, archive_digest, sha, '1.8.1')
         tree = core.run(['git','-C',str(self.repository),'rev-parse',sha+':app'])
         official.verify_git_package(self.repository, sha, self.manifest, self.files, expected_tree=tree)
@@ -59,24 +64,24 @@ class Native(official.Native):
             if path.exists(): check(core.read_json(path).get(key) in ('complete','rolled_back'), 'prior operation unresolved')
         prior=self.load()
         check(not prior or (own_journal and prior['phase']=='build_done' and prior['sha']==self.sha and prior['digest']==self.digest), 'existing test cutover requires reconcile')
-        receipt=core.read_json(core.CONFIG/'hubify-payment-evidence-cutover.json')
-        check(receipt['phase']=='complete' and receipt['sha']==BASE_SHA and receipt['digest']==BASE_DIGEST and receipt['image']==BASE_IMAGE, 'previous pilot receipt')
+        receipt=core.read_json(core.CONFIG/self.previous_receipt)
+        check(receipt['phase']=='complete' and receipt['sha']==self.base_sha and receipt['digest']==self.base_digest and receipt['image']==self.base_image, 'previous pilot receipt')
         bundle=self.observe(); obs=bundle['observation']; installed=obs['version']
         check(bundle['context']=={'installation':pilot.history.INSTALLATION,'origin':'https://hubify.web.id'}, 'Hubify installation')
-        check(installed['source_sha']==BASE_SHA and installed['artifact_sha256']==BASE_DIGEST and installed['image_digest']==BASE_IMAGE and installed['version']=='1.8.1', 'test baseline metadata')
-        check(obs['source_commit']==BASE_SHA and obs['app_tree']==pilot.APP_TREE and obs['source_inventory']==self.old_manifest['migrations'], 'source baseline')
+        check(installed['source_sha']==self.base_sha and installed['artifact_sha256']==self.base_digest and installed['image_digest']==self.base_image and installed['version']=='1.8.1', 'test baseline metadata')
+        check(obs['source_commit']==self.base_sha and obs['app_tree']==self.base_tree and obs['source_inventory']==self.old_manifest['migrations'], 'source baseline')
         apps=[c for c in obs['containers'] if c['service']=='app']
-        check(len(apps)==1 and apps[0]['image']==BASE_IMAGE and apps[0]['running'] and apps[0]['health']=='healthy', 'active baseline image')
+        check(len(apps)==1 and apps[0]['image']==self.base_image and apps[0]['running'] and apps[0]['health']=='healthy', 'active baseline image')
         paths=package.runtime_paths(self.old_files)
         check(set(bundle['runtime'])==paths and all(bundle['runtime'][p].get('sha256')==digest(self.old_files[p]) for p in paths), 'baseline runtime bytes')
         check(self.ledger_valid({'from':installed}), '32 complete ledger entries required')
         from update_service.native_forward import schema_hash
         check(schema_hash()==pilot.AFTER_SCHEMA, 'schema drift')
         check(self.flags()=={k:'yes' for k in official.FLAGS}, 'Production guard changed')
-        self.check_runtime(BASE_SHA, BASE_IMAGE)
+        self.check_runtime(self.base_sha, self.base_image)
         core.preserved_caddy_content(True,self.proxy_hashes)
         for path, item in receipt['worker_guard_patch'].items():
-            check(digest(Path(path).read_bytes())==item['after'] and Path(path).read_bytes().count(GUARD)==1, 'worker guard baseline')
+            check(digest(Path(path).read_bytes())==item['after'] and Path(path).read_bytes().count(self.previous_guard)==1, 'worker guard baseline')
         from update_service.engine import Engine
         Engine(None,{}).resources()
         persistent=int(core.sql("SELECT pg_database_size('store');"))+sum(p.stat().st_size for root in [core.DATA/'media',core.CONFIG] for p in root.rglob('*') if p.is_file())
@@ -114,9 +119,9 @@ class Native(official.Native):
         core.run(['systemctl','stop','single-store-updater.service']);self.worker_idle()
         journal['worker_guard_patch']={}
         for i,path in enumerate([core.ROOT/n/'update_service/engine.py' for n in ['manager','updater']]):
-            raw=path.read_bytes();check(digest(raw)==journal['guards'][str(path)] and raw.count(GUARD)==1,'worker changed')
+            raw=path.read_bytes();check(digest(raw)==journal['guards'][str(path)] and raw.count(self.previous_guard)==1,'worker changed')
             pilot.write_private_once(self.folder/('previous-worker-'+str(i)+'.py'),raw)
-            fresh=raw.replace(GUARD,NEXT_GUARD);compile(fresh,str(path),'exec')
+            fresh=raw.replace(self.previous_guard,self.next_guard);compile(fresh,str(path),'exec')
             journal['worker_guard_patch'][str(path)]={'before':digest(raw),'after':digest(fresh)};self.save(journal)
             temp=path.with_suffix('.blu-guard-tmp');temp.write_bytes(fresh);temp.chmod(0o644);os.replace(temp,path)
         core.run(['systemctl','stop','single-store-maintenance.timer'])
@@ -176,7 +181,7 @@ class Native(official.Native):
         cfg=core.read_json(core.CONFIG/'updater/config.json')
         core.atomic_json(cfg['baseline'],{'root':str(self.folder/'source'),'files':journal['manifest']['files']})
         core.atomic_json(core.CONFIG/'version.json',{**journal['from'],'source_sha':self.sha,'artifact_sha256':self.digest,'image_digest':journal['image'],
-            'deployment':'hubify-blu-transfer-test','previous_source_sha':BASE_SHA,'channel':'hubify-development'})
+            'deployment':self.deployment_name,'previous_source_sha':self.base_sha,'channel':'hubify-development'})
 
     def rollback_before_migration(self,journal):
         # Same schema; even the nominal "migration" phase performed no mutation.
@@ -187,3 +192,16 @@ class Native(official.Native):
             core.write_caddy(core.read_json(core.STATE),live=True,preserve_extra_sites=True,approved_proxy_hashes=self.proxy_hashes)
             core.public_health(core.read_json(core.STATE))
         self.resume_workers(journal)
+
+
+class AuthNative(Native):
+    """Separately pinned continuation; never re-label the completed prior receipt."""
+    base_sha = 'e6cc5eb72cf9d737bfce59ed7a514bdea48ad0ac'
+    base_digest = 'c9a2b69ca79923081729eb0f8cd790eb9c9a03002c11dc88ab0d813f3e1079a6'
+    base_image = 'sha256:129a6f7875de9da655a025013c7a22c86b37d4963dbb419e5bacf12c45a12c5f'
+    base_tree = '4cc61bfd835cb7131ac3199c87d9a92cee34fb52'
+    previous_receipt = 'hubify-payment-test-cutover.json'
+    journal_name = 'hubify-blu-auth-cutover.json'
+    previous_guard = NEXT_GUARD
+    deployment_name = 'hubify-blu-signature-review'
+    next_guard = NEXT_GUARD.replace(b"'hubify-payment-test-cutover.json')", b"'hubify-payment-test-cutover.json','hubify-blu-auth-cutover.json')")

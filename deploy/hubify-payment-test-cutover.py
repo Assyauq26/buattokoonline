@@ -7,7 +7,7 @@ sys.path.insert(0,str(ROOT/'installer'))
 import core,promotions_cutover as official,payment_test_cutover as pilot
 from update_service.runtime import install
 
-def main():
+def main(driver_class=pilot.Native):
     parser=argparse.ArgumentParser(description=__doc__)
     mode=parser.add_mutually_exclusive_group(required=True)
     for name in ['dry-run','apply','reconcile']:mode.add_argument('--'+name,action='store_true')
@@ -16,7 +16,7 @@ def main():
     parser.add_argument('--external-work-stopped',action='store_true')
     args=parser.parse_args();install();os.umask(0o077)
     official.check(not args.external_work_stopped or args.reconcile,'external work attestation requires reconcile')
-    driver=pilot.Native(ROOT,args.candidate,args.candidate_sha256,args.source_sha,args.baseline_archive)
+    driver=driver_class(ROOT,args.candidate,args.candidate_sha256,args.source_sha,args.baseline_archive)
     driver.external_work_stopped=args.external_work_stopped
     engine=official.Cutover(driver)
     if args.dry_run: print(json.dumps(engine.dry_run(),sort_keys=True));return

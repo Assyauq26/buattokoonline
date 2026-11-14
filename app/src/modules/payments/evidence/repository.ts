@@ -168,7 +168,7 @@ export async function allocateNewAttempt(
   });
 }
 
-function fingerprint(o: Observation) {
+export function observationFingerprint(o: Observation) {
   return createHash("sha256")
     .update(
       JSON.stringify([
@@ -235,7 +235,7 @@ export async function ingestObservation(
         ],
       },
     });
-    const fp = fingerprint(o);
+    const fp = observationFingerprint(o);
     if (duplicates.length) {
       const old = duplicates[0];
       if (duplicates.length > 1 || old.fingerprint !== fp) {

@@ -45,4 +45,12 @@ class TestCutover(unittest.TestCase):
         self.assertEqual(pilot.GUARD.count(b'operator_cutover_in_progress'),1)
         self.assertEqual(pilot.NEXT_GUARD.replace(b",'hubify-payment-test-cutover.json'",b''),pilot.GUARD)
 
+    def test_auth_continuation_preserves_original_edge_and_adds_only_its_own_guard(self):
+        self.assertEqual(pilot.Native.base_sha,pilot.BASE_SHA)
+        self.assertEqual(pilot.Native.journal_name,'hubify-payment-test-cutover.json')
+        self.assertEqual(pilot.AuthNative.base_sha,'e6cc5eb72cf9d737bfce59ed7a514bdea48ad0ac')
+        self.assertEqual(pilot.AuthNative.previous_guard,pilot.NEXT_GUARD)
+        self.assertEqual(pilot.AuthNative.next_guard.replace(b",'hubify-blu-auth-cutover.json'",b''),pilot.NEXT_GUARD)
+        self.assertNotEqual(pilot.AuthNative.journal_name,pilot.AuthNative.previous_receipt)
+
 if __name__=='__main__':unittest.main()
