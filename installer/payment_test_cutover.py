@@ -251,7 +251,8 @@ class PreparedAuthNative(AuthNative):
         receipt=core.read_json(path)
         archive=core.ROOT/'operator-packages/hubify-blu-auth-5c3ff6dc8d58.tar.gz'
         manifest,files=package.package(archive,PREPARED_DIGEST,PREPARED_SHA,'1.8.1')
-        official.verify_git_package(self.repository,PREPARED_SHA,manifest,files,expected_tree=PREPARED_TREE)
+        compiled_repository=core.ROOT/'operator-sources'/('pr56-'+PREPARED_SHA)
+        official.verify_git_package(compiled_repository,PREPARED_SHA,manifest,files,expected_tree=PREPARED_TREE)
         check(core.run(['git','-C',str(self.repository),'rev-parse',self.sha+':app'])==PREPARED_TREE,'prepared target app tree changed')
         image=review_prepared(receipt,manifest,self.manifest)
         check(core.run(['docker','image','inspect','--format','{{.Id}}',image])==image,'prepared image identity changed')
