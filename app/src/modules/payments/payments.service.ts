@@ -9,6 +9,7 @@ import {
   lockPaymentOrder,
 } from "@/modules/orders/transaction-locks";
 import { writeAudit } from "@/modules/audit/audit.service";
+import { BLU_TEST_METHOD } from "./evidence/test-policy";
 
 export function listActiveBankAccounts() {
   return prisma.bankAccount.findMany({
@@ -39,6 +40,7 @@ export async function submitConfirmation(
     });
     if (!order?.payment) throw new HttpError("Order tidak ditemukan", 404);
     const payment = order.payment;
+    if (payment.method === BLU_TEST_METHOD) throw new HttpError("Pesanan uji blu tidak menerima bukti atau pelunasan. Gunakan halaman Uji transfer blu.", 409);
     if (
       order.status !== "PENDING_PAYMENT" ||
       (payment.status !== "REJECTED" &&
@@ -129,6 +131,7 @@ export async function approvePayment(paymentId: string, adminId: string) {
       },
     });
     if (!payment) throw new HttpError("Pembayaran tidak ditemukan", 404);
+    if (payment.method === BLU_TEST_METHOD) throw new HttpError("Pesanan uji blu tidak menerima bukti atau pelunasan. Gunakan halaman Uji transfer blu.", 409);
     if (["CANCELLED", "EXPIRED", "REFUNDED"].includes(payment.order.status))
       throw new HttpError("Order tidak menerima approval pembayaran", 409);
     if (payment.status === "PAID") {

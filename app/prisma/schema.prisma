@@ -586,6 +586,7 @@ model OrderStatusHistory {
 
 // ---------- Payments ----------
 model BankAccount {
+  evidenceSources PaymentEvidenceSource[]
   id            String   @id @default(cuid())
   bankName      String
   accountNumber String
@@ -600,6 +601,7 @@ model BankAccount {
 }
 
 model Payment {
+  evidenceAttempt PaymentEvidenceAttempt?
   id            String        @id @default(cuid())
   orderId       String        @unique
   provider      String        @default("manual")
@@ -614,6 +616,111 @@ model Payment {
   bankAccount  BankAccount?          @relation(fields: [bankAccountId], references: [id])
   confirmations PaymentConfirmation[]
   events       PaymentEvent[]
+}
+
+// Experimental payment evidence. Live activation is intentionally not exposed.
+model PaymentEvidenceSource {
+  id               String @id @default(cuid())
+  storeScope       String
+  kind             String
+  label            String
+  accountRef       String
+  bankAccountId    String?
+  bankAccount      BankAccount? @relation(fields: [bankAccountId], references: [id], onDelete: Restrict)
+  encryptedSecret  String?
+  staticQris       String?
+  enabled          Boolean @default(false)
+  generation       Int @default(0)
+  health           String @default("NOT_CONNECTED")
+  lastCheckedAt    DateTime?
+  nextPollAt       DateTime?
+  failures         Int @default(0)
+  cursor           String?
+  leaseToken       String?
+  leaseUntil       DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  attempts         PaymentEvidenceAttempt[]
+  evidence         IncomingPaymentEvidence[]
+  reviews          PaymentEvidenceReview[]
+  oauthStates      PaymentEvidenceOAuthState[]
+  @@unique([storeScope, kind, accountRef])
+  @@index([storeScope, nextPollAt])
+}
+
+model PaymentEvidenceAttempt {
+  id           String @id @default(cuid())
+  sourceId     String
+  paymentId    String @unique
+  baseAmount   Int
+  uniqueCode   Int
+  payable      Int
+  expiresAt    DateTime
+  retainUntil  DateTime
+  createdAt    DateTime @default(now())
+  source       PaymentEvidenceSource @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+  payment      Payment @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  claim        PaymentEvidenceClaim?
+  @@index([sourceId, retainUntil, payable])
+}
+
+model IncomingPaymentEvidence {
+  id             String @id @default(cuid())
+  sourceId       String
+  externalId     String
+  bankTxId       String?
+  messageId      String?
+  fingerprint    String
+  amount         Int?
+  currency       String
+  direction      String
+  providerStatus String
+  accountRef     String
+  occurredAt     DateTime?
+  trusted        Boolean @default(false)
+  reason         String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  source         PaymentEvidenceSource @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+  claim          PaymentEvidenceClaim?
+  @@unique([sourceId, externalId])
+  @@unique([sourceId, bankTxId])
+  @@unique([sourceId, messageId])
+  @@index([sourceId, createdAt])
+}
+
+model PaymentEvidenceClaim {
+  id         String @id @default(cuid())
+  evidenceId String @unique
+  attemptId  String @unique
+  actorId    String
+  reason     String
+  createdAt  DateTime @default(now())
+  evidence   IncomingPaymentEvidence @relation(fields: [evidenceId], references: [id], onDelete: Restrict)
+  attempt    PaymentEvidenceAttempt @relation(fields: [attemptId], references: [id], onDelete: Restrict)
+}
+
+model PaymentEvidenceReview {
+  id         String @id @default(cuid())
+  sourceId   String
+  actorId    String?
+  action     String
+  reason     String
+  evidenceId String?
+  attemptId  String?
+  createdAt  DateTime @default(now())
+  source     PaymentEvidenceSource @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+  @@index([sourceId, createdAt])
+}
+
+model PaymentEvidenceOAuthState {
+  digest            String @id
+  sourceId          String
+  actorId           String
+  generation        Int
+  encryptedVerifier String
+  expiresAt         DateTime
+  source            PaymentEvidenceSource @relation(fields: [sourceId], references: [id], onDelete: Cascade)
 }
 
 model PaymentConfirmation {

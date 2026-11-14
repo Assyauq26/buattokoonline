@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { databaseTestTarget } from "../database-target";
 const targets = {
+  PAYMENT_EVIDENCE_TEST_DATABASE_URL:
+    "postgresql://postgres@127.0.0.1:5432/hubify_payment_evidence_test",
   MANAGEMENT_TEST_DATABASE_URL:
     "postgresql://postgres@127.0.0.1:5432/management_v130_test",
   PRODUCT_EDITOR_TEST_DATABASE_URL:
@@ -10,6 +12,10 @@ const targets = {
 };
 describe("isolated full-suite database routing", () => {
   it("keeps editor, promotions and management suites on separate databases", () => {
+    expect(
+      databaseTestTarget("/tests/database/payment-evidence.test.ts", targets),
+    ).toBe(targets.PAYMENT_EVIDENCE_TEST_DATABASE_URL);
+    expect(databaseTestTarget("/tests/database/blu-transfer-test.test.ts", targets)).toBe(targets.PAYMENT_EVIDENCE_TEST_DATABASE_URL);
     expect(
       databaseTestTarget(
         "/tests/database/promotions-refactor.test.ts",

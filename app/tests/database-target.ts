@@ -3,23 +3,29 @@ export function databaseTestTarget(
   file: string,
   env: Record<string, string | undefined>,
 ) {
-  const profile = file.endsWith("/promotions-refactor.test.ts")
+  const profile = (file.endsWith("/payment-evidence.test.ts") || file.endsWith("/blu-transfer-test.test.ts") || file.endsWith("/blu-signature.test.ts"))
     ? {
-        key: "PROMOTIONS_TEST_DATABASE_URL",
-        port: "5557",
-        database: "/hubify_promotions_test",
+        key: "PAYMENT_EVIDENCE_TEST_DATABASE_URL",
+        port: "5432",
+        database: "/hubify_payment_evidence_test",
       }
-    : file.endsWith("/product-editor-remediation.test.ts")
+    : file.endsWith("/promotions-refactor.test.ts")
       ? {
-          key: "PRODUCT_EDITOR_TEST_DATABASE_URL",
-          port: "5432",
-          database: "/product_editor_test",
+          key: "PROMOTIONS_TEST_DATABASE_URL",
+          port: "5557",
+          database: "/hubify_promotions_test",
         }
-      : {
-          key: "MANAGEMENT_TEST_DATABASE_URL",
-          port: "5432",
-          database: "/management_v130_test",
-        };
+      : file.endsWith("/product-editor-remediation.test.ts")
+        ? {
+            key: "PRODUCT_EDITOR_TEST_DATABASE_URL",
+            port: "5432",
+            database: "/product_editor_test",
+          }
+        : {
+            key: "MANAGEMENT_TEST_DATABASE_URL",
+            port: "5432",
+            database: "/management_v130_test",
+          };
   const target = env[profile.key];
   if (!target)
     throw new Error("Missing isolated database profile: " + profile.key);

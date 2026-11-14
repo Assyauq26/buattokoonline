@@ -8,6 +8,7 @@ import { formatIDR } from "@/lib/money";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ProofForm } from "@/components/storefront/proof-form";
+import { BLU_TEST_METHOD } from "@/modules/payments/evidence/test-policy";
 
 export const dynamic = "force-dynamic";
 export const metadata = {
@@ -25,6 +26,7 @@ export default async function PaymentPage({ params }: PaymentRouteProps) {
   if (!user) redirect(`/login?redirectTo=/checkout/payment/${orderId}`);
   const order = await getOrderForUser(user.id, orderId);
   const payment = order.payment!;
+  if (payment.method === BLU_TEST_METHOD) redirect("/admin/payments/evidence/test");
   const bank = payment.bankAccount;
 
   const isRefunded = payment.status === "REFUNDED";
