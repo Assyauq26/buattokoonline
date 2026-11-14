@@ -9,6 +9,7 @@ import {
 } from "@/modules/orders/transaction-locks";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { paymentWindow, type PaymentWindowMinutes } from "./amount-window";
+import { BLU_TEST_METHOD } from "./test-policy";
 import {
   allocateAmount,
   evidenceReason,
@@ -406,6 +407,7 @@ export async function claimEvidence(
       occurredAt: e.occurredAt,
       trusted: e.trusted,
     };
+    if (p.method === BLU_TEST_METHOD) throw new HttpError("Uji blu tidak dapat diklaim sebagai pembayaran pesanan", 409);
     if (
       e.reason !== "SELLER_REVIEW_REQUIRED" ||
       evidenceReason(observation, source.accountRef) !==

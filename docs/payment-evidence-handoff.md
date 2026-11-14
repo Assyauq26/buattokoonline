@@ -79,3 +79,16 @@ lab after verification and preserve existing backups. Private original remains i
 the owner's Downloads; audit-only DKIM tooling stays outside Git in
 audit-tools/blu-dkim-node. Browser evidence uses signed synthetic sessions, not
 real seller/Google login or new money movement. Central platform/VPSs are untouched.
+# Latest continuation: live transfer test flow
+
+The former NO-GO/OAuth-pending notes below are historical. The exact observational
+pilot `aeb4846` was deployed to Hubify successfully (1.8.1 private channel, 32
+finished migrations, backup verified/restored to scratch, J&T Production retained).
+Owner consent, Gmail API read and a real Rp20.131 notification were verified live.
+No order was retrofitted, claimed or settled. The owner now authorizes the missing
+issuance-to-match flow, deployment to Hubify and release once gates pass.
+See [blu-live-test.md](blu-live-test.md) for the new Admin-only flow, safety tests,
+app-only cutover/recovery and explicit remaining public-release gates. Do not
+interpret any old deployment restriction or old readiness observation below as
+the current status. Actual new deployment identity is recorded in PR56/journal.
+

@@ -95,6 +95,7 @@ export function PaymentEvidenceSettings({
     "inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-950 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black motion-safe:active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50";
   return (
     <div className="space-y-5" aria-busy={pending}>
+      {kind === "GMAIL_BANK" && sources.some(s => s.connected) && <Link href="/admin/payments/evidence/test" className={`${button} bg-black !text-white`}>Uji transfer blu</Link>}
       <p role="status" aria-live="polite" className="text-sm text-zinc-700">
         {pending && (
           <Loader2

@@ -15,6 +15,7 @@ describe("isolated full-suite database routing", () => {
     expect(
       databaseTestTarget("/tests/database/payment-evidence.test.ts", targets),
     ).toBe(targets.PAYMENT_EVIDENCE_TEST_DATABASE_URL);
+    expect(databaseTestTarget("/tests/database/blu-transfer-test.test.ts", targets)).toBe(targets.PAYMENT_EVIDENCE_TEST_DATABASE_URL);
     expect(
       databaseTestTarget(
         "/tests/database/promotions-refactor.test.ts",

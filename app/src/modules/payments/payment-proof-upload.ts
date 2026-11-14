@@ -5,6 +5,7 @@ import { HttpError } from "@/lib/response";
 import { putObject, removeObject, STORAGE_APP } from "@/lib/storage";
 import { validatePaymentProof } from "./payment-proof-validation";
 import { submitConfirmation } from "./payments.service";
+import { BLU_TEST_METHOD } from "./evidence/test-policy";
 
 export interface PaymentProofFields {
   orderId: string;
@@ -22,10 +23,11 @@ async function assertUploadAllowed(userId: string, orderId: string) {
     select: {
       status: true,
       expiresAt: true,
-      payment: { select: { status: true } },
+      payment: { select: { status: true, method: true } },
     },
   });
   if (!order?.payment) throw new HttpError("Pesanan tidak ditemukan", 404);
+  if (order.payment.method === BLU_TEST_METHOD) throw new HttpError("Uji blu tidak menerima unggahan bukti pembayaran", 409);
   if (
     order.status !== "PENDING_PAYMENT" ||
     (order.payment.status !== "REJECTED" &&

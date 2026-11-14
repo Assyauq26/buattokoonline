@@ -3,7 +3,7 @@ export function databaseTestTarget(
   file: string,
   env: Record<string, string | undefined>,
 ) {
-  const profile = file.endsWith("/payment-evidence.test.ts")
+  const profile = (file.endsWith("/payment-evidence.test.ts") || file.endsWith("/blu-transfer-test.test.ts"))
     ? {
         key: "PAYMENT_EVIDENCE_TEST_DATABASE_URL",
         port: "5432",

@@ -3,6 +3,7 @@ import { handle, ok } from "@/lib/response";
 import { requireEvidenceAdmin } from "@/modules/payments/evidence/access";
 import { reviewGmailNow } from "@/modules/payments/evidence/gmail-review";
 import { assertSameOrigin } from "@/lib/mutation-origin";
+import { createBluTestOrder, listBluTestOrders, testOrderInput } from "@/modules/payments/evidence/test-orders";
 import {
   createSource,
   disconnectSource,
@@ -14,6 +15,7 @@ import {
 
 export const dynamic = "force-dynamic";
 const command = z.discriminatedUnion("action", [
+  z.object({ action: z.literal("create-test"), input: testOrderInput }).strict(),
   z.object({ action: z.literal("create"), input: z.unknown() }).strict(),
   z
     .object({
@@ -39,6 +41,7 @@ export async function POST(req: Request) {
     assertSameOrigin(req);
     const user = await requireEvidenceAdmin();
     const input = command.parse(await boundedJson(req, 16_000));
+    if (input.action === "create-test") return ok(await createBluTestOrder(user.id, input.input), 201);
     if (input.action === "create")
       return ok(await createSource(user.id, input.input), 201);
     if (input.action === "disconnect")
@@ -46,5 +49,14 @@ export async function POST(req: Request) {
     if (input.action === "connect-google")
       return ok({ url: await beginGoogleOAuth(user.id, input.sourceId) });
     return ok(await reviewGmailNow(user.id, input.sourceId));
+  });
+}
+
+export async function GET() {
+  return handle(async () => {
+    const user = await requireEvidenceAdmin();
+    const response = ok({ tests: await listBluTestOrders(user.id), serverNow: new Date().toISOString() });
+    response.headers.set("Cache-Control", "private, no-store");
+    return response;
   });
 }

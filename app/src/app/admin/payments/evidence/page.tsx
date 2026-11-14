@@ -39,6 +39,7 @@ export default async function Page() {
           Bukti dari sumber pembayaran. Pencocokan belum berarti pesanan lunas.
         </p>
       </header>
+      <Link href="/admin/payments/evidence/test" className="inline-flex min-h-11 items-center rounded-xl bg-black px-4 text-sm font-medium text-white">Uji transfer blu</Link>
       <p className="rounded-xl bg-zinc-100 p-4 text-sm">
         Periksa sumber merchant atau bank secara langsung. Jangan menerima email
         diteruskan, nominal saja, atau status yang tidak dikenal sebagai bukti
