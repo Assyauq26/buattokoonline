@@ -2,6 +2,12 @@
 
 ## Current Hubify pilot request — 2026-11-14
 
+Later checkpoint: the owner's new Web OAuth client JSON now validates the exact
+Hubify callback and is staged root-only outside the application runtime. The
+project/client now exist; API/test-user/consent readiness is still unverified.
+See the pilot runbook's latest provisioning checkpoint. No secret is in Git and
+no Gmail connection, runtime activation or deployment occurred.
+
 The owner now authorizes a Hubify-only observational deployment after safety gates.
 Earlier preparation-only statements below describe the historical foundation,
 not the current authorization. Deployment is still **BLOCKED** by the installed

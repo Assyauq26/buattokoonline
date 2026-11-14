@@ -2,6 +2,26 @@
 
 ## Decision: BLOCKED / NO-GO for deployment
 
+### Later OAuth provisioning checkpoint (2026-11-14)
+
+The owner subsequently created a Google Cloud project and Web OAuth client and
+supplied its downloaded JSON by local path. The client type/identity, official
+Google endpoints, secret presence and exact Hubify callback were verified without
+printing secret values. A minimal private configuration is staged at
+`/etc/single-store/payment-evidence/google-client.json`, root-owned mode 0600 in a
+root-owned 0700 directory. It is not mounted into the app or loaded into runtime.
+Staging used SSH stdin under the existing operation lock and refuses replacement
+of a differing existing file. No credentials were committed or posted to GitHub.
+
+Post-stage read-only checks confirmed the same healthy v1.8.0/source/image, preview
+and OAuth runtime still OFF/unconfigured, and J&T approvals still yes. No app
+restart, deployment, DB/ledger change, login or Google API request was made.
+Gmail API enablement, audience/test users, scope/verification and actual consent
+are still unverified. The earlier observation that no project existed below is
+historical; it no longer describes the owner's account. Deployment/executor/disk
+and production backup gates remain unresolved. The owner must not transfer test
+money yet; the staged client alone does not establish a Gmail connection.
+
 The owner authorized a Hubify-only deployment after safety gates. This supersedes
 the earlier preparation-only restriction; no additional general deployment consent
 is needed. It does not authorize bypassing guards, disabling J&T Production,

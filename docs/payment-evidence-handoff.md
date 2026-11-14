@@ -1,5 +1,14 @@
 # Hubify pilot continuation — 2026-11-14
 
+Latest update: owner-created Web OAuth JSON was privately validated, including the
+exact Hubify callback, and staged root-only at
+`/etc/single-store/payment-evidence/google-client.json` (0600; parent 0700), under
+the operation lock. No secret was logged/committed, and the file is not loaded by
+the app. Post-stage health/source and J&T flags are unchanged. Google project/client
+now exist; API enablement/test users/scope/consent remain unverified. No Gmail
+connection or deployment occurred. Earlier "no project yet" observations below
+are superseded by this checkpoint; executor/disk/backup gates still apply.
+
 The latest owner attachment authorizes a Hubify-only observational deployment
 after safety gates, with no new checkout method or automatic PAID. That overrides
 the earlier preparation-only deployment restriction, but never overrides guards.
