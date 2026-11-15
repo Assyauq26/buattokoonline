@@ -21,9 +21,8 @@ import { addressSchema, type SelectedLocation } from "@/modules/regions/region.v
 import { validateLocation } from "@/modules/regions/region.service";
 import type { ShippingInquiry, ShippingRate } from "@/infrastructure/shipping/contracts/shipping-provider";
 import { issueShippingQuote, shippingFingerprint, verifyShippingQuote } from "./shipping-quote";
-import { BLU_CHECKOUT_METHOD, prepareBluCheckout } from "@/modules/payments/evidence/blu-checkout";
-import { GOPAY_CHECKOUT_METHOD, prepareGoPayCheckout } from "@/modules/payments/evidence/gopay-checkout";
-import { storeScope } from "@/modules/payments/evidence/repository";
+import { MIDTRANS_METHOD, MIDTRANS_WINDOW_MS } from "@/modules/payments/midtrans/policy";
+import { snapshotAttempt } from "@/modules/payments/midtrans/settings";
 
 export interface AddressInput {
   recipientName: string;
@@ -129,6 +128,7 @@ export async function createOrder(
     shipping: ShippingChoice;
     couponCode?: string;
     bankAccountId: string;
+    paymentMethod?: "manual" | "midtrans";
     paymentEvidenceSourceId?: string;
     codeConsent?: boolean;
     note?: string;
@@ -152,7 +152,7 @@ export async function createOrder(
   // Persist idempotency through the existing Order PK and transactional audit metadata.
   if (input.intentId) await readCheckoutIntent(input.intentId, userId, prisma, true);
   const orderId = input.intentId ? `buy_${hash(`${userId}:${input.intentId}`).slice(0, 40)}` : input.requestId ? `chk_${hash(`${userId}:${input.requestId}`).slice(0, 40)}` : undefined;
-  const requestDigest = hash(JSON.stringify({ ...(input.intentId ? { intentId: input.intentId } : {}), ...(input.paymentEvidenceSourceId ? { paymentEvidenceSourceId: input.paymentEvidenceSourceId, codeConsent: input.codeConsent === true } : {}), address: Object.entries(input.address).sort(([a], [b]) => a.localeCompare(b)), shipping: { courier: input.shipping.courier, service: input.shipping.service }, bankAccountId: input.bankAccountId, couponCode: input.couponCode?.toUpperCase() || null, note: input.note || null, lines: checkoutSignature(confirmation.data), expectedQuote: acceptedQuote?.success ? acceptedQuote.data : null }));
+  const requestDigest = hash(JSON.stringify({ paymentMethod: input.paymentMethod || "manual", ...(input.intentId ? { intentId: input.intentId } : {}), ...(input.paymentEvidenceSourceId ? { paymentEvidenceSourceId: input.paymentEvidenceSourceId, codeConsent: input.codeConsent === true } : {}), address: Object.entries(input.address).sort(([a], [b]) => a.localeCompare(b)), shipping: { courier: input.shipping.courier, service: input.shipping.service }, bankAccountId: input.bankAccountId, couponCode: input.couponCode?.toUpperCase() || null, note: input.note || null, lines: checkoutSignature(confirmation.data), expectedQuote: acceptedQuote?.success ? acceptedQuote.data : null }));
   const replay = async (tx: Prisma.TransactionClient) => {
     if (!orderId) return null;
     const existing = await tx.order.findUnique({ where: { id: orderId, userId } });
@@ -187,13 +187,12 @@ export async function createOrder(
   }
   if (checkoutSignature(confirmation.data) !== checkoutSignature(cartView.lines)) throw new HttpError("Harga atau isi keranjang berubah. Muat ulang checkout dan konfirmasi ulang sebelum membuat pesanan.", 409);
 
-  const selectedSource = input.paymentEvidenceSourceId ? await prisma.paymentEvidenceSource.findFirst({where:{id:input.paymentEvidenceSourceId,storeScope:storeScope()},select:{kind:true}}) : null;
-  if(input.paymentEvidenceSourceId && !selectedSource)throw new HttpError("Metode pembayaran tidak tersedia",409);
-  const isQris = selectedSource?.kind === "GOPAY_QRIS";
-  const bank = isQris ? null : await prisma.bankAccount.findFirst({
+  const isMidtrans = input.paymentMethod === "midtrans";
+  if (input.paymentEvidenceSourceId) throw new HttpError("Metode otomatis lama tidak menerima pesanan baru. Pilih Midtrans atau transfer manual.", 409);
+  const bank = isMidtrans ? null : await prisma.bankAccount.findFirst({
     where: { id: input.bankAccountId, isActive: true, deletedAt: null },
   });
-  if (!bank && !isQris) throw new HttpError("Rekening bank tidak valid", 400);
+  if (!bank && !isMidtrans) throw new HttpError("Rekening bank tidak valid", 400);
 
 
   const parsedAddress = addressSchema.parse(input.address);
@@ -216,7 +215,7 @@ export async function createOrder(
   const shippingCost = selectedRate.cost;
 
   const orderNumber = genOrderNumber();
-  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+  const expiresAt = new Date(Date.now() + (isMidtrans ? MIDTRANS_WINDOW_MS : 24 * 60 * 60 * 1000));
 
   const result = await prisma.$transaction(async (tx) => {
     await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "User" WHERE "id" = ${userId} FOR SHARE`);
@@ -273,11 +272,7 @@ export async function createOrder(
       acceptedQuote.data.total !== total
     )) throw new HttpError("Harga, ongkir, atau kupon berubah. Muat ulang checkout dan konfirmasi ulang total pesanan.", 409);
     if (![current.subtotal, shippingCost, discount, total].every(n => Number.isSafeInteger(n) && n >= 0 && n <= 2_147_483_647)) throw new HttpError("Total pesanan tidak valid", 422);
-    const blu = input.paymentEvidenceSourceId
-      ? isQris ? await prepareGoPayCheckout(tx,input.paymentEvidenceSourceId,total,input.codeConsent===true)
-        : await prepareBluCheckout(tx, input.paymentEvidenceSourceId, bank!.id, total, input.codeConsent === true)
-      : null;
-    const payableTotal = blu?.payable ?? total;
+    const payableTotal = total;
     const created = await tx.order.create({
       data: {
         ...(orderId ? { id: orderId } : {}),
@@ -291,7 +286,7 @@ export async function createOrder(
         total: payableTotal,
         couponCode: code,
         note: input.note,
-        expiresAt: blu?.expiresAt ?? expiresAt,
+        expiresAt,
         items: {
           create: current.lines.map((l) => ({
             variantId: l.variantId,
@@ -333,17 +328,14 @@ export async function createOrder(
     const payment = await tx.payment.create({
       data: {
         orderId: created.id,
-        provider: "manual",
-        method: blu ? (isQris ? GOPAY_CHECKOUT_METHOD : BLU_CHECKOUT_METHOD) : "bank_transfer",
+        provider: isMidtrans ? "midtrans" : "manual",
+        method: isMidtrans ? MIDTRANS_METHOD : "bank_transfer",
         amount: payableTotal,
         status: "PENDING_PAYMENT",
         bankAccountId: bank?.id,
       },
     });
-    if (blu) {
-      const attempt=await tx.paymentEvidenceAttempt.create({ data: { ...blu, paymentId: payment.id } });
-      if(payment.method===BLU_CHECKOUT_METHOD)await tx.paymentEvidenceReview.create({data:{sourceId:blu.sourceId,attemptId:attempt.id,action:"BLU_AUTOMATIC_ATTEMPT",reason:"Tagihan diterbitkan melalui checkout blu otomatis setelah opt-in seller diverifikasi di bawah kunci sumber dalam transaksi yang sama."}});
-    }
+    if (isMidtrans) await snapshotAttempt(tx, payment.id, payableTotal, expiresAt);
 
     if (input.intentId) {
       await tx.checkoutIntent.update({ where: { id: input.intentId }, data: { consumedAt: new Date(), orderId: created.id } });

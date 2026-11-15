@@ -14,6 +14,8 @@ import { formatIDR } from "@/lib/money";
 import { paymentDisplayStatus } from "@/lib/order-status";
 import { GOPAY_CHECKOUT_METHOD } from "@/modules/payments/evidence/gopay-checkout";
 import { BLU_CHECKOUT_METHOD } from "@/modules/payments/evidence/blu-checkout";
+import { MidtransPayment } from "@/components/storefront/midtrans-payment";
+import { paymentView } from "@/modules/payments/midtrans/service";
 export default async function Page({
   params,
 }: {
@@ -36,6 +38,7 @@ async function PaymentContent({
   const { id } = await params,
     o = await getOrderById(id);
   if (!o?.payment) notFound();
+  if (o.payment.method === "midtrans_snap") return <div className="mx-auto max-w-2xl space-y-5"><h1 className="text-2xl font-bold">Pembayaran · {o.orderNumber}</h1><MidtransPayment staff orderId={o.id} initial={JSON.parse(JSON.stringify(await paymentView(o.id)))} /></div>;
   const p = o.payment,
     c = p.confirmations[0];
   return (

@@ -1,6 +1,11 @@
 // Invoked inside the app container by a local systemd timer. No external service.
 if (!process.env.CRON_SECRET) throw new Error('Maintenance is not configured');
 const maintenanceStarted = Date.now();
+// Independent reconciliation starts before slower carrier work. No customer tab is needed.
+const midtrans = fetch('http://127.0.0.1:3000/api/internal/cron/midtrans', {
+  method: 'POST', headers: { Authorization: `Bearer ${process.env.CRON_SECRET}` }, signal: AbortSignal.timeout(40000),
+}).then(response => { if (!response.ok) throw new Error(`Midtrans worker failed (${response.status})`); console.log('midtrans: completed'); })
+  .catch(() => { console.error('midtrans: deferred; durable attempts retained'); });
 for (const name of ['expire-orders', 'product-media-cleanup', 'jnt-tracking']) {
   const response = await fetch(`http://127.0.0.1:3000/api/internal/cron/${name}`, {
     headers: { Authorization: `Bearer ${process.env.CRON_SECRET}` },

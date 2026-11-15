@@ -6,7 +6,11 @@ const nextConfig = {
   reactStrictMode: true,
   outputFileTracingIncludes: { "/*": ["./src/modules/regions/data/snapshot.json.gz"] },
   async headers() {
-    return [{ source: "/api/v1/admin/store-appearance", headers: [{ key: "Cache-Control", value: "private, no-store" }, { key: "Vary", value: "Cookie" }] }, { source: "/admin/customize", headers: [{ key: "Cache-Control", value: "private, no-store" }] }, { source: "/api/v1/admin/store-branding/:path*", headers: [{ key: "Cache-Control", value: "private, no-store" }, { key: "Vary", value: "Cookie" }] }, { source: "/store-customize-preview", headers: [
+    return [{ source: "/checkout/payment/:path*", headers: [
+      { key: "Cache-Control", value: "private, no-store" },
+      { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+      { key: "Content-Security-Policy", value: "script-src 'self' 'unsafe-inline' https://*.midtrans.com https://*.veritrans.co.id https://*.cloudfront.net https://*.mixpanel.com https://*.google-analytics.com; frame-src https://*.midtrans.com https://*.veritrans.co.id; connect-src 'self' https://*.midtrans.com https://*.veritrans.co.id https://*.mixpanel.com https://*.google-analytics.com; object-src 'none'; base-uri 'self'; frame-ancestors 'self'" },
+    ] }, { source: "/api/v1/admin/store-appearance", headers: [{ key: "Cache-Control", value: "private, no-store" }, { key: "Vary", value: "Cookie" }] }, { source: "/admin/customize", headers: [{ key: "Cache-Control", value: "private, no-store" }] }, { source: "/api/v1/admin/store-branding/:path*", headers: [{ key: "Cache-Control", value: "private, no-store" }, { key: "Vary", value: "Cookie" }] }, { source: "/store-customize-preview", headers: [
       { key: "Cache-Control", value: "private, no-store" },
       { key: "Content-Security-Policy", value: "connect-src 'none'; form-action 'none'; object-src 'none'; base-uri 'self'; frame-ancestors 'self'" },
       { key: "X-Robots-Tag", value: "noindex, nofollow" },

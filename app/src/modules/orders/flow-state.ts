@@ -39,7 +39,7 @@ export function orderFlow(o: FlowOrder) {
     s = o.shipment;
   let key = "payment",
     label = "Menunggu pembayaran",
-    description = "Belum ada bukti pembayaran.",
+    description = "Menunggu penyelesaian pembayaran.",
     tone = "pending",
     action = "detail",
     cta = "Lihat detail";

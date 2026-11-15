@@ -238,6 +238,10 @@ export async function transitionOrderInTransaction(
     include: { items: { orderBy: { variantId: "asc" } }, payment: true },
   });
   if (!order) throw new HttpError("Order tidak ditemukan", 404);
+  if (to === "EXPIRED" && order.payment?.method === "midtrans_snap") {
+    const { assertSafeExpiry } = await import("@/modules/payments/midtrans/service");
+    await assertSafeExpiry(tx, order.payment.id);
+  }
   if (order.status === to) return order;
   if (!testOrderTransitionAllowed(order.payment?.method, to)) throw new HttpError("Pesanan uji blu hanya dapat ditutup atau kedaluwarsa", 409);
   if (to === "EXPIRED" && order.payment?.status === "WAITING_VERIFICATION")
@@ -339,13 +343,16 @@ export async function expireStaleOrders(actorId = "system") {
       paymentStatus: { in: ["PENDING_PAYMENT"] },
       payment: { is: { status: { in: ["PENDING_PAYMENT"] } } },
     },
-    select: { id: true },
+    select: { id: true, payment: { select: { id: true, method: true } } },
     orderBy: [{ expiresAt: "asc" }, { id: "asc" }],
     take: 50,
   });
   let expired = 0;
+  const expiryDeadline = Date.now() + 25_000;
   for (const o of stale) {
+    if (Date.now() > expiryDeadline) break;
     try {
+      if (o.payment?.method === "midtrans_snap") { const { prepareExpiry } = await import("@/modules/payments/midtrans/service"); await prepareExpiry(o.payment.id); }
       await transitionOrder(o.id, "EXPIRED", actorId, "Kedaluwarsa otomatis");
       expired++;
     } catch (error) {

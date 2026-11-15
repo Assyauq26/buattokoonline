@@ -8,6 +8,69 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
+// Immutable merchant versions retain verification paths for existing attempts.
+model MidtransConfiguration {
+  id String @id
+  storeScope String
+  environment String
+  merchantId String
+  clientKey String
+  serverKeyEnvelope String
+  createdBy String
+  createdAt DateTime @default(now())
+  settings MidtransSetting[]
+  attempts MidtransAttempt[]
+  @@index([storeScope, environment, merchantId, createdAt], map: "MidtransConfiguration_realm_created_idx")
+}
+model MidtransSetting {
+  storeScope String @id
+  configId String?
+  enabled Boolean @default(false)
+  updatedAt DateTime @updatedAt
+  configuration MidtransConfiguration? @relation(fields: [configId], references: [id], onDelete: Restrict)
+}
+model MidtransAttempt {
+  id String @id
+  paymentId String
+  configId String
+  providerOrderId String @unique
+  amount Int
+  currency String @default("IDR")
+  state String @default("NEW")
+  providerStatus String?
+  fraudStatus String?
+  channel String?
+  transactionId String?
+  transactionIdentity String? @unique
+  snapEnvelope String?
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  creationStartedAt DateTime?
+  leaseToken String?
+  leaseUntil DateTime?
+  nextCheckAt DateTime @default(now())
+  lastCheckedAt DateTime?
+  lastError String?
+  closedAt DateTime?
+  payment Payment @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  configuration MidtransConfiguration @relation(fields: [configId], references: [id], onDelete: Restrict)
+  events MidtransEvent[]
+  @@index([nextCheckAt])
+  @@index([paymentId, createdAt])
+}
+model MidtransEvent {
+  id String @id
+  attemptId String
+  kind String
+  fingerprint String @unique
+  data Json
+  receivedAt DateTime @default(now())
+  processedAt DateTime?
+  lastError String?
+  attempt MidtransAttempt @relation(fields: [attemptId], references: [id], onDelete: Restrict)
+  @@index([attemptId, receivedAt])
+}
+
 // ---------- Enums ----------
 enum ProductStatus {
   DRAFT
@@ -601,6 +664,7 @@ model BankAccount {
 }
 
 model Payment {
+  midtransAttempts MidtransAttempt[]
   evidenceAttempt PaymentEvidenceAttempt?
   id            String        @id @default(cuid())
   orderId       String        @unique

@@ -366,6 +366,10 @@ export async function commandResolution(
           if (!input.attested || input.fundsReview !== "NOT_RECEIVED")
             fail("Pemeriksaan dana diperlukan");
         }
+        if (o.payment?.method === "midtrans_snap") {
+          const { assertSafeExpiry } = await import("@/modules/payments/midtrans/service");
+          await assertSafeExpiry(tx, o.payment.id);
+        }
         for (const i of o.items)
           await releaseStock(tx, i.variantId, i.quantity, o.orderNumber);
         await tx.payment.update({
