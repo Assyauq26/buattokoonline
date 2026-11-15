@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { beginGoPayOtp, finishGoPayOtp,checkGoPayConnection } from "@/modules/payments/evidence/gopay-session";
+import { setGoPayEnabled,replaceGoPayQris } from "@/modules/payments/evidence/gopay-checkout";
 import { handle, ok } from "@/lib/response";
 import { requireEvidenceAdmin } from "@/modules/payments/evidence/access";
 import { reviewGmailNow } from "@/modules/payments/evidence/gmail-review";
@@ -17,6 +19,11 @@ import {
 
 export const dynamic = "force-dynamic";
 const command = z.discriminatedUnion("action", [
+  z.object({action:z.literal("gopay-check-connection"),sourceId:z.string().min(1).max(100)}).strict(),
+  z.object({action:z.literal("set-gopay-qris"),sourceId:z.string().min(1).max(100),payload:z.string().min(1).max(4096).nullable()}).strict(),
+  z.object({action:z.literal("set-gopay-enabled"),sourceId:z.string().min(1).max(100),enabled:z.boolean(),ownershipConfirmed:z.boolean()}).strict(),
+  z.object({action:z.literal("gopay-request-otp"),sourceId:z.string().min(1).max(100),phone:z.string().regex(/^\+?62\d{8,13}$/)}).strict(),
+  z.object({action:z.literal("gopay-verify-otp"),sourceId:z.string().min(1).max(100),otp:z.string().regex(/^\d{4,8}$/)}).strict(),
   z.object({ action: z.literal("set-blu-enabled"), sourceId: z.string().min(1).max(100), enabled: z.boolean() }).strict(),
   z.object({ action: z.literal("approve-blu"), input: bluApprovalInput }).strict(),
   z.object({ action: z.literal("recheck-blu"), sourceId: z.string().min(1).max(100) }).strict(),
@@ -51,6 +58,11 @@ export async function POST(req: Request) {
     if (input.action === "approve-blu") return ok(await approveBluManually(user.id, input.input));
     if (input.action === "record-blu-review") return ok(await recordBluReview(user.id, input.input));
     if (input.action === "recheck-blu") return ok({ ...await reconcileBluSource(input.sourceId, user.id, new Date(), Date.now() + 10000, true), reconciled: true });
+    if (input.action === "gopay-check-connection") return ok(await checkGoPayConnection(user.id,input.sourceId));
+    if (input.action === "set-gopay-qris") return ok(await replaceGoPayQris(user.id,input.sourceId,input.payload));
+    if (input.action === "set-gopay-enabled") return ok(await setGoPayEnabled(user.id,input.sourceId,input.enabled,input.ownershipConfirmed));
+    if (input.action === "gopay-request-otp") return ok(await beginGoPayOtp(user.id,input.sourceId,input.phone));
+    if (input.action === "gopay-verify-otp") return ok(await finishGoPayOtp(user.id,input.sourceId,input.otp));
     if (input.action === "create-test") return ok(await createBluTestOrder(user.id, input.input), 201);
     if (input.action === "create")
       return ok(await createSource(user.id, input.input), 201);

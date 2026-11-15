@@ -12,6 +12,7 @@ import { getOrderById } from "@/modules/orders/orders.service";
 import { PaymentVerify } from "@/components/admin/payment-verify";
 import { formatIDR } from "@/lib/money";
 import { paymentDisplayStatus } from "@/lib/order-status";
+import { GOPAY_CHECKOUT_METHOD } from "@/modules/payments/evidence/gopay-checkout";
 import { BLU_CHECKOUT_METHOD } from "@/modules/payments/evidence/blu-checkout";
 export default async function Page({
   params,
@@ -50,7 +51,7 @@ async function PaymentContent({
         <strong>{o.orderNumber}</strong>
         <span className="flow-status">{paymentDisplayStatus(p.status)}</span>
       </header>
-      {p.method === BLU_CHECKOUT_METHOD && <section className="order-panel space-y-3"><p>Notifikasi bank adalah kandidat pembayaran. Periksa mutasi asli lalu setujui melalui pemeriksaan blu.</p><PaymentVerify paymentId={p.id} method={p.method} /></section>}
+      {[BLU_CHECKOUT_METHOD,GOPAY_CHECKOUT_METHOD].includes(p.method) && <section className="order-panel space-y-3"><p>Pembayaran ini diperiksa otomatis oleh backend. Mutasi yang valid dan tepat satu tagihan dapat melunasi pesanan; konflik atau pembayaran terlambat tetap ditahan.</p><PaymentVerify paymentId={p.id} method={p.method} /></section>}
       {c ? (
         <div className="flow-columns">
           <section className="order-panel">
@@ -103,7 +104,7 @@ async function PaymentContent({
               )}
               {p.status === "WAITING_VERIFICATION" &&
                 o.status === "PENDING_PAYMENT" &&
-                p.method !== BLU_CHECKOUT_METHOD && a.permissions.includes(PERMISSIONS.PAYMENT_VERIFY) && (
+                ![BLU_CHECKOUT_METHOD,GOPAY_CHECKOUT_METHOD].includes(p.method) && a.permissions.includes(PERMISSIONS.PAYMENT_VERIFY) && (
                   <Suspense fallback={<OperationsSkeleton />}>
                     <PaymentVerify amount={o.total} paymentId={p.id} />
                   </Suspense>
@@ -113,7 +114,7 @@ async function PaymentContent({
         </div>
       ) : (
         <section className="order-panel">
-          Bukti transfer belum tersedia.
+          Belum ada bukti transfer manual. Metode otomatis tidak menggunakan unggah bukti.
         </section>
       )}
     </div>

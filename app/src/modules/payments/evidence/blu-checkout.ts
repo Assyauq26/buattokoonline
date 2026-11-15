@@ -17,14 +17,15 @@ export function bluCheckoutEnabled() {
 
 export async function listBluCheckoutSources() {
   if (!bluCheckoutEnabled()) return [];
-  return prisma.paymentEvidenceSource.findMany({
+  const sources=await prisma.paymentEvidenceSource.findMany({
     where: { storeScope: storeScope(), kind: "GMAIL_BANK", enabled: true,
       encryptedSecret: { not: null }, automationActorId: { not: null }, health: "REVIEW_ONLY",
       lastCheckedAt: { gte: new Date(Date.now() - 5 * 60_000) },
       bankAccount: { isActive: true, deletedAt: null } },
-    select: { id: true, label: true, bankAccountId: true },
+    select: { id: true, label: true, bankAccountId: true,generation:true,reviews:{where:{action:"BLU_AUTO_MATCH_OPT_IN"},orderBy:[{createdAt:"desc"},{id:"desc"}],take:1,select:{reason:true}} },
     orderBy: { createdAt: "asc" }, take: 30,
   });
+  return sources.filter(s=>s.reviews[0]?.reason===`generation:${s.generation}`).map(({id,label,bankAccountId})=>({id,label,bankAccountId}));
 }
 
 /** Same transaction as the new order/payment and stock reservation. Source lock
@@ -39,6 +40,7 @@ export async function prepareBluCheckout(tx: Prisma.TransactionClient, sourceId:
       s.bankAccountId !== bankAccountId || s.health !== "REVIEW_ONLY" || !s.lastCheckedAt || +s.lastCheckedAt < +now - 5 * 60_000)
     throw new HttpError("Metode blu belum siap. Pilih pembayaran manual atau muat ulang.", 409);
   await assertBluOperator(tx, s.automationActorId);
+  if(!await tx.paymentEvidenceReview.findFirst({where:{sourceId,action:"BLU_AUTO_MATCH_OPT_IN",reason:`generation:${s.generation}`},select:{id:true}}))throw new HttpError("Seller perlu mengonfirmasi aktivasi blu otomatis pada pengaturan",409);
   const bank = await tx.bankAccount.findFirst({ where: { id: bankAccountId, isActive: true, deletedAt: null } });
   if (!bank) throw new HttpError("Rekening blu tidak tersedia", 409);
   const occupied = await tx.paymentEvidenceAttempt.findMany({

@@ -3,6 +3,7 @@ import { HttpError } from "@/lib/response";
 import { canTransitionPayment } from "@/modules/payments/domain/state-machine";
 import { settlePaymentInTransaction } from "./payment-settlement";
 import { BLU_CHECKOUT_METHOD } from "./evidence/blu-checkout";
+import { GOPAY_CHECKOUT_METHOD } from "./evidence/gopay-checkout";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import {
   assertStaffPermission,
@@ -42,7 +43,7 @@ export async function submitConfirmation(
     if (!order?.payment) throw new HttpError("Order tidak ditemukan", 404);
     const payment = order.payment;
     if (payment.method === BLU_TEST_METHOD) throw new HttpError("Pesanan uji blu tidak menerima bukti atau pelunasan. Gunakan halaman Uji transfer blu.", 409);
-    if (payment.method === BLU_CHECKOUT_METHOD) throw new HttpError("Notifikasi blu dibaca otomatis. Hubungi seller bila transfer belum terdeteksi; jangan mengunggah bukti melalui alur transfer manual.", 409);
+    if ([BLU_CHECKOUT_METHOD,GOPAY_CHECKOUT_METHOD].includes(payment.method)) throw new HttpError("Pembayaran ini diperiksa otomatis; tidak menggunakan unggah bukti transfer manual.", 409);
     if (
       order.status !== "PENDING_PAYMENT" ||
       (payment.status !== "REJECTED" &&
@@ -134,7 +135,7 @@ export async function approvePayment(paymentId: string, adminId: string) {
     });
     if (!payment) throw new HttpError("Pembayaran tidak ditemukan", 404);
     if (payment.method === BLU_TEST_METHOD) throw new HttpError("Pesanan uji blu tidak menerima bukti atau pelunasan. Gunakan halaman Uji transfer blu.", 409);
-    if (payment.method === BLU_CHECKOUT_METHOD) throw new HttpError("Periksa dan setujui bukti blu melalui halaman Pemeriksaan Notifikasi Bank", 409);
+    if ([BLU_CHECKOUT_METHOD,GOPAY_CHECKOUT_METHOD].includes(payment.method)) throw new HttpError("Gunakan rekonsiliasi pembayaran otomatis; jalur bukti manual tidak berlaku", 409);
     if (["CANCELLED", "EXPIRED", "REFUNDED"].includes(payment.order.status))
       throw new HttpError("Order tidak menerima approval pembayaran", 409);
     if (payment.status === "PAID") {

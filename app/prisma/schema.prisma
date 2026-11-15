@@ -658,6 +658,10 @@ model PaymentEvidenceAttempt {
   payable      Int
   expiresAt    DateTime
   retainUntil  DateTime
+  qrisPayload  String?
+  qrisId       String? @unique
+  trxId        String? @unique
+  merchantName String?
   createdAt    DateTime @default(now())
   source       PaymentEvidenceSource @relation(fields: [sourceId], references: [id], onDelete: Restrict)
   payment      Payment @relation(fields: [paymentId], references: [id], onDelete: Restrict)

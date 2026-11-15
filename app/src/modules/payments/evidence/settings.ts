@@ -1,5 +1,5 @@
 import "server-only";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { HttpError } from "@/lib/response";
@@ -14,14 +14,14 @@ export const sourceInput = z
   .object({
     kind: z.enum(["GOPAY_QRIS", "GMAIL_BANK"]),
     label: z.string().trim().min(2).max(80),
-    accountRef: z.string().trim().min(1).max(100),
+    accountRef: z.string().trim().max(100),
     staticQris: z.string().max(4096).optional(),
   })
   .strict();
 export async function createSource(actorId: string, raw: unknown) {
   requirePreview();
   const input = sourceInput.parse(raw);
-  if (input.kind === "GOPAY_QRIS") {
+  if (input.kind === "GOPAY_QRIS" && input.staticQris) {
     try {
       validateStaticQris(input.staticQris || "");
     } catch (error) {
@@ -30,11 +30,11 @@ export async function createSource(actorId: string, raw: unknown) {
         422,
       );
     }
-  } else if (input.staticQris)
+  } else if (input.kind === "GMAIL_BANK" && input.staticQris)
     throw new HttpError("QRIS tidak berlaku untuk bank", 422);
   return prisma.$transaction(async (tx) => {
     await assertStaffPermission(tx, actorId, PERMISSIONS.BANK_MANAGE);
-    let accountRef = input.accountRef;
+    let accountRef = input.accountRef || "pending-"+randomUUID();
     let bankAccountId: string | undefined;
     if (input.kind === "GMAIL_BANK") {
       const bank = await tx.bankAccount.findFirst({
@@ -124,7 +124,7 @@ export async function disconnectSource(actorId: string, sourceId: string) {
     }
   }
   // Local disconnection succeeds even if Google is unavailable. Report remote state honestly.
-  if (!revoked)
+  if (!revoked && secret.kind === "GMAIL_BANK")
     await prisma.paymentEvidenceReview.create({
       data: {
         sourceId,
@@ -134,5 +134,5 @@ export async function disconnectSource(actorId: string, sourceId: string) {
           "Cabut akses dari Akun Google > Keamanan > Koneksi pihak ketiga; pencabutan jarak jauh belum terkonfirmasi.",
       },
     });
-  return { disconnected: true, remoteRevoked: revoked };
+  return { disconnected: true, remoteRevoked: revoked, kind: secret.kind };
 }

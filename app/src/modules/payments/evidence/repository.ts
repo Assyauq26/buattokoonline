@@ -253,6 +253,8 @@ export async function ingestObservation(
               "Status/identitas sumber berubah; periksa mutasi dan refund secara terpisah.",
           },
         });
+        if(source.kind==="GOPAY_QRIS")await tx.paymentEvidenceReview.create({data:{sourceId,evidenceId:old.id,action:"GOPAY_SOURCE_STATUS_CHANGED",
+          reason:`status=${["SETTLEMENT","CAPTURE","REFUND","PARTIAL_REFUND","PENDING","FAILED","CANCELLED"].includes(o.status)?o.status:"UNKNOWN"}; Klaim asli dipertahankan. Periksa perubahan status atau refund secara manual.`}});
       }
       return old.id;
     }
@@ -337,7 +339,7 @@ export async function finishSourceLease(
         health: result.authFailed
           ? "RECONNECT_REQUIRED"
           : result.ok
-            ? "REVIEW_ONLY"
+            ? (s.kind === "GOPAY_QRIS" ? "MERCHANT_CONNECTED" : "REVIEW_ONLY")
             : "TEMPORARILY_UNAVAILABLE",
         nextPollAt: new Date(
           now.getTime() +
@@ -408,6 +410,7 @@ export async function claimEvidence(
       trusted: e.trusted,
     };
     if (p.method === BLU_TEST_METHOD) throw new HttpError("Uji blu tidak dapat diklaim sebagai pembayaran pesanan", 409);
+    if(["blu_email_transfer","gopay_merchant_qris"].includes(p.method))throw new HttpError("Pembayaran otomatis hanya dapat diklaim dalam transaksi settlement yang sama",409);
     if (
       e.reason !== "SELLER_REVIEW_REQUIRED" ||
       evidenceReason(observation, source.accountRef) !==

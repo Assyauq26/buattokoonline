@@ -9,7 +9,7 @@ import { unseal } from "./secrets";
 import { storeScope } from "./repository";
 import { z } from "zod";
 
-export async function setBluEnabled(actorId: string, sourceId: string, enabled: boolean) {
+export async function setBluEnabled(actorId: string, sourceId: string, enabled: boolean, inspectOnly = false) {
   requirePreview();
   if (enabled && !bluCheckoutEnabled()) throw new HttpError("Checkout blu belum dibuka pada instalasi ini", 409);
   return prisma.$transaction(async tx => {
@@ -17,9 +17,11 @@ export async function setBluEnabled(actorId: string, sourceId: string, enabled: 
     const s = await lockSource(tx, sourceId);
     if (s.kind !== "GMAIL_BANK") throw new HttpError("Koneksi ini bukan rekening blu", 422);
     if (enabled) {
-      if (!s.encryptedSecret || s.health !== "REVIEW_ONLY" || !s.lastCheckedAt || +s.lastCheckedAt < Date.now() - 5 * 60_000 || !s.bankAccountId ||
-        !await tx.bankAccount.findFirst({ where: { id: s.bankAccountId, isActive: true, deletedAt: null } }))
-        throw new HttpError("Hubungkan Gmail, baca notifikasi blu, dan periksa rekening aktif terlebih dahulu", 409);
+      if (!s.encryptedSecret || s.health === "RECONNECT_REQUIRED") throw new HttpError("Koneksi Gmail perlu dihubungkan ulang sebelum aktivasi",409);
+      if (s.health !== "REVIEW_ONLY") throw new HttpError("Baca notifikasi blu untuk memverifikasi koneksi Gmail terlebih dahulu",409);
+      if (!s.lastCheckedAt || +s.lastCheckedAt < Date.now()-5*60_000) throw new HttpError("Pemeriksaan Gmail sudah lebih dari lima menit. Klik Baca notifikasi blu, lalu aktifkan kembali.",409);
+      if (!s.bankAccountId || !await tx.bankAccount.findFirst({ where: { id: s.bankAccountId, isActive: true, deletedAt: null } }))
+        throw new HttpError("Rekening blu tidak aktif atau sudah dihapus. Pilih rekening penerima aktif.",409);
       try {
         z.object({ access: z.string().min(1).max(16000), refresh: z.string().min(1).max(16000),
           expiresAt: z.number().finite().positive() }).strict().parse(JSON.parse(unseal(s.encryptedSecret, storeScope(), sourceId, "google-tokens")));
@@ -34,16 +36,28 @@ export async function setBluEnabled(actorId: string, sourceId: string, enabled: 
       }
       if (!verified) throw new HttpError("Belum ada notifikasi blu dengan rekening dan tanda tangan yang terverifikasi", 409);
     }
-    if (s.enabled === enabled && (!enabled || s.automationActorId === actorId)) return { enabled };
+    if (inspectOnly) return { enabled: s.enabled };
+    const consent = enabled ? await tx.paymentEvidenceReview.findFirst({where:{sourceId,action:"BLU_AUTO_MATCH_OPT_IN",reason:`generation:${s.generation}`},select:{id:true}}) : null;
+    if (s.enabled === enabled && (!enabled || (s.automationActorId === actorId && consent))) return { enabled };
     await tx.paymentEvidenceSource.update({ where: { id: sourceId }, data: {
       enabled, automationActorId: enabled ? actorId : null, generation: { increment: 1 },
       leaseToken: null, leaseUntil: null, cursor: null, nextPollAt: null,
     } });
     await tx.paymentEvidenceOAuthState.deleteMany({ where: { sourceId } });
+    if(enabled)await tx.paymentEvidenceReview.create({data:{sourceId,actorId,action:"BLU_AUTO_MATCH_OPT_IN",reason:`generation:${s.generation+1}`}});
     await tx.paymentEvidenceReview.create({ data: { sourceId, actorId,
       action: enabled ? "BLU_CHECKOUT_ENABLED" : "BLU_CHECKOUT_DISABLED",
       reason: enabled ? "Seller mengaktifkan notifikasi otomatis dan checkout berkode unik; hasil tidak pasti tetap diperiksa manual."
         : "Checkout dan pembacaan otomatis dihentikan; pesanan serta histori tetap dipertahankan." } });
     return { enabled };
   });
+}
+
+/** Same validation as activation, without mutating generation, tokens or source. */
+export async function inspectBluReadiness(actorId: string, sourceId: string) {
+  try { await setBluEnabled(actorId, sourceId, true, true); return { ready: true, reason: "Siap diaktifkan untuk pembayaran otomatis." }; }
+  catch (error) {
+    if (error instanceof HttpError) return { ready: false, reason: error.message };
+    return { ready: false, reason: "Pemeriksaan kesiapan belum selesai. Muat ulang atau periksa layanan." };
+  }
 }

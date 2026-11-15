@@ -12,6 +12,7 @@ import { ShoppingCart, Package } from "lucide-react";
 import { formatIDR } from "@/lib/money";
 import { CheckoutClient } from "@/components/storefront/checkout-client";
 import { listBluCheckoutSources } from "@/modules/payments/evidence/blu-checkout";
+import { listGoPayCheckoutSources } from "@/modules/payments/evidence/gopay-checkout";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Checkout", robots: { index: false } };
@@ -43,7 +44,7 @@ export default async function CheckoutPage({ searchParams }: { searchParams: Pro
       include: { addresses: { where: { isDefault: true }, take: 1 } },
     }),
     readShippingSettings(),
-    listBluCheckoutSources(),
+    Promise.all([listBluCheckoutSources(),listGoPayCheckoutSources()]).then(([blu,qris])=>[...blu.map(s=>({...s,kind:"GMAIL_BANK"})),...qris.map(s=>({...s,kind:"GOPAY_QRIS"}))]),
   ]);
   if (cart.lines.length === 0) redirect("/cart");
 
@@ -79,7 +80,7 @@ export default async function CheckoutPage({ searchParams }: { searchParams: Pro
         subtotal={cart.subtotal}
         expectedLines={cart.lines.map(({ variantId, quantity, unitPrice }) => ({ variantId, quantity, unitPrice }))}
         banks={banks}
-        bluSources={bluSources.filter(s => s.bankAccountId).map(s => ({ id: s.id, label: s.label, bankAccountId: s.bankAccountId! }))}
+        bluSources={bluSources.map(s => ({ id: s.id, label: s.label, bankAccountId: s.bankAccountId || "",kind:s.kind }))}
         address={addr ? {
           recipientName: addr.recipientName,
           phone: addr.phone,

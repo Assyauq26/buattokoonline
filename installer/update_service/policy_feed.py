@@ -24,7 +24,10 @@ def authorized(release, installed, config, state, catalog=None):
     policy, digest = authenticate(json.dumps(raw).encode(), core.read_json(config.get('policyTrust',config['trust'])))
     state.policy(policy,digest)
     # Native adapter supports only the independently reviewed published pair.
-    if policy.get('executor') == 'blu-checkout-forward-v1':
+    if policy.get('executor') == 'payment-live-forward-v1':
+        from .payment_live_forward import reviewed_policy
+        reviewed_policy(policy)
+    elif policy.get('executor') == 'blu-checkout-forward-v1':
         from .blu_forward import reviewed_policy
         reviewed_policy(policy)
     elif policy.get('executor') == 'payment-evidence-forward-v1':

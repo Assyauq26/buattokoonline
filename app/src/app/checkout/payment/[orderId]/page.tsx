@@ -11,6 +11,7 @@ import { ProofForm } from "@/components/storefront/proof-form";
 import { BLU_TEST_METHOD } from "@/modules/payments/evidence/test-policy";
 import { prisma } from "@/lib/prisma";
 import { BLU_CHECKOUT_METHOD } from "@/modules/payments/evidence/blu-checkout";
+import { GOPAY_CHECKOUT_METHOD } from "@/modules/payments/evidence/gopay-checkout";
 import { BluPaymentStatus } from "@/components/storefront/blu-payment-status";
 
 export const dynamic = "force-dynamic";
@@ -31,7 +32,7 @@ export default async function PaymentPage({ params }: PaymentRouteProps) {
   const payment = order.payment!;
   if (payment.method === BLU_TEST_METHOD) redirect("/admin/payments/evidence/test");
   const bank = payment.bankAccount;
-  const attempt = payment.method === BLU_CHECKOUT_METHOD ? await prisma.paymentEvidenceAttempt.findUnique({ where: { paymentId: payment.id } }) : null;
+  const attempt = [BLU_CHECKOUT_METHOD,GOPAY_CHECKOUT_METHOD].includes(payment.method) ? await prisma.paymentEvidenceAttempt.findUnique({ where: { paymentId: payment.id } }) : null;
 
   const isRefunded = payment.status === "REFUNDED";
   const isPaid = payment.status === "PAID";
@@ -150,9 +151,10 @@ export default async function PaymentPage({ params }: PaymentRouteProps) {
             )}
           </div>
 
-          {attempt && bank && <BluPaymentStatus orderId={order.id} accountNumber={bank.accountNumber} amount={payment.amount}
+          {attempt?.qrisId && <section className="space-y-3 rounded-2xl border border-zinc-200 p-4"><h2 className="font-semibold">QRIS · {attempt.merchantName}</h2><img src={`/api/v1/orders/${order.id}/qris`} alt="QRIS pembayaran pesanan ini" className="mx-auto aspect-square w-full max-w-sm" /><a href={`/api/v1/orders/${order.id}/qris?download=1`} className="inline-flex min-h-11 items-center rounded-xl bg-black px-4 text-white">Unduh QRIS</a><p className="text-sm text-zinc-600">Batas waktu aplikasi lima menit. QR mungkin tetap dapat dibayar setelah batas waktu; jangan membayar tagihan yang sudah ditutup.</p></section>}
+          {attempt && (bank || attempt.qrisId) && <BluPaymentStatus orderId={order.id} accountNumber={bank?.accountNumber || ""} amount={payment.amount}
             uniqueCode={attempt.uniqueCode} expiresAt={attempt.expiresAt.toISOString()} initialStatus={payment.status} serverNow={new Date().toISOString()} />}
-          {isWaiting ? (
+          {isWaiting && !attempt ? (
             <div
               className="flex flex-col items-center gap-3 rounded-2xl border border-warning/40 bg-amber-50 p-8 text-center"
               data-testid="payment-waiting"
@@ -169,7 +171,7 @@ export default async function PaymentPage({ params }: PaymentRouteProps) {
               </Button>
             </div>
           ) : attempt ? (
-            <p className="rounded-xl bg-zinc-50 p-4 text-sm text-zinc-600">Menunggu notifikasi transfer blu. Jika dana telah masuk tetapi belum terdeteksi, hubungi seller untuk pemeriksaan mutasi. Jangan melakukan transfer ulang.</p>
+            <p className="rounded-xl bg-zinc-50 p-4 text-sm text-zinc-600">Menunggu konfirmasi otomatis. Jika dana telah masuk tetapi belum terdeteksi, hubungi seller untuk pemeriksaan mutasi. Jangan melakukan transfer ulang.</p>
           ) : (
             <div className="space-y-3">
               {lastRejected && (
