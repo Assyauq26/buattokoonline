@@ -337,7 +337,7 @@ export async function finishSourceLease(
         health: result.authFailed
           ? "RECONNECT_REQUIRED"
           : result.ok
-            ? "REVIEW_ONLY"
+            ? (s.kind === "GOPAY_QRIS" ? "MERCHANT_CONNECTED" : "REVIEW_ONLY")
             : "TEMPORARILY_UNAVAILABLE",
         nextPollAt: new Date(
           now.getTime() +

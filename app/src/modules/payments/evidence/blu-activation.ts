@@ -9,7 +9,7 @@ import { unseal } from "./secrets";
 import { storeScope } from "./repository";
 import { z } from "zod";
 
-export async function setBluEnabled(actorId: string, sourceId: string, enabled: boolean) {
+export async function setBluEnabled(actorId: string, sourceId: string, enabled: boolean, inspectOnly = false) {
   requirePreview();
   if (enabled && !bluCheckoutEnabled()) throw new HttpError("Checkout blu belum dibuka pada instalasi ini", 409);
   return prisma.$transaction(async tx => {
@@ -17,9 +17,11 @@ export async function setBluEnabled(actorId: string, sourceId: string, enabled: 
     const s = await lockSource(tx, sourceId);
     if (s.kind !== "GMAIL_BANK") throw new HttpError("Koneksi ini bukan rekening blu", 422);
     if (enabled) {
-      if (!s.encryptedSecret || s.health !== "REVIEW_ONLY" || !s.lastCheckedAt || +s.lastCheckedAt < Date.now() - 5 * 60_000 || !s.bankAccountId ||
-        !await tx.bankAccount.findFirst({ where: { id: s.bankAccountId, isActive: true, deletedAt: null } }))
-        throw new HttpError("Hubungkan Gmail, baca notifikasi blu, dan periksa rekening aktif terlebih dahulu", 409);
+      if (!s.encryptedSecret || s.health === "RECONNECT_REQUIRED") throw new HttpError("Koneksi Gmail perlu dihubungkan ulang sebelum aktivasi",409);
+      if (s.health !== "REVIEW_ONLY") throw new HttpError("Baca notifikasi blu untuk memverifikasi koneksi Gmail terlebih dahulu",409);
+      if (!s.lastCheckedAt || +s.lastCheckedAt < Date.now()-5*60_000) throw new HttpError("Pemeriksaan Gmail sudah lebih dari lima menit. Klik Baca notifikasi blu, lalu aktifkan kembali.",409);
+      if (!s.bankAccountId || !await tx.bankAccount.findFirst({ where: { id: s.bankAccountId, isActive: true, deletedAt: null } }))
+        throw new HttpError("Rekening blu tidak aktif atau sudah dihapus. Pilih rekening penerima aktif.",409);
       try {
         z.object({ access: z.string().min(1).max(16000), refresh: z.string().min(1).max(16000),
           expiresAt: z.number().finite().positive() }).strict().parse(JSON.parse(unseal(s.encryptedSecret, storeScope(), sourceId, "google-tokens")));
@@ -34,6 +36,7 @@ export async function setBluEnabled(actorId: string, sourceId: string, enabled: 
       }
       if (!verified) throw new HttpError("Belum ada notifikasi blu dengan rekening dan tanda tangan yang terverifikasi", 409);
     }
+    if (inspectOnly) return { enabled: s.enabled };
     if (s.enabled === enabled && (!enabled || s.automationActorId === actorId)) return { enabled };
     await tx.paymentEvidenceSource.update({ where: { id: sourceId }, data: {
       enabled, automationActorId: enabled ? actorId : null, generation: { increment: 1 },
@@ -46,4 +49,13 @@ export async function setBluEnabled(actorId: string, sourceId: string, enabled: 
         : "Checkout dan pembacaan otomatis dihentikan; pesanan serta histori tetap dipertahankan." } });
     return { enabled };
   });
+}
+
+/** Same validation as activation, without mutating generation, tokens or source. */
+export async function inspectBluReadiness(actorId: string, sourceId: string) {
+  try { await setBluEnabled(actorId, sourceId, true, true); return { ready: true, reason: "Siap diaktifkan untuk pembayaran otomatis." }; }
+  catch (error) {
+    if (error instanceof HttpError) return { ready: false, reason: error.message };
+    return { ready: false, reason: "Pemeriksaan kesiapan belum selesai. Muat ulang atau periksa layanan." };
+  }
 }

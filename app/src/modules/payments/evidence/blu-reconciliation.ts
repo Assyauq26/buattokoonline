@@ -12,8 +12,8 @@ import { assertBluOperator } from "./blu-access";
 import { lockSource, requirePreview, storeScope } from "./repository";
 import { signatureAuditState } from "./signature-audit";
 
-/** A signature binds email bytes; it does not prove bank settlement or payer
- * identity. This routine returns manual-review candidates, never a paid result. */
+/** Authenticate the supported bank credit notification. Sender names are not
+ * payment identifiers. Never promote an arbitrary UNKNOWN provider observation. */
 async function candidates(tx: Prisma.TransactionClient, a: PaymentEvidenceAttempt, s: PaymentEvidenceSource, now: Date) {
   const rows = await tx.incomingPaymentEvidence.findMany({ where: { sourceId: s.id, amount: a.payable,
     accountRef: s.accountRef, currency: "IDR", direction: "CREDIT", providerStatus: "UNKNOWN",
@@ -50,7 +50,7 @@ export async function reconcileBluSource(sourceId: string, actorId: string, now 
     ...(cursor ? { OR: [{ createdAt: { gt: new Date(cursor.createdAt) } },
       { createdAt: new Date(cursor.createdAt), id: { gt: cursor.id } }] } : {}) },
     orderBy: [{ createdAt: "asc" }, { id: "asc" }], take: 50 });
-  let reviewed = 0;
+  let reviewed = 0, settled = 0;
   let last: typeof attempts[number] | undefined;
   for (const a of attempts) {
     if (Date.now() >= deadline) break;
@@ -59,11 +59,32 @@ export async function reconcileBluSource(sourceId: string, actorId: string, now 
       await lockPaymentOrder(tx, a.paymentId);
       const s = await lockSource(tx, sourceId);
       if (!manual && (!s.enabled || s.automationActorId !== actorId)) return;
-      const p = await tx.payment.findUniqueOrThrow({ where: { id: a.paymentId }, include: { order: true } });
+      const p = await tx.payment.findUniqueOrThrow({ where: { id: a.paymentId }, include: { order: { include: { items: true } } } });
       if (p.method !== BLU_CHECKOUT_METHOD || p.amount !== a.payable || p.order.total !== a.payable || p.status === "PAID") return;
       const found = await candidates(tx, a, s, now);
       if (!found.length) return;
       const late = p.order.status !== "PENDING_PAYMENT" || !p.order.expiresAt || p.order.expiresAt <= now;
+      if (!late && found.length === 1 && s.enabled && s.automationActorId === actorId &&
+          p.bankAccountId === s.bankAccountId && p.order.expiresAt?.getTime() === a.expiresAt.getTime() &&
+          a.expiresAt > now && ["PENDING_PAYMENT", "WAITING_VERIFICATION"].includes(p.status) &&
+          found[0].externalId.startsWith("rfc-message:")) {
+        const evidence = found[0];
+        const collision = await tx.paymentEvidenceAttempt.count({ where: { sourceId, payable: a.payable,
+          id: { not: a.id }, createdAt: { lte: evidence.occurredAt! }, expiresAt: { gt: evidence.occurredAt! } } });
+        const blocked = await tx.paymentEvidenceReview.findFirst({ where: { sourceId, evidenceId: evidence.id,
+          action: { in: ["BLU_MANUAL_AMBIGUOUS", "BLU_MANUAL_LATE", "BLU_MANUAL_REFUND_REQUIRED", "BLU_MANUAL_NOT_A_PAYMENT"] } }, select: { id: true } });
+        const claimed = await tx.paymentEvidenceClaim.findUnique({ where: { evidenceId: evidence.id }, select: { id: true } });
+        if (!collision && !blocked && !claimed && !await tx.paymentEvidenceClaim.findUnique({ where: { attemptId: a.id } })) {
+          await tx.paymentEvidenceClaim.create({ data: { evidenceId: evidence.id, attemptId: a.id, actorId,
+            reason: "Notifikasi dana masuk blu bertanda tangan valid, rekening dan nominal berkode unik cocok tepat satu tagihan aktif." } });
+          if (p.status === "PENDING_PAYMENT") await tx.payment.update({ where: { id: p.id }, data: { status: "WAITING_VERIFICATION" } });
+          await settlePaymentInTransaction(tx, { ...p, status: "WAITING_VERIFICATION" }, actorId, "Transfer blu dikonfirmasi otomatis dari notifikasi dana masuk bank tervalidasi");
+          await tx.paymentEvidenceReview.create({ data: { sourceId, evidenceId: evidence.id, attemptId: a.id, actorId,
+            action: "BLU_AUTO_SETTLED", reason: "Nominal tepat, rekening sesuai, dalam batas waktu; klaim permanen dan settlement dalam satu transaksi." } });
+          settled++;
+          return;
+        }
+      }
       const action = late ? "BLU_LATE_REVIEW" : found.length === 1 ? "BLU_CANDIDATE_REVIEW" : "BLU_AMBIGUOUS_REVIEW";
       if (await tx.paymentEvidenceReview.findFirst({ where: { sourceId, attemptId: a.id, action }, select: { id: true } })) return;
       await tx.paymentEvidenceReview.create({ data: { sourceId, attemptId: a.id, createdAt: now,
@@ -94,7 +115,7 @@ export async function reconcileBluSource(sourceId: string, actorId: string, now 
     await tx.paymentEvidenceReview.create({ data: { sourceId, action: "BLU_RECONCILE_CHECKPOINT",
       reason: JSON.stringify(last ? { createdAt: last.createdAt.toISOString(), id: last.id } : null) } });
   });
-  return { reviewed, settled: 0 as const };
+  return { reviewed, settled };
 }
 
 export const bluApprovalInput = z.object({ evidenceId: z.string().min(1).max(100), attemptId: z.string().min(1).max(100),

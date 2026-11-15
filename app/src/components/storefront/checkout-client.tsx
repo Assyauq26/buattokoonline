@@ -95,7 +95,7 @@ export function CheckoutClient({
   requestId: string;
   intentId?: string;
   banks: Bank[];
-  bluSources?: Array<{ id: string; label: string; bankAccountId: string }>;
+  bluSources?: Array<{ id: string; label: string; bankAccountId: string;kind?:string }>;
   address: Addr | null;
   jntCheckout?: boolean;
 }) {
@@ -542,7 +542,7 @@ export function CheckoutClient({
           <h2 className="flex items-center gap-2 font-display text-lg font-bold text-ink">
             <CreditCard size={18} /> Metode Pembayaran
           </h2>
-          {banks.length === 0 && (
+          {banks.length === 0 && bluSources.length===0 && (
             <p role="alert" className="text-sm text-destructive">
               Metode pembayaran belum tersedia. Hubungi toko untuk melanjutkan.
             </p>
@@ -553,8 +553,8 @@ export function CheckoutClient({
               <label key={s.id} className={cn("flex cursor-pointer items-start gap-3 rounded-xl border p-3", bluSourceId === s.id ? "checkout-option-selected" : "border-line")}>
                 <input type="radio" name="bankAccountId" value={s.bankAccountId} checked={bluSourceId === s.id}
                   onChange={() => { setBluSourceId(s.id); setBankId(s.bankAccountId); }} className="checkout-radio mt-1" />
-                <span><span className="block text-sm font-semibold">Transfer blu · notifikasi otomatis</span>
-                  <span className="block text-xs text-ink-muted">{s.label}. Waktu bayar 10 menit. Hasil yang belum pasti diperiksa seller.</span></span>
+                <span><span className="block text-sm font-semibold">{s.kind==="GOPAY_QRIS"?"QRIS GoPay Merchant":"Transfer blu · otomatis"}</span>
+                  <span className="block text-xs text-ink-muted">{s.label}. Waktu bayar {s.kind==="GOPAY_QRIS"?"5":"10"} menit. Konfirmasi dari backend.</span></span>
               </label>
             ))}
             {banks.map((b) => (

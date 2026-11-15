@@ -22,6 +22,8 @@ import { validateLocation } from "@/modules/regions/region.service";
 import type { ShippingInquiry, ShippingRate } from "@/infrastructure/shipping/contracts/shipping-provider";
 import { issueShippingQuote, shippingFingerprint, verifyShippingQuote } from "./shipping-quote";
 import { BLU_CHECKOUT_METHOD, prepareBluCheckout } from "@/modules/payments/evidence/blu-checkout";
+import { GOPAY_CHECKOUT_METHOD, prepareGoPayCheckout } from "@/modules/payments/evidence/gopay-checkout";
+import { storeScope } from "@/modules/payments/evidence/repository";
 
 export interface AddressInput {
   recipientName: string;
@@ -185,10 +187,13 @@ export async function createOrder(
   }
   if (checkoutSignature(confirmation.data) !== checkoutSignature(cartView.lines)) throw new HttpError("Harga atau isi keranjang berubah. Muat ulang checkout dan konfirmasi ulang sebelum membuat pesanan.", 409);
 
-  const bank = await prisma.bankAccount.findFirst({
+  const selectedSource = input.paymentEvidenceSourceId ? await prisma.paymentEvidenceSource.findFirst({where:{id:input.paymentEvidenceSourceId,storeScope:storeScope()},select:{kind:true}}) : null;
+  if(input.paymentEvidenceSourceId && !selectedSource)throw new HttpError("Metode pembayaran tidak tersedia",409);
+  const isQris = selectedSource?.kind === "GOPAY_QRIS";
+  const bank = isQris ? null : await prisma.bankAccount.findFirst({
     where: { id: input.bankAccountId, isActive: true, deletedAt: null },
   });
-  if (!bank) throw new HttpError("Rekening bank tidak valid", 400);
+  if (!bank && !isQris) throw new HttpError("Rekening bank tidak valid", 400);
 
 
   const parsedAddress = addressSchema.parse(input.address);
@@ -250,9 +255,11 @@ export async function createOrder(
     if (shippingSettings.activeJnt) requireEz(approvedRevision(shippingSettings.activeJnt).config);
     const lockedInquiry = shippingSettings.activeJnt ? await shippingInquiry(current, location, tx) : { destination: location, weightGram: 0, packages: [] };
     verifyShippingQuote(input.shipping.quoteToken, shippingFingerprint(userId, lockedInquiry, checkoutSignature(current.lines), shippingSettings.revision), selectedRate);
+    if(bank){
     await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "BankAccount" WHERE "id" = ${bank.id} FOR SHARE`);
     const lockedBank = await tx.bankAccount.findFirst({ where: { id: bank.id, isActive: true, deletedAt: null } });
     if (!lockedBank) throw new HttpError("Rekening bank tidak valid", 409);
+    }
     // Serializes redemptions for capped coupons across concurrent checkout transactions.
     if (input.couponCode) await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "Coupon" WHERE "code" = ${input.couponCode.toUpperCase()} FOR UPDATE`);
     const { discount, code } = await computeDiscount(input.couponCode, current.subtotal, tx, userId);
@@ -267,7 +274,8 @@ export async function createOrder(
     )) throw new HttpError("Harga, ongkir, atau kupon berubah. Muat ulang checkout dan konfirmasi ulang total pesanan.", 409);
     if (![current.subtotal, shippingCost, discount, total].every(n => Number.isSafeInteger(n) && n >= 0 && n <= 2_147_483_647)) throw new HttpError("Total pesanan tidak valid", 422);
     const blu = input.paymentEvidenceSourceId
-      ? await prepareBluCheckout(tx, input.paymentEvidenceSourceId, bank.id, total, input.codeConsent === true)
+      ? isQris ? await prepareGoPayCheckout(tx,input.paymentEvidenceSourceId,total,input.codeConsent===true)
+        : await prepareBluCheckout(tx, input.paymentEvidenceSourceId, bank!.id, total, input.codeConsent === true)
       : null;
     const payableTotal = blu?.payable ?? total;
     const created = await tx.order.create({
@@ -326,10 +334,10 @@ export async function createOrder(
       data: {
         orderId: created.id,
         provider: "manual",
-        method: blu ? BLU_CHECKOUT_METHOD : "bank_transfer",
+        method: blu ? (isQris ? GOPAY_CHECKOUT_METHOD : BLU_CHECKOUT_METHOD) : "bank_transfer",
         amount: payableTotal,
         status: "PENDING_PAYMENT",
-        bankAccountId: bank.id,
+        bankAccountId: bank?.id,
       },
     });
     if (blu) await tx.paymentEvidenceAttempt.create({ data: { ...blu, paymentId: payment.id } });
@@ -352,7 +360,7 @@ export async function createOrder(
 
   // Build payment instruction via provider abstraction (manual MVP).
   const provider = getPaymentProvider("manual");
-  await provider.createPayment({
+  if(bank) await provider.createPayment({
     orderNumber,
     amount: order.total,
     bankAccount: {

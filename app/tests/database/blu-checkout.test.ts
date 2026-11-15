@@ -9,6 +9,9 @@ import { setBluEnabled } from "@/modules/payments/evidence/blu-activation";
 import { reconcileBluSource, approveBluManually, recordBluReview } from "@/modules/payments/evidence/blu-reconciliation";
 import { observationFingerprint } from "@/modules/payments/evidence/repository";
 import { seal } from "@/modules/payments/evidence/secrets";
+import { setGoPayEnabled,prepareGoPayCheckout,GOPAY_CHECKOUT_METHOD } from "@/modules/payments/evidence/gopay-checkout";
+import { reconcileGoPay,runGoPayWorker } from "@/modules/payments/evidence/gopay-worker";
+import { crc16 } from "@/modules/payments/evidence/qris";
 import { reserveStock, releaseStock } from "@/modules/inventory/inventory.service";
 import { approvePayment, submitConfirmation } from "@/modules/payments/payments.service";
 import { previewCheckout, createOrder } from "@/modules/checkout/checkout.service";
@@ -79,6 +82,59 @@ async function order(s: Awaited<ReturnType<typeof source>>, issued = new Date(),
 }
 const approval = (evidenceId: string, attemptId: string) => ({ evidenceId, attemptId, bankConfirmed: true, reason: "Synthetic reviewer checked the original bank mutation independently." });
 
+it("automatically settles one authenticated bank credit exactly once across concurrent workers", async () => {
+  const s = await activeSource(), o = await order(s);
+  const e = await evidence(s, o.attempt.payable, new Date(+o.attempt.createdAt + 1000));
+  await prisma.incomingPaymentEvidence.update({ where: { id: e.id }, data: { externalId: "rfc-message:" + randomBytes(32).toString("hex") } });
+  await Promise.all([reconcileBluSource(s.id, actor), reconcileBluSource(s.id, actor)]);
+  const p = await prisma.payment.findUniqueOrThrow({ where: { id: o.payment!.id } });
+  expect(p.status).toBe("PAID");
+  expect(await prisma.paymentEvidenceClaim.count({ where: { attemptId: o.attempt.id } })).toBe(1);
+  expect(await prisma.inventoryMovement.count({ where: { variantId: o.variantId, type: "SALE" } })).toBe(1);
+  expect(await prisma.orderStatusHistory.count({ where: { orderId: o.id, toStatus: "PAID" } })).toBe(1);
+  expect((await reconcileBluSource(s.id, actor)).settled).toBe(0);
+});
+
+async function activeGoPaySource(){
+  vi.stubEnv("PAYMENT_GOPAY_CHECKOUT_ENABLED","true");
+  const base=await source(),merchant="fixture-"+randomUUID();
+  const tag=(id:string,value:string)=>id+String(value.length).padStart(2,"0")+value;
+  const body=tag("00","01")+tag("01","11")+tag("26",tag("00","ID.CO.TEST")+tag("01",merchant))+tag("52","5999")+tag("53","360")+tag("58","ID")+tag("59","FIXTURE STORE")+tag("60","TEST CITY")+"6304";
+  const encrypted=seal(JSON.stringify({format:1,phone:"6281234567890",nonce:randomUUID(),actor,attempts:0,access:"synthetic",refresh:"synthetic-refresh",expiresAt:Date.now()+3600000,merchantId:merchant,merchantName:"FIXTURE STORE"}),scope,base.id,"gopay-session");
+  await prisma.paymentEvidenceSource.update({where:{id:base.id},data:{kind:"GOPAY_QRIS",accountRef:merchant,bankAccountId:null,staticQris:body+crc16(body),encryptedSecret:encrypted,health:"MERCHANT_CONNECTED",lastCheckedAt:new Date()}});
+  await setGoPayEnabled(actor,base.id,true,true);
+  return prisma.paymentEvidenceSource.findUniqueOrThrow({where:{id:base.id}});
+}
+
+it("snapshots dynamic QRIS and permanently claims a merchant transaction under concurrent settlement",async()=>{
+  const base=await activeGoPaySource(),merchant=base.accountRef;
+  const first=await order(await activeSource());
+  const allocation=await prisma.$transaction(tx=>prepareGoPayCheckout(tx,base.id,20000,true));
+  await prisma.payment.update({where:{id:first.payment!.id},data:{method:GOPAY_CHECKOUT_METHOD,amount:allocation.payable,bankAccountId:null}});
+  await prisma.order.update({where:{id:first.id},data:{total:allocation.payable,expiresAt:allocation.expiresAt}});
+  await prisma.paymentEvidenceAttempt.delete({where:{id:first.attempt.id}});
+  const attempt=await prisma.paymentEvidenceAttempt.create({data:{...allocation,paymentId:first.payment!.id}});
+  const fingerprint=randomBytes(32).toString("hex");
+  const e=await prisma.incomingPaymentEvidence.create({data:{sourceId:base.id,externalId:"provider-"+randomUUID(),bankTxId:"stable-"+randomUUID(),amount:allocation.payable,currency:"IDR",direction:"CREDIT",providerStatus:"SETTLEMENT",accountRef:merchant,occurredAt:new Date(+allocation.createdAt+1000),trusted:true,reason:"SELLER_REVIEW_REQUIRED",fingerprint}});
+  await Promise.all([reconcileGoPay(base.id,actor),reconcileGoPay(base.id,actor)]);
+  expect((await prisma.payment.findUniqueOrThrow({where:{id:first.payment!.id}})).status).toBe("PAID");
+  expect(await prisma.paymentEvidenceClaim.count({where:{evidenceId:e.id,attemptId:attempt.id}})).toBe(1);
+  expect(await prisma.inventoryMovement.count({where:{variantId:first.variantId,type:"SALE"}})).toBe(1);
+  await prisma.paymentEvidenceSource.update({where:{id:base.id},data:{staticQris:null,enabled:false}});
+  expect((await prisma.paymentEvidenceAttempt.findUniqueOrThrow({where:{id:attempt.id}})).qrisPayload).toBe(allocation.qrisPayload);
+  expect(+attempt.expiresAt-+attempt.createdAt).toBe(300000);
+});
+
+it("does not automatically settle two signed candidates with the same amount", async () => {
+  const s = await activeSource(), o = await order(s);
+  for (let i=0;i<2;i++) {
+    const e = await evidence(s, o.attempt.payable, new Date(+o.attempt.createdAt + 1000));
+    await prisma.incomingPaymentEvidence.update({ where: { id: e.id }, data: { externalId: "rfc-message:" + randomBytes(32).toString("hex") } });
+  }
+  expect((await reconcileBluSource(s.id, actor)).settled).toBe(0);
+  expect(await prisma.paymentEvidenceClaim.count({ where: { attemptId: o.attempt.id } })).toBe(0);
+});
+
 async function checkout(s: Awaited<ReturnType<typeof source>>) {
   const product = await prisma.product.create({ data: { name: "Synthetic checkout", slug: randomUUID(), basePrice: 20000,
     status: "PUBLISHED", variants: { create: { sku: randomUUID(), inventory: { create: { onHand: 2 } } } } }, include: { variants: true } });
@@ -95,6 +151,28 @@ async function checkout(s: Awaited<ReturnType<typeof source>>) {
     paymentEvidenceSourceId: s.id, codeConsent: true, requestId: randomUUID(), expectedLines: preview.lines,
     expectedQuote: { subtotal: preview.subtotal, shippingCost: preview.shippingCost, discount: preview.discount, total: preview.total } } };
 }
+
+it.each(["SETTLEMENT","REFUND","PARTIAL_REFUND","PENDING","FAILED","UNKNOWN"])("uses real QRIS checkout and backend worker for provider status %s",async status=>{
+  const s=await activeGoPaySource(),f=await checkout(s);
+  const o=await createOrder(f.user,{...f.input,bankAccountId:""});
+  const p=await prisma.payment.findUniqueOrThrow({where:{orderId:o.id},include:{evidenceAttempt:true}});
+  expect(p.method).toBe(GOPAY_CHECKOUT_METHOD);expect(p.bankAccountId).toBeNull();
+  expect(p.evidenceAttempt?.qrisPayload).toContain("5405"+String(p.amount));
+  const providerId="provider-"+randomUUID(),providerTime=new Date().toISOString();
+  const provider=vi.fn().mockImplementation(async()=>new Response(JSON.stringify({transactions:[{id:providerId,merchant_id:s.accountRef,gross_amount:String(p.amount),transaction_status:status,transaction_time:providerTime,currency:"IDR",payment_type:"QRIS"}]})));
+  vi.stubGlobal("fetch",provider);
+  try{
+    const result=await runGoPayWorker(s.id);
+    expect(result.failed).toBe(0);
+    const saved=await prisma.payment.findUniqueOrThrow({where:{id:p.id}});
+    expect(saved.status).toBe(status==="SETTLEMENT"?"PAID":"PENDING_PAYMENT");
+    expect(await prisma.paymentEvidenceClaim.count({where:{attemptId:p.evidenceAttempt!.id}})).toBe(status==="SETTLEMENT"?1:0);
+    const calls=provider.mock.calls.length;
+    await runGoPayWorker(s.id);
+    expect(provider.mock.calls.length).toBe(calls); // Durable source cooldown survives caller restart.
+    expect(await prisma.incomingPaymentEvidence.count({where:{sourceId:s.id,bankTxId:providerId}})).toBe(1);
+  }finally{vi.unstubAllGlobals();}
+});
 
 it("uses the actual checkout with server shipping quotes, reservation and idempotent retries", async () => {
   const s = await activeSource(), f = await checkout(s);
@@ -155,15 +233,15 @@ it("requires code consent and bank minimum before issuing an attempt", async () 
   await expect(prisma.$transaction(tx => prepareBluCheckout(tx, s.id, s.bankAccountId!, 9999, true))).rejects.toThrow("minimal");
   expect(await prisma.paymentEvidenceAttempt.count({ where: { sourceId: s.id } })).toBe(before);
 });
-it("unknown bank status becomes manual review, never automatic paid; retry settles stock and notification once", async () => {
+it("unsupported notification identity stays in manual review; explicit approval remains exactly once", async () => {
   const s = await activeSource(), o = await order(s), e = await evidence(s, o.total, new Date(+o.attempt.createdAt + 100));
   await Promise.all([reconcileBluSource(s.id, actor), reconcileBluSource(s.id, actor)]);
   expect((await prisma.payment.findUniqueOrThrow({ where: { id: o.payment!.id } })).status).toBe("WAITING_VERIFICATION");
   expect(await prisma.paymentEvidenceClaim.count({ where: { attemptId: o.attempt.id } })).toBe(0);
   expect(await prisma.paymentEvidenceReview.count({ where: { attemptId: o.attempt.id, action: "BLU_CANDIDATE_REVIEW" } })).toBe(1);
-  await expect(approvePayment(o.payment!.id, actor)).rejects.toThrow("Pemeriksaan Notifikasi");
+  await expect(approvePayment(o.payment!.id, actor)).rejects.toMatchObject({ status: 409 });
   await expect(submitConfirmation(buyer, o.id, { senderBank: "Synthetic", senderName: "Synthetic", amount: o.total,
-    transferDate: new Date(), proofPath: "/private/synthetic.png", proofMime: "image/png" })).rejects.toThrow("dibaca otomatis");
+    transferDate: new Date(), proofPath: "/private/synthetic.png", proofMime: "image/png" })).rejects.toMatchObject({ status: 409 });
   await Promise.all([approveBluManually(actor, approval(e.id, o.attempt.id)), approveBluManually(actor, approval(e.id, o.attempt.id))]);
   expect(await prisma.paymentEvidenceClaim.count({ where: { attemptId: o.attempt.id } })).toBe(1);
   expect(await prisma.inventory.findUniqueOrThrow({ where: { variantId: o.variantId } })).toMatchObject({ onHand: 19, reserved: 0 });

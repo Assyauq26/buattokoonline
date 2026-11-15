@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { publicGoPayStatus } from "@/modules/payments/evidence/gopay-session";
+import { GoPayTransactions } from "@/components/admin/gopay-transactions";
 import { notFound } from "next/navigation";
 import { ArrowLeft, Info, ShieldCheck } from "lucide-react";
 import { requireEvidenceAdmin } from "@/modules/payments/evidence/access";
@@ -7,6 +9,8 @@ import { prisma } from "@/lib/prisma";
 import { previewEnabled } from "@/modules/payments/evidence/policy";
 import { storeScope } from "@/modules/payments/evidence/repository";
 import { PaymentEvidenceSettings } from "@/components/admin/payment-evidence-settings";
+import { inspectBluReadiness } from "@/modules/payments/evidence/blu-activation";
+import { goPayCheckoutEnabled } from "@/modules/payments/evidence/gopay-checkout";
 import { bluCheckoutEnabled } from "@/modules/payments/evidence/blu-checkout";
 
 export const dynamic = "force-dynamic";
@@ -35,6 +39,8 @@ export default async function Page({
             lastCheckedAt: true,
             encryptedSecret: true,
             enabled: true,
+            staticQris: true,
+            updatedAt: true,
           },
           orderBy: { createdAt: "desc" },
           take: 30,
@@ -48,6 +54,7 @@ export default async function Page({
         })
       : [],
   ]);
+  const readiness = gopay ? [] : await Promise.all(sources.map(s => inspectBluReadiness(user.id, s.id)));
   const oauthEnabled =
     process.env.PAYMENT_GMAIL_OAUTH_TEST === "true" &&
     !!process.env.PAYMENT_GOOGLE_CLIENT_ID &&
@@ -64,7 +71,7 @@ export default async function Page({
       </Link>
       <header>
         <span className="mb-3 inline-block rounded-full bg-zinc-100 px-3 py-1 text-xs font-medium">
-          {gopay ? "Koneksi GoPay belum siap" : "Aktifkan per rekening setelah terhubung"}
+          {gopay ? "QRIS GoPay Merchant · integrasi tidak resmi" : "Aktifkan per rekening setelah terhubung"}
         </span>
         <h1>
           {gopay ? "QRIS GoPay Merchant" : "Notifikasi bank melalui Gmail"}
@@ -82,8 +89,8 @@ export default async function Page({
         </h2>
         <p className="text-sm leading-relaxed text-zinc-600">
           {gopay
-            ? "Integrasi GoPay ini bukan API pembayaran resmi dan dapat berubah atau berhenti bekerja. Login, OTP, dan refresh sesi belum tervalidasi. Jangan masukkan password, OTP, cookie, atau token merchant ke formulir ini."
-            : "Notifikasi blu dibaca melalui izin Gmail yang mencakup mailbox secara luas. Gunakan mailbox khusus notifikasi. Format blu dan tanda tangan email didukung; bank lain belum didukung. Status bank yang belum pasti tetap memerlukan pemeriksaan seller."}
+            ? "Integrasi GoPay ini bukan API pembayaran resmi dan dapat berubah atau berhenti bekerja. Alur OTP memakai adapter yang dapat diaudit. Masukkan OTP hanya di formulir verifikasi dashboard ini. Jangan memasukkan password, cookie, atau token secara manual. Kontrak provider diperiksa pada setiap respons."
+            : "Notifikasi blu dibaca melalui izin Gmail yang mencakup mailbox secara luas. Gunakan mailbox khusus notifikasi. Format blu dan tanda tangan email didukung; bank lain belum didukung. Notifikasi dana masuk yang tervalidasi dapat melunasi satu tagihan dengan nominal berkode unik yang sama persis. Konflik dan notifikasi terlambat tetap ditahan."}
         </p>
         {!gopay && (
           <p className="text-sm leading-relaxed text-zinc-600">
@@ -106,14 +113,19 @@ export default async function Page({
             : "Google belum terhubung. Coba hubungkan ulang dari halaman ini."}
         </p>
       )}
+      {gopay && preview && <GoPayTransactions sources={sources.map(s=>({id:s.id,label:s.label}))} />}
       {preview ? (
         <PaymentEvidenceSettings
           kind={kind}
-          sources={sources.map((s) => ({
+          sources={sources.map((s, index) => ({
+            readiness: readiness[index],
             id: s.id,
             label: s.label,
             health: s.health,
-            connected: !!s.encryptedSecret,
+            connected: !!s.encryptedSecret && (!gopay || s.health === "MERCHANT_CONNECTED"),
+            qrisConfigured: !!s.staticQris,
+            merchant: gopay ? publicGoPayStatus(s.id,s.encryptedSecret) : null,
+            qrisVersion: s.updatedAt.toISOString(),
             enabled: s.enabled,
             lastCheckedAt: s.lastCheckedAt?.toISOString() || null,
           }))}
@@ -124,6 +136,7 @@ export default async function Page({
           canManage={user.permissions.includes(PERMISSIONS.BANK_MANAGE)}
           oauthEnabled={oauthEnabled}
           bluCheckoutAvailable={bluCheckoutEnabled()}
+          goPayCheckoutAvailable={goPayCheckoutEnabled()}
         />
       ) : (
         <section className="settings-card">

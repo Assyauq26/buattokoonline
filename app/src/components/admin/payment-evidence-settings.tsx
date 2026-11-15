@@ -10,6 +10,10 @@ interface Source {
   health: string;
   connected: boolean;
   enabled?: boolean;
+  readiness?: { ready: boolean; reason: string };
+  qrisConfigured?:boolean;
+  qrisVersion?:string;
+  merchant?:{merchantId:string|null;merchantName:string|null;phoneSuffix:string;expiresAt:string}|null;
   lastCheckedAt: string | null;
 }
 const healthLabels: Record<string, string> = {
@@ -19,6 +23,10 @@ const healthLabels: Record<string, string> = {
   RECONNECT_REQUIRED: "Hubungkan ulang",
   REVIEW_ONLY: "Hanya pemeriksaan seller",
   TEMPORARILY_UNAVAILABLE: "Sementara tidak tersedia",
+  OTP_REQUESTING: "Meminta OTP",
+  OTP_REQUIRED: "Menunggu verifikasi OTP · berlaku lima menit",
+  MERCHANT_CONNECTED: "Akun dan merchant terhubung",
+  MERCHANT_CHECK_REQUIRED: "Sesi diterima; klik Periksa koneksi merchant untuk menyelesaikan pemeriksaan akun",
 };
 export function PaymentEvidenceSettings({
   kind,
@@ -27,6 +35,7 @@ export function PaymentEvidenceSettings({
   canManage,
   oauthEnabled,
   bluCheckoutAvailable = false,
+  goPayCheckoutAvailable = false,
 }: {
   kind: "GOPAY_QRIS" | "GMAIL_BANK";
   sources: Source[];
@@ -34,8 +43,24 @@ export function PaymentEvidenceSettings({
   canManage: boolean;
   oauthEnabled: boolean;
   bluCheckoutAvailable?: boolean;
+  goPayCheckoutAvailable?: boolean;
 }) {
   const router = useRouter();
+  const [qrisPayload, setQrisPayload] = useState("");
+  async function uploadQris(file: File | undefined,sourceId?:string) {
+    if (!file || pending) return;
+    if (file.size > 4*1024*1024 || !["image/png","image/jpeg","image/webp"].includes(file.type)) { setMessage("Gunakan PNG, JPEG atau WebP maksimal 4 MB"); return; }
+    setPending(true); setMessage("");
+    try {
+      const response = await fetch("/api/v1/admin/payment-evidence/qris-image", { method: "POST", headers: { "Content-Type":file.type }, body:file, signal:AbortSignal.timeout(20000) });
+      const body = await response.json();
+      if (!response.ok || !body.success) throw new Error(body.error?.message || "QRIS tidak terbaca");
+      if(sourceId){await send({action:"set-gopay-qris",sourceId,payload:body.data.payload});router.refresh();}
+      else setQrisPayload(body.data.payload);
+      setMessage(`QRIS terbaca: ${body.data.merchantName} · ${body.data.merchantCity}. ${sourceId?"Tersimpan; aktifkan ulang checkout setelah memeriksa merchant.":"Simpan untuk menerapkan konfigurasi."}`);
+    } catch(error) { setMessage(error instanceof Error ? error.message : "QRIS tidak terbaca"); }
+    finally { setPending(false); }
+  }
   const [pending, setPending] = useState(false),
     [message, setMessage] = useState("");
   async function send(body: unknown) {
@@ -61,13 +86,21 @@ export function PaymentEvidenceSettings({
         window.location.assign(result.url);
         return;
       }
-      if (result.reconciled) {
-        setMessage(`${result.reviewed} kandidat diperbarui. Belum ada pembayaran yang dinyatakan lunas.`); router.refresh();
+      if (result.otpRequired) {
+        setMessage("OTP diminta ke nomor merchant. Masukkan di formulir verifikasi dalam lima menit.");router.refresh();
+      } else if(result.authenticated) {
+        setMessage(`Akun terhubung: ${result.merchantName || "merchant terverifikasi"}. Periksa QRIS sebelum aktivasi checkout.`);router.refresh();
+      } else if (result.reconciled) {
+        setMessage(`${result.settled || 0} pembayaran dikonfirmasi otomatis; ${result.reviewed} hasil memerlukan pemeriksaan.`); router.refresh();
       } else if (result.reviewOnly) {
         setMessage(
-          `${result.count} email diperiksa. ${result.limited ? "Masih ada halaman berikutnya; baca lagi setelah satu menit." : "Pembacaan selesai."} Semua hasil perlu pemeriksaan manual; pesanan tidak dilunasi.`,
+          `${result.count} email diperiksa. ${result.limited ? "Masih ada halaman berikutnya; baca lagi setelah satu menit." : "Pembacaan selesai."} Worker mencocokkan pembayaran pada rekening yang diaktifkan.`,
         );
         router.refresh();
+      } else if (result.disconnected && result.kind === "GOPAY_QRIS") {
+        setMessage("Sesi GoPay lokal dihapus dan checkout dihentikan. Pencabutan sesi di provider tidak diklaim; kelola perangkat/sesi juga dari akun merchant.");router.refresh();
+      } else if (result.connectionChecked) {
+        setMessage(`Koneksi merchant ${result.merchantName} terverifikasi. Periksa QRIS lalu aktifkan checkout.`);router.refresh();
       } else if (result.disconnected && !result.remoteRevoked)
         setMessage(
           "Koneksi lokal diputus. Cabut juga akses Hubify dari halaman Keamanan Akun Google karena pencabutan jarak jauh belum terkonfirmasi.",
@@ -122,13 +155,35 @@ export function PaymentEvidenceSettings({
             {healthLabels[s.health] || "Perlu pemeriksaan operator"}
             {s.enabled ? " · Pembacaan otomatis aktif" : " · Checkout nonaktif"}
           </p>
+          {s.readiness && <p role="status" className="rounded-xl bg-zinc-50 p-3 text-sm text-zinc-700">{s.readiness.reason}</p>}
+          {s.merchant && <p className="text-sm">{s.merchant.merchantName||"Identitas merchant belum diperiksa"} · ID {s.merchant.merchantId||"belum tersedia"} · akun ••••{s.merchant.phoneSuffix}</p>}
+          {kind === "GOPAY_QRIS" && canManage && <div className="space-y-3 rounded-xl bg-zinc-50 p-3">
+            {s.qrisConfigured && <img src={`/api/v1/admin/payment-evidence/qris-image?sourceId=${encodeURIComponent(s.id)}&v=${encodeURIComponent(s.qrisVersion||"")}`} alt="Preview QRIS statis merchant" className="mx-auto aspect-square w-56 max-w-full rounded-xl bg-white" />}
+            <label className="block space-y-2 text-sm"><span>{s.qrisConfigured?"Ganti gambar QRIS":"Unggah QRIS merchant"}</span><input type="file" accept="image/png,image/jpeg,image/webp" disabled={pending} onChange={event=>void uploadQris(event.target.files?.[0],s.id)} /></label>
+            {s.qrisConfigured && <button type="button" className={button} disabled={pending} onClick={()=>void perform({action:"set-gopay-qris",sourceId:s.id,payload:null})}>Hapus QRIS konfigurasi</button>}
+            <p className="text-sm">Integrasi tidak resmi. OTP menghubungkan sesi akun; aktivasi menunggu verifikasi merchant dan kontrak sesi.</p>
+            <form className="flex flex-wrap gap-2" onSubmit={event=>{event.preventDefault();const form=new FormData(event.currentTarget);void perform({action:"gopay-request-otp",sourceId:s.id,phone:form.get("phone")});}}>
+              <label className="grow text-sm">Nomor GoBiz/merchant<input name="phone" type="tel" autoComplete="tel" required pattern="\\+?62[0-9]{8,13}" maxLength={17} placeholder="6281234567890" className="mt-1 block w-full rounded-xl border border-zinc-200 bg-white p-3" /></label>
+              <button className={button} disabled={pending}>Kirim OTP</button>
+            </form>
+            <button type="button" className={button} disabled={pending} onClick={()=>void perform({action:"gopay-check-connection",sourceId:s.id})}>Periksa koneksi merchant</button>
+            <form className="flex flex-wrap gap-2" onSubmit={event=>{event.preventDefault();const form=new FormData(event.currentTarget);void perform({action:"gopay-verify-otp",sourceId:s.id,otp:form.get("otp")});event.currentTarget.reset();}}>
+              <label className="grow text-sm">Kode OTP<input name="otp" inputMode="numeric" autoComplete="one-time-code" required pattern="[0-9]{4,8}" maxLength={8} className="mt-1 block w-full rounded-xl border border-zinc-200 bg-white p-3" /></label>
+              <button className={button+" bg-black !text-white"} disabled={pending}>Verifikasi OTP</button>
+            </form>
+            <form className="space-y-3" onSubmit={event=>{event.preventDefault();void perform({action:"set-gopay-enabled",sourceId:s.id,enabled:!s.enabled,ownershipConfirmed:true});}}>
+              {!s.enabled && <label className="flex items-start gap-3 text-sm"><input type="checkbox" required disabled={pending || !goPayCheckoutAvailable} className="mt-1 size-4 accent-black" /><span>Saya memastikan QRIS ini milik merchant yang terhubung. Pembayaran akan dicocokkan otomatis dengan nominal berkode unik dan mutasi masuk berhasil.</span></label>}
+              <button className={button+" bg-black !text-white"} disabled={pending || (!s.enabled && (!goPayCheckoutAvailable || s.health!=="MERCHANT_CONNECTED"))}>{s.enabled?"Nonaktifkan checkout QRIS":"Aktifkan checkout QRIS"}</button>
+              {!goPayCheckoutAvailable && <p className="text-sm">Operator belum membuka checkout QRIS pada instalasi ini.</p>}
+            </form>
+          </div>}
           {canManage && kind === "GMAIL_BANK" && (
             <form className="space-y-3 rounded-xl bg-zinc-50 p-3" onSubmit={event => {
               event.preventDefault(); void perform({ action: "set-blu-enabled", sourceId: s.id, enabled: !s.enabled });
             }}>
               {!s.enabled && <label className="flex items-start gap-3 text-sm">
                 <input type="checkbox" required className="mt-1 size-4 shrink-0 accent-black" disabled={pending || !bluCheckoutAvailable} />
-                <span>Aktifkan rekening ini untuk checkout berkode unik dan pembacaan Gmail otomatis. Saya akan memeriksa mutasi asli sebelum menyetujui hasil yang belum pasti.</span>
+                <span>Aktifkan pembayaran otomatis berdasarkan notifikasi dana masuk blu yang tervalidasi, rekening sesuai, dan nominal berkode unik yang cocok tepat satu tagihan. Konflik dan pembayaran terlambat tetap diperiksa terpisah.</span>
               </label>}
               <button className={button + " bg-black !text-white"} disabled={pending || (!s.enabled && (!bluCheckoutAvailable || !s.connected))}>
                 {s.enabled ? "Nonaktifkan checkout blu" : "Aktifkan checkout blu"}
@@ -225,13 +280,12 @@ export function PaymentEvidenceSettings({
           <label className="block space-y-2 text-sm">
             <span>
               {kind === "GOPAY_QRIS"
-                ? "ID merchant (bukan token atau password)"
+                ? "ID merchant (opsional; diverifikasi setelah OTP)"
                 : "Rekening penerima"}
             </span>
             {kind === "GOPAY_QRIS" ? (
               <input
                 name="accountRef"
-                required
                 maxLength={100}
                 className="w-full rounded-xl border border-zinc-200 p-3"
                 autoComplete="off"
@@ -253,9 +307,12 @@ export function PaymentEvidenceSettings({
           </label>
           {kind === "GOPAY_QRIS" && (
             <label className="block space-y-2 text-sm">
-              <span>Teks QRIS statis</span>
+              <span>Gambar atau teks QRIS statis</span>
+              <input type="file" accept="image/png,image/jpeg,image/webp" disabled={pending} onChange={event => void uploadQris(event.target.files?.[0])} className="block w-full text-sm" aria-label="Unggah gambar QRIS" />
               <textarea
                 name="staticQris"
+                value={qrisPayload}
+                onChange={event=>setQrisPayload(event.target.value)}
                 rows={4}
                 required
                 maxLength={4096}
@@ -264,8 +321,7 @@ export function PaymentEvidenceSettings({
                 className="w-full resize-y rounded-xl border border-zinc-200 p-3 font-mono text-xs"
               />
               <span className="block text-xs text-zinc-500">
-                Checksum dan identitas QR diperiksa sebelum disimpan. Unggah
-                gambar belum didukung.
+                PNG, JPEG, WebP maksimal 4 MB. Checksum, mata uang dan identitas merchant diperiksa sebelum disimpan.
               </span>
             </label>
           )}

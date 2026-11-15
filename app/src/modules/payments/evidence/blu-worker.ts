@@ -9,16 +9,16 @@ import { reconcileBluSource } from "./blu-reconciliation";
 /** Invoked by the existing local maintenance timer, independent of buyer tabs.
  * Persisted nextPollAt, cursor, failures and generation lease survive restart.
  * No bank mutation or automatic PAID exists in this worker. */
-export async function runBluWorker() {
+export async function runBluWorker(sourceId?: string, budgetMs = 55_000) {
   if (!bluCheckoutEnabled()) return { read: 0, reviewed: 0, failed: 0, enabled: false };
-  const now = new Date(), end = Date.now() + 55_000, signal = AbortSignal.timeout(45_000);
+  const now = new Date(), end = Date.now() + budgetMs, signal = AbortSignal.timeout(Math.min(45_000, budgetMs - 5_000));
   const sources = await prisma.paymentEvidenceSource.findMany({ where: {
-    storeScope: storeScope(), kind: "GMAIL_BANK", enabled: true, encryptedSecret: { not: null },
+    storeScope: storeScope(), ...(sourceId ? { id: sourceId } : {}), kind: "GMAIL_BANK", enabled: true, encryptedSecret: { not: null },
     automationActorId: { not: null }, health: { not: "RECONNECT_REQUIRED" },
     AND: [{ OR: [{ nextPollAt: null }, { nextPollAt: { lte: now } }] },
       { OR: [{ leaseUntil: null }, { leaseUntil: { lte: now } }] }],
   }, orderBy: [{ nextPollAt: { sort: "asc", nulls: "first" } }, { id: "asc" }], take: 10 });
-  let read = 0, reviewed = 0, failed = 0;
+  let read = 0, reviewed = 0, settled = 0, failed = 0;
   for (const s of sources) {
     if (signal.aborted || Date.now() > end - 10_000) break;
     try {
@@ -40,9 +40,9 @@ export async function runBluWorker() {
       // text never enter the maintenance response or log.
     }
     if (Date.now() < end) {
-      try { reviewed += (await reconcileBluSource(s.id, s.automationActorId!, new Date(), end)).reviewed; }
+      try { const result = await reconcileBluSource(s.id, s.automationActorId!, new Date(), end); reviewed += result.reviewed; settled += result.settled; }
       catch { /* A revoked generation or operator cannot update review state. */ }
     }
   }
-  return { read, reviewed, failed, enabled: true };
+  return { read, reviewed, settled, failed, enabled: true };
 }

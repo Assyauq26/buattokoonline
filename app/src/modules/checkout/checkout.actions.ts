@@ -24,7 +24,7 @@ const schema = z.object({
   shippingCost: z.coerce.number().int().nonnegative(),
   quoteToken: z.string().min(1).max(4096),
   provinceCode: z.string(), cityCode: z.string(), districtCode: z.string(), villageCode: z.string(),
-  bankAccountId: z.string().min(1),
+  bankAccountId: z.string().max(100),
   paymentEvidenceSourceId: z.preprocess(v => v === "" ? undefined : v, z.string().min(1).max(100).optional()),
   codeConsent: z.preprocess(v => v === "on" || v === "true", z.boolean()),
   couponCode: z.string().optional(),

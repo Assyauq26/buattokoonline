@@ -13,4 +13,5 @@ export async function assertBluOperator(tx: Prisma.TransactionClient, actorId: s
   if (!user || !enrolled.includes(actorId)) throw new HttpError("Pengelola blu tidak lagi memiliki akses", 403);
   await assertStaffPermission(tx, actorId, PERMISSIONS.BANK_MANAGE);
   await assertStaffPermission(tx, actorId, PERMISSIONS.PAYMENT_READ);
+  await assertStaffPermission(tx, actorId, PERMISSIONS.PAYMENT_VERIFY);
 }
