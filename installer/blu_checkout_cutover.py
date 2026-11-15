@@ -5,6 +5,7 @@ not the public canonical31 adapter and cannot authorize another installation.
 """
 import json
 import base64
+import copy
 from pathlib import Path
 import core
 import promotions_cutover as official
@@ -88,15 +89,26 @@ class Native(prior.Native):
         return {**report,'schema_unchanged':False,'before_migrations':32,'after_migrations':33}
 
     def prepare(self,j):
-        super().prepare(j)
         from update_service.engine import Engine
-        source=self.folder/'source'
-        image=self.prepared_images['tools'] if self.prepared_images else 'single-store-tools:hubify-blu-checkout-'+self.sha[:12]
-        if not self.prepared_images:Engine(None,{}).build(source,image,'tools')
-        else:j['reused_build']={**self.prepared_images,'operatorReviewed':True}
-        j['candidate']['services']['tools'].update(image=image,build={'context':str(source/'app'),'target':'tools'})
-        j['candidate']['services']['app']['environment'].update(STORE_INSTALLED_VERSION='1.8.2',PAYMENT_BLU_CHECKOUT_ENABLED='true')
-        core.atomic_json(self.folder/'compose.json',j['candidate'])
+        self.folder.mkdir(parents=True,mode=0o700,exist_ok=False)
+        source=self.folder/'source';source.mkdir(mode=0o755)
+        for name,data in self.files.items():
+            path=source/name;path.parent.mkdir(parents=True,exist_ok=True);path.write_bytes(data);path.chmod(0o644)
+        core.atomic_json(source/'release.json',self.manifest)
+        core.atomic_json(source/'.hubify-provenance.json',{'source_sha':self.sha,
+            'app_tree':core.run(['git','-C',str(self.repository),'rev-parse',self.sha+':app']),'archive_sha256':self.digest})
+        candidate=copy.deepcopy(j['old_compose'])
+        if self.prepared_images:j['reused_build']={**self.prepared_images,'operatorReviewed':True}
+        for name,target in (('app','runtime'),('tools','tools')):
+            image=self.prepared_images[name] if self.prepared_images else 'single-store-'+name+':hubify-blu-checkout-'+self.sha[:12]
+            if not self.prepared_images:Engine(None,{}).build(source,image,target)
+            candidate['services'][name].update(image=image,build={'context':str(source/'app'),'target':target})
+        candidate['services']['app'].setdefault('environment',{}).update(STORE_INSTALLED_VERSION='1.8.2',
+            STORE_BUILD_SHA=self.sha,STORE_UPDATE_CHANNEL=core.read_json(core.CONFIG/'updater/config.json')['channel'],
+            PAYMENT_BLU_CHECKOUT_ENABLED='true')
+        j['candidate']=candidate
+        j['image']=core.run(['docker','image','inspect','--format','{{.Id}}',candidate['services']['app']['image']])
+        core.atomic_json(self.folder/'compose.json',candidate)
 
     def data_snapshot(self):return NativeForward.data_snapshot(self)
 

@@ -14,6 +14,20 @@ from blu_oauth import validate
 from update_service.trust import Rejected
 
 class HubifyBluCutoverTests(unittest.TestCase):
+    def test_prepared_receipt_names_actual_build_without_legacy_image_identity(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as folder:
+            d=object.__new__(blu.Native);d.folder=Path(folder)/'new';d.repository=Path(folder);d.sha='a'*40;d.digest='b'*64
+            d.files={'app/source':b'fixture'};d.manifest={'source_sha':d.sha}
+            d.prepared_images={'sourceSha':d.sha,'artifactDigest':d.digest,'app':'sha256:'+'c'*64,'tools':'sha256:'+'d'*64,'builder':'official-prebuild'}
+            j={'old_compose':{'services':{'app':{'environment':{'JNT_PRODUCTION_API_APPROVED':'yes'}},'tools':{}}}}
+            with patch('core.run',side_effect=lambda args: 'e'*40 if args[0]=='git' else d.prepared_images['app']),patch('core.read_json',return_value={'channel':'pilot'}),patch('update_service.engine.Engine.build') as build:
+                d.prepare(j);build.assert_not_called()
+            self.assertEqual(j['reused_build'],{**d.prepared_images,'operatorReviewed':True})
+            self.assertEqual(j['candidate']['services']['app']['environment']['STORE_BUILD_SHA'],d.sha)
+            self.assertEqual(j['candidate']['services']['app']['environment']['JNT_PRODUCTION_API_APPROVED'],'yes')
+            self.assertEqual(j['candidate']['services']['app']['environment']['STORE_INSTALLED_VERSION'],'1.8.2')
+            self.assertEqual(j['candidate']['services']['tools']['image'],d.prepared_images['tools'])
     def test_only_the_one_new_migration_and_byte_identical_history(self):
         old={'migrations':{str(n):'a'*64 for n in range(32)}}
         files={'app/prisma/migrations/'+n+'/migration.sql':b'old SQL' for n in old['migrations']}

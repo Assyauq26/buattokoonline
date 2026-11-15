@@ -13,7 +13,7 @@ def main():
     for name in ('dry-run','apply','reconcile'):mode.add_argument('--'+name,action='store_true')
     p.add_argument('--candidate',required=True);p.add_argument('--candidate-sha256',required=True)
     p.add_argument('--source-sha',required=True);p.add_argument('--baseline-archive',required=True)
-    p.add_argument('--prepared-images',help='Root-only receipt from the authenticated dedicated QA builder')
+    p.add_argument('--prepared-images',help='Root-only receipt from an authenticated official builder')
     p.add_argument('--external-work-stopped',action='store_true');a=p.parse_args()
     install();os.umask(0o077)
     official.check(not a.external_work_stopped or a.reconcile,'external attestation only for recovery')

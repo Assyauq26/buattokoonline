@@ -95,7 +95,7 @@ and [restricted-scope requirements](https://developers.google.com/identity/proto
 3. Check Hubify identity, baseline, schema/ledger, no carrier request in flight,
    all J&T approvals unchanged, idle updater, lock and disk. Preserve every old
    receipt. Only authenticated unused build cache may be removed, without force.
-4. Build on the dedicated QA builder when Hubify lacks the6GiB build budget.
+4. Use the official bounded Engine build on Hubify when the6GiB build and memory gates pass, or an independently authenticated builder when they do not.
    Bind the root-only prepared-image receipt to final Git/app tree/archive digest
    and both immutable image IDs; verify every packaged runtime source file in
    isolated read-only, unprivileged, network-disabled image inspections. Reserve
@@ -166,3 +166,29 @@ runtime; the central app/database are not deployed. Its real-archive test uses a
 disposable Ed25519 key, and tests verify refresh, global sequence monotonicity,
 wrong-artifact rejection and explicit wildcard review. Publication still follows
 successful Hubify cutover and smoke; these lab receipts do not claim it is live.
+
+
+## Production preparation / capacity
+
+The candidate OCI layers were measured without extracting them:1,004,016,863
+compressed bytes and3,295,343,616 uncompressed bytes. Compressed image size alone
+is not an import budget. The laptop-relayed image stream was stopped before any
+app cutover, and unchanged container/source metadata was verified. An attempted
+internal SSH route failed the existing trusted host-key check; it was not trusted
+or used. Its temporary forced-command key was removed and the original authorized
+keys restored byte-for-byte; the source private key and pin were deleted.
+
+Only specifically authenticated obsolete store app/tools images and unused build
+cache were retired, without force/prune. Current/immediate-predecessor app images,
+current tools, database/media/configuration, every backup and central platform/mail
+images were retained. The old1.7.4 image's only differences were the two already
+proven CRLF representations; no historical file or ledger was edited.
+
+An extra1GiB private swap file was added on Hubify after the original build/disk
+budget passed, preserving the existing swap. The original fstab and a capacity
+journal are root-only under`/var/backups/single-store/blu-build-capacity-20261115`.
+The resource gate passed and free disk remained7,180,648,448 bytes before final
+prebuild. Final factory images can therefore be built locally by the official
+Engine, then independently checked and supplied to the cutover as prepared
+images. This is an image-preparation stage, not an app/schema activation; the
+normal checksum/baseline/backup/migration/fence/recovery gates still follow.
