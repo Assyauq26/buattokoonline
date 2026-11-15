@@ -18,6 +18,18 @@ from update_service.native_forward import NativeForward
 from update_service.trust import Rejected
 
 class BluAdapterTests(unittest.TestCase):
+    def test_build_budget_is_checked_without_weakening_prepared_readiness(self):
+        from update_service.engine import Engine
+        engine=Engine(None,{})
+        with patch('pathlib.Path.read_text',return_value='MemTotal: 2000000 kB\nMemAvailable: 800000 kB\nSwapFree: 1300000 kB\n'),patch('os.cpu_count',return_value=2):
+            engine.resources()
+            with self.assertRaisesRegex(Rejected,'insufficient_build_resources'):engine.build_resources()
+        with patch.object(engine,'build_resources') as gate,patch('subprocess.run',return_value=types.SimpleNamespace(returncode=0)) as run:
+            engine.build(Path('/isolated-fixture'),'fixture:only','tools')
+            gate.assert_called_once()
+            args=run.call_args.args[0]
+            self.assertEqual(args[args.index('--memory')+1],'1792m')
+            self.assertEqual(args[args.index('--memory-swap')+1],'3072m')
     def setUp(self):
         self.manifest=json.loads(Path(os.environ['PUBLIC_V181_MANIFEST']).read_text())
         self.policy=dict(format=2,executor=blu.EXECUTOR,fromVersion='1.8.1',toVersion='1.8.2',

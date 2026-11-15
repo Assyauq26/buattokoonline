@@ -34,15 +34,27 @@ async function candidates(tx: Prisma.TransactionClient, a: PaymentEvidenceAttemp
 export async function reconcileBluSource(sourceId: string, actorId: string, now = new Date(), deadline = Date.now() + 10_000, manual = false) {
   requirePreview();
   await prisma.$transaction(tx => assertBluOperator(tx, actorId));
+  const savedCursor = await prisma.paymentEvidenceReview.findFirst({ where: { sourceId,
+    source: { storeScope: storeScope() }, action: "BLU_RECONCILE_CHECKPOINT" },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }], select: { reason: true } });
+  let cursor: { createdAt: string; id: string } | undefined;
+  try {
+    const value = JSON.parse(savedCursor?.reason || "null");
+    if (value && typeof value.id === "string" && value.id.length <= 100 &&
+      typeof value.createdAt === "string" && Number.isFinite(+new Date(value.createdAt))) cursor = value;
+  } catch { /* Invalid cursor cannot authorize payment; restart the bounded scan. */ }
   const attempts = await prisma.paymentEvidenceAttempt.findMany({ where: { sourceId,
     source: { storeScope: storeScope(), kind: "GMAIL_BANK", ...(manual ? {} : { enabled: true, automationActorId: actorId }) },
     claim: null, expiresAt: { gt: new Date(+now - 24 * 3600_000) },
-    payment: { method: BLU_CHECKOUT_METHOD, status: { in: ["PENDING_PAYMENT", "WAITING_VERIFICATION", "REJECTED", "EXPIRED"] } } },
+    payment: { method: BLU_CHECKOUT_METHOD, status: { in: ["PENDING_PAYMENT", "WAITING_VERIFICATION", "REJECTED", "EXPIRED"] } },
+    ...(cursor ? { OR: [{ createdAt: { gt: new Date(cursor.createdAt) } },
+      { createdAt: new Date(cursor.createdAt), id: { gt: cursor.id } }] } : {}) },
     orderBy: [{ createdAt: "asc" }, { id: "asc" }], take: 50 });
   let reviewed = 0;
+  let last: typeof attempts[number] | undefined;
   for (const a of attempts) {
     if (Date.now() >= deadline) break;
-    await prisma.$transaction(async tx => {
+    try { await prisma.$transaction(async tx => {
       await assertBluOperator(tx, actorId);
       await lockPaymentOrder(tx, a.paymentId);
       const s = await lockSource(tx, sourceId);
@@ -68,8 +80,20 @@ export async function reconcileBluSource(sourceId: string, actorId: string, now 
       if (!late) await tx.notification.create({ data: { userId: p.order.userId, type: "payment",
         title: "Notifikasi transfer ditemukan", body: `Pembayaran ${p.order.orderNumber} sedang diperiksa seller. Jangan transfer ulang.` } });
       reviewed++;
-    });
+    }); } catch (error) {
+      // A poisoned/ambiguous candidate must not starve later orders. Financial
+      // approval still fails closed; database/runtime failures stop the scan.
+      if (!(error instanceof HttpError) || error.status !== 409) throw error;
+    }
+    last = a;
   }
+  if (last || (!attempts.length && cursor)) await prisma.$transaction(async tx => {
+    await assertBluOperator(tx, actorId);
+    const s = await lockSource(tx, sourceId);
+    if (!manual && (!s.enabled || s.automationActorId !== actorId)) return;
+    await tx.paymentEvidenceReview.create({ data: { sourceId, action: "BLU_RECONCILE_CHECKPOINT",
+      reason: JSON.stringify(last ? { createdAt: last.createdAt.toISOString(), id: last.id } : null) } });
+  });
   return { reviewed, settled: 0 as const };
 }
 

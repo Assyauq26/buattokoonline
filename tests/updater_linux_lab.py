@@ -253,7 +253,7 @@ def context(case):
         yield root,cfg
 
 
-def run(case,recover=False):
+def run(case,recover=False,external_work_stopped=False):
     with context(case) as (root,cfg):
         controller=Controller(cfg)
         profile=json.loads((root/'blu-profile.json').read_text()) if (root/'blu-profile.json').exists() else {}
@@ -261,7 +261,7 @@ def run(case,recover=False):
         if recover:
             job=controller.state.jobs()[0]
             from update_service.reconcile import reconcile
-            reconcile(cfg,job['id'])
+            reconcile(cfg,job['id'],external_work_stopped)
             result=controller.state.jobs()[0]
             print(json.dumps({'reconciled':result['state']}));return
         admin=json.loads(core.sql('''SELECT row_to_json(u) FROM (SELECT u.id,u."sessionVersion" FROM "User" u JOIN "UserRole" ur ON ur."userId"=u.id JOIN "Role" r ON r.id=ur."roleId" WHERE u."isActive" AND r.name='Admin' LIMIT 1) u;'''))
@@ -298,8 +298,9 @@ def serve(case):
 if __name__=='__main__':
     parser=argparse.ArgumentParser();parser.add_argument('command',choices=['prepare','run','recover','serve']);parser.add_argument('--case',required=True)
     parser.add_argument('--blu-profile');parser.add_argument('--empty',action='store_true');parser.add_argument('--official-catalog',action='store_true')
+    parser.add_argument('--external-work-stopped',action='store_true')
     args=parser.parse_args()
     if os.geteuid()!=0 or not re.fullmatch('[a-f0-9]{8}',args.case):raise SystemExit('Explicit root disposable case required')
     if args.command=='prepare':prepare(args.case,args.empty,args.official_catalog,json.loads(Path(args.blu_profile).read_text()) if args.blu_profile else None)
     elif args.command=='serve':serve(args.case)
-    else:run(args.case,args.command=='recover')
+    else:run(args.case,args.command=='recover',args.external_work_stopped)

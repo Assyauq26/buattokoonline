@@ -141,7 +141,6 @@ class NativeForward:
         # Never claim safe durable payment replay for an unimplemented provider.
         require(env.get('PAYMENT_PROVIDER','manual')=='manual','payment_webhook_not_supported')
         self.baseline();core.healthy()
-        self.e.resources()
         persistent=int(core.sql("SELECT pg_database_size('store');"))
         persistent+=sum(p.stat().st_size for root in (core.DATA/'media',core.CONFIG) for p in root.rglob('*') if p.is_file())
         prepared=self.load()
@@ -152,6 +151,8 @@ class NativeForward:
                 image=prepared['candidate']['services'][name]['image']
                 identity=core.run(['docker','image','inspect','--format','{{.Id}}',image])
                 require(identity.startswith('sha256:') and (name!='app' or identity==prepared.get('image')),'prepared_image_changed')
+        if prepared:self.e.resources()
+        else:self.e.build_resources()
         require(shutil.disk_usage(core.ROOT).free >= (2 if prepared else 6)*1024**3+2*persistent,'insufficient_disk')
         require(self.carrier_idle(),'carrier_work_pending')
         hashes=proxy_hashes(self.config)

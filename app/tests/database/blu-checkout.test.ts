@@ -186,6 +186,17 @@ it("holds ambiguous notifications and refuses financial approval", async () => {
   await expect(approveBluManually(actor, approval(e.id, o.attempt.id))).rejects.toThrow();
   expect(await prisma.paymentEvidenceClaim.count({ where: { attemptId: o.attempt.id } })).toBe(0);
 });
+it("resumes a bounded reconciliation scan instead of starving the 51st order", async () => {
+  const s = await activeSource();
+  for (let i = 0; i < 50; i++) await order(s);
+  const o = await order(s), e = await evidence(s, o.total, new Date(+o.attempt.createdAt + 100));
+  await reconcileBluSource(s.id, actor, new Date(), Date.now() + 20000);
+  expect((await prisma.payment.findUniqueOrThrow({ where: { id: o.payment!.id } })).status).toBe("PENDING_PAYMENT");
+  await reconcileBluSource(s.id, actor, new Date(), Date.now() + 20000);
+  expect((await prisma.payment.findUniqueOrThrow({ where: { id: o.payment!.id } })).status).toBe("WAITING_VERIFICATION");
+  expect(await prisma.paymentEvidenceClaim.count({ where: { evidenceId: e.id } })).toBe(0);
+  expect(await prisma.paymentEvidenceReview.count({ where: { sourceId: s.id, action: "BLU_RECONCILE_CHECKPOINT" } })).toBe(2);
+});
 it("records manual findings idempotently without consuming evidence or changing money", async () => {
   const s = await activeSource(), o = await order(s), e = await evidence(s, o.total, new Date(+o.attempt.createdAt + 100));
   const input = { requestId: randomUUID(), evidenceId: e.id, decision: "REFUND_REQUIRED", reason: "Periksa pengembalian langsung di aplikasi bank." };
