@@ -168,6 +168,8 @@ export default async function PaymentPage({ params }: PaymentRouteProps) {
                 <Link href={`/orders/${order.id}`}>Lihat Status Pesanan</Link>
               </Button>
             </div>
+          ) : attempt ? (
+            <p className="rounded-xl bg-zinc-50 p-4 text-sm text-zinc-600">Menunggu notifikasi transfer blu. Jika dana telah masuk tetapi belum terdeteksi, hubungi seller untuk pemeriksaan mutasi. Jangan melakukan transfer ulang.</p>
           ) : (
             <div className="space-y-3">
               {lastRejected && (

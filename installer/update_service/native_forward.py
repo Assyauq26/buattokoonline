@@ -110,8 +110,13 @@ class NativeForward:
             require(baseline['files'].get(name)==digest,'local_customization')
         # Verify actual running source bytes, not just version environment variables.
         js="""const fs=require('fs'),c=require('crypto');let s='';process.stdin.on('data',x=>s+=x);process.stdin.on('end',()=>{const out={};for(const p of JSON.parse(s)){try{out[p]=c.createHash('sha256').update(fs.readFileSync('/app/'+p.slice(4))).digest('hex')}catch{out[p]=null}}console.log(JSON.stringify(out))});"""
-        observed=json.loads(core.dc(['exec','-T','app','node','-e',js],input=json.dumps(list(self.policy['baselineFiles'])).encode()))
-        require(observed==self.policy['baselineFiles'],'active_source_mismatch')
+        # Full signed file inventory above remains checked on the extracted
+        # baseline. The authenticated Dockerfile excludes tests/resources from
+        # both images; do not expect those files to appear in the container.
+        runtime={p:h for p,h in self.policy['baselineFiles'].items()
+            if not p.startswith(('app/tests/','app/resources/'))}
+        observed=json.loads(core.dc(['exec','-T','app','node','-e',js],input=json.dumps(list(runtime)).encode()))
+        require(observed==runtime,'active_source_mismatch')
         installed=core.read_json(core.CONFIG/'version.json')
         item=json.loads(core.run(['docker','inspect',core.dc(['ps','-q','app'])]))[0]
         env=dict(v.split('=',1) for v in item['Config']['Env'] if '=' in v)

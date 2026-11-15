@@ -162,6 +162,8 @@ it("unknown bank status becomes manual review, never automatic paid; retry settl
   expect(await prisma.paymentEvidenceClaim.count({ where: { attemptId: o.attempt.id } })).toBe(0);
   expect(await prisma.paymentEvidenceReview.count({ where: { attemptId: o.attempt.id, action: "BLU_CANDIDATE_REVIEW" } })).toBe(1);
   await expect(approvePayment(o.payment!.id, actor)).rejects.toThrow("Pemeriksaan Notifikasi");
+  await expect(submitConfirmation(buyer, o.id, { senderBank: "Synthetic", senderName: "Synthetic", amount: o.total,
+    transferDate: new Date(), proofPath: "/private/synthetic.png", proofMime: "image/png" })).rejects.toThrow("dibaca otomatis");
   await Promise.all([approveBluManually(actor, approval(e.id, o.attempt.id)), approveBluManually(actor, approval(e.id, o.attempt.id))]);
   expect(await prisma.paymentEvidenceClaim.count({ where: { attemptId: o.attempt.id } })).toBe(1);
   expect(await prisma.inventory.findUniqueOrThrow({ where: { variantId: o.variantId } })).toMatchObject({ onHand: 19, reserved: 0 });

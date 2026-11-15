@@ -138,6 +138,12 @@ class Native(prior.Native):
             'migrations':self.expected_ledger(j),'artifact_sha256':self.digest,'image_digest':j['image'],
             'deployment':self.deployment_name,'previous_source_sha':self.base_sha,'channel':cfg['channel']})
 
+    def verify_active(self,j):
+        super().verify_active(j)
+        check(schema_hash()==AFTER_SCHEMA,'active schema33 drift')
+        if not j.get('traffic_may_have_opened'):
+            check(core.sql('SELECT count(*) FROM "PaymentEvidenceSource" WHERE enabled;')=='0','unexpected account activation')
+
     def rollback_before_migration(self,j):
         check(not j.get('migration_started') and self.database_state(j)=='old','unsafe app rollback')
         return super().rollback_before_migration(j)

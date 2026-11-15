@@ -1,5 +1,9 @@
 # Payment continuation — 2026-11-15
 
+Historical checkpoint at df73c23. The continuing v1.8.2 implementation and current
+release gates are tracked in [blu-v182-release.md](blu-v182-release.md); statements
+below that checkout/worker/migration33 are unimplemented describe that old commit.
+
 ## Verified baseline
 
 PR56 remains draft, based on main e885ca4. Live Hubify is the private 1.8.1

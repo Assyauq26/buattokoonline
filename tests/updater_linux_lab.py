@@ -239,6 +239,17 @@ def context(case):
             ('update_service.engine.Engine.backup',backup)]:stack.enter_context(patch(name,value))
         if not cfg.get('officialCatalog'):
             for name,value in [('update_service.server.build_opener',lambda *a:Transport()),('update_service.policy_feed.fresh',fresh),('update_service.policy_feed.current_catalog',catalog),('update_service.native_forward.fresh',fresh)]:stack.enter_context(patch(name,value))
+        if (root/'blu-profile.json').exists():
+            # Unpublished candidate transport only; all production package and
+            # policy checks still run against the exact signed size and digest.
+            profile=json.loads((root/'blu-profile.json').read_text())
+            def fixture_download(url,path,size,digest,progress=lambda *a:None):
+                release=catalog(cfg,State(cfg['database'],cfg['installation']))['releases'][0]
+                raw=Path(profile['archive']).read_bytes()
+                if (url!=release['url'] or digest!=profile['digest'] or len(raw)!=size
+                    or hashlib.sha256(raw).hexdigest()!=digest):raise RuntimeError('Lab artifact transport mismatch')
+                Path(path).write_bytes(raw);progress(size,size)
+            stack.enter_context(patch('update_service.engine.download',fixture_download))
         yield root,cfg
 
 

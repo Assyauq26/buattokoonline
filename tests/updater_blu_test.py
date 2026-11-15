@@ -8,6 +8,7 @@ import sys
 import types
 import unittest
 from unittest.mock import patch
+from unittest.mock import Mock
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'installer'))
 if os.name!='posix':sys.modules.setdefault('fcntl',types.SimpleNamespace(LOCK_EX=1,LOCK_NB=2,flock=lambda *a:None))
@@ -58,5 +59,22 @@ class BluAdapterTests(unittest.TestCase):
                 p.write_text(json.dumps({'phase':phase}))
                 with self.assertRaisesRegex(Rejected,'operator_cutover_in_progress'):operator_cutover_guard()
             p.write_text(json.dumps({'phase':'complete'}));operator_cutover_guard()
+    def test_full_baseline_still_authenticates_excluded_source_files(self):
+        driver=object.__new__(blu.BluCheckoutForward)
+        driver.e=Mock();driver.config={'baseline':'fixture'};driver.policy=self.policy
+        expected=self.policy['baselineFiles']
+        runtime={p:h for p,h in expected.items() if not p.startswith(('app/tests/','app/resources/'))}
+        installed={'version':'1.8.1','source_sha':BASE_SOURCE}
+        env=['STORE_BUILD_SHA='+BASE_SOURCE,'STORE_INSTALLED_VERSION=1.8.1','APP_ORIGIN=https://fixture.invalid','STORE_INSTALLATION_ID=fixture','STORE_UPDATER_ENABLED=1']
+        driver.config.update(origin='https://fixture.invalid',installation='fixture')
+        def dc(args,input=None):
+            if args[0]=='ps':return 'fixture-container'
+            self.assertEqual(set(json.loads(input)),set(runtime));return json.dumps(runtime)
+        with patch('core.read_json',side_effect=[{'files':expected},installed]),patch('core.dc',side_effect=dc),patch('core.run',return_value=json.dumps([{'Config':{'Env':env}}])):
+            driver.baseline()
+        excluded=next(p for p in expected if p.startswith('app/tests/'))
+        with patch('core.read_json',return_value={'files':{**expected,excluded:'f'*64}}),patch('core.dc') as calls:
+            with self.assertRaisesRegex(Rejected,'local_customization'):driver.baseline()
+            calls.assert_not_called()
 
 if __name__=='__main__':unittest.main()

@@ -42,6 +42,7 @@ export async function submitConfirmation(
     if (!order?.payment) throw new HttpError("Order tidak ditemukan", 404);
     const payment = order.payment;
     if (payment.method === BLU_TEST_METHOD) throw new HttpError("Pesanan uji blu tidak menerima bukti atau pelunasan. Gunakan halaman Uji transfer blu.", 409);
+    if (payment.method === BLU_CHECKOUT_METHOD) throw new HttpError("Notifikasi blu dibaca otomatis. Hubungi seller bila transfer belum terdeteksi; jangan mengunggah bukti melalui alur transfer manual.", 409);
     if (
       order.status !== "PENDING_PAYMENT" ||
       (payment.status !== "REJECTED" &&

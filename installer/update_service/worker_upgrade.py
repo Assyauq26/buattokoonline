@@ -76,11 +76,16 @@ def installed_revision(source, prior, target):
     if hashlib.sha256(original).hexdigest() != expected.get('update_service/engine.py') or original.count(OLD_GUARD) != 1:
         raise Rejected('worker_source_bytes')
     reviewed = original.replace(OLD_GUARD, PreparedAuthNative.next_guard)
+    sixth = b"'hubify-blu-auth-retry-cutover.json','hubify-blu-checkout-cutover.json')"
+    reviewed_six = original.replace(OLD_GUARD,PreparedAuthNative.next_guard.replace(b"'hubify-blu-auth-retry-cutover.json')",sixth))
+    six = actual.get('update_service/engine.py') == hashlib.sha256(reviewed_six).hexdigest()
+    if six:reviewed=reviewed_six
     adopted = {**expected, 'update_service/engine.py':hashlib.sha256(reviewed).hexdigest()}
     if actual != adopted or (Path(target)/'update_service/engine.py').read_bytes() != reviewed:
         raise Rejected('worker_source_bytes')
     names = ('hubify-promotions-cutover.json','hubify-payment-evidence-cutover.json',
         'hubify-payment-test-cutover.json','hubify-blu-auth-cutover.json','hubify-blu-auth-retry-cutover.json')
+    if six:names=(*names,'hubify-blu-checkout-cutover.json')
     receipts = {}
     for name in names:
         path = core.CONFIG/name
@@ -88,9 +93,16 @@ def installed_revision(source, prior, target):
         if core.read_json(path).get('phase') not in ('complete','rolled_back'):
             raise Rejected('operator_cutover_in_progress')
         receipts[name] = hashlib.sha256(path.read_bytes()).hexdigest()
-    latest = core.read_json(core.CONFIG/names[-1])
+    latest = core.read_json(core.CONFIG/'hubify-blu-auth-retry-cutover.json')
     if latest.get('phase') != 'complete' or latest.get('sha') != '8e65f4a74eb7b597afa27e87f28e3a5d141da1c2':
         raise Rejected('worker_source_bytes')
+    if six:
+        completed=core.read_json(core.CONFIG/names[-1]);active=core.read_json(core.CONFIG/'version.json')
+        if (completed.get('phase')!='complete' or completed.get('from',{}).get('source_sha')!=latest['sha']
+            or completed.get('manifest',{}).get('version')!='1.8.2'
+            or completed.get('manifest',{}).get('source_sha')!=completed.get('sha')
+            or active.get('source_sha')!=completed.get('sha') or active.get('artifact_sha256')!=completed.get('digest')):
+            raise Rejected('worker_source_bytes')
     return {'kind':'completed-hubify-additive-guards-v1', 'originalSource':sha, 'receipts':receipts,
         'originalEngine':expected['update_service/engine.py'], 'runningEngine':adopted['update_service/engine.py']}
 

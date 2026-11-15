@@ -44,6 +44,16 @@ class WorkerUpgradeTests(unittest.TestCase):
                 proof=installed_revision(root,prior,target)
                 self.assertEqual(proof['kind'],'completed-hubify-additive-guards-v1')
                 self.assertEqual(len(proof['receipts']),5)
+                from blu_checkout_cutover import Native as BluNative
+                engine.write_bytes(original.replace(OLD_GUARD,BluNative.next_guard))
+                sixth={'phase':'complete','from':{'source_sha':'8e65f4a74eb7b597afa27e87f28e3a5d141da1c2'},
+                    'sha':'c'*40,'digest':'d'*64,'manifest':{'version':'1.8.2','source_sha':'c'*40}}
+                (config/'hubify-blu-checkout-cutover.json').write_text(json.dumps(sixth))
+                (config/'version.json').write_text(json.dumps({'source_sha':'c'*40,'artifact_sha256':'d'*64}))
+                self.assertEqual(len(installed_revision(root,prior,target)['receipts']),6)
+                (config/'version.json').write_text(json.dumps({'source_sha':'wrong'}))
+                with self.assertRaisesRegex(Rejected,'worker_source_bytes'):installed_revision(root,prior,target)
+                engine.write_bytes(current)
                 (config/names[0]).write_text('{"phase":"recovery_required"}')
                 with self.assertRaisesRegex(Rejected,'operator_cutover_in_progress'):installed_revision(root,prior,target)
                 (config/names[0]).write_text('{"phase":"complete"}')

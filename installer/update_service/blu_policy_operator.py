@@ -15,7 +15,7 @@ def prepare(old,new,sha,digest,installations,sequence,now=None):
     policy=dict(format=2,repository=core.REPO,id='canonical-v181-to-v182-blu',sequence=sequence,
         issuedAt=now,expiresAt=now+86400,fromVersion='1.8.1',toVersion='1.8.2',fromSourceSha=BASE_SOURCE,
         sourceSha=sha,artifactDigest=digest,baselineAppTree=BASE_TREE,baselineSchemaHash=BASE_SCHEMA,
-        baselineFiles={p:package.digest(files[p]) for p in sorted(package.runtime_paths(files))},
+        baselineFiles={p:package.digest(files[p]) for p in sorted(files) if p.startswith('app/')},
         minimumWorker=3,executor=EXECUTOR,failureStrategy='forward-only-after-migration',
         beforeMigrations=baseline['migrations'],afterMigrations=target['migrations'],installations=installations)
     reviewed_policy(policy)

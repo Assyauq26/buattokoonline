@@ -52,6 +52,7 @@ try {
     await page.getByRole('heading', { name: 'Transfer blu · nominal harus tepat' }).waitFor();
     assert.equal(await page.getByRole('button', { name: 'Salin nominal', exact: true }).count(), 1);
     assert.equal(await page.getByRole('button', { name: 'Salin rekening', exact: true }).count(), 1);
+    assert.equal(await page.getByRole('button', { name: 'Kirim Konfirmasi', exact: true }).count(), 0);
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
     await page.screenshot({ path: resolve(out, `blu-instructions-${viewport.width}.png`), fullPage: true });
     checks.push(`${viewport.width}: owned blu payment has exact nominal, countdown and copy actions`);
