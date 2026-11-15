@@ -97,3 +97,32 @@ Review found and corrected a QRIS checkout bank-ID requirement, clock-based blu
 opt-in classification, token loss risk after refresh rotation/profile outage and
 legacy UI copy. New blu attempts carry an explicit immutable policy receipt in
 the order transaction; old attempts keep their review-based behavior.
+
+## Linux gate evidence before merge
+
+Dedicated QA case `/opt/updater-lab/b1830001`, source
+15a957eaa0e5a628fac0d76f7fe2229526ed123a, candidate archive
+09ff3549ebf1e95b4c9feb52a1f2ceb2df08fec42c19add212204ca495128319.
+This is a rehearsal artifact, not the final published release identity.
+
+- Factory baseline came from unchanged public v1.8.2, with every runtime source
+  byte authenticated before reusing its baseline images. The existing QA shop
+  was not used as a relabeled baseline or migrated for this case.
+- Actual official Controller/Engine/PaymentLiveForward upgraded33→34 under
+  isolated Docker networks. Backup was restored into scratch PostgreSQL.
+- SIGKILL injected after committed `migration_done` left the write fence and
+  durable journal intact. Official reconcile succeeded without replaying SQL.
+- All33 old ledger rows and all87 old table projections, including synthetic
+  paid/pending orders, price snapshots, inventory and coupon, remained unchanged.
+- Actual systemd timer drain/resume passed; a subsequent app-container restart
+  preserved the same data. Final schema matched b88c7c76…a551a91.
+-11 exact-edge tests and21 shared failure/lock/recovery tests passed on Linux.
+- The catalog-only continuation passed actual Ed25519 signing/authentication,
+  renewal and wrong-source/digest/tamper denials with disposable keys. No production
+  key, real bank/carrier transaction or public catalog was used in this rehearsal.
+
+QA receipts: `upgrade-proof.json` in the case and
+`/opt/updater-lab/payments-catalog-audit/verification.json`. The final merged
+artifact must be repackaged and matched to the unchanged tested app/installer
+trees before Hubify apply. Production deployment and publication remain separate
+gates recorded in their root-only journals and final release report.
