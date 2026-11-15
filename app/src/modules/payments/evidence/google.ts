@@ -101,11 +101,11 @@ export type GoogleTokens = {
   refresh: string;
   expiresAt: number;
 };
-async function tokenRequest(params: URLSearchParams) {
+async function tokenRequest(params: URLSearchParams, signal?: AbortSignal) {
   const response = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
     body: params,
-    signal: AbortSignal.timeout(10_000),
+    signal: AbortSignal.any([AbortSignal.timeout(10_000), ...(signal ? [signal] : [])]),
     redirect: "error",
     cache: "no-store",
   });
@@ -198,6 +198,7 @@ export async function completeGoogleOAuth(
           generation: { increment: 1 },
           health: "CONNECTED_PARSER_BLOCKED",
           enabled: false,
+          automationActorId: null,
           leaseToken: null,
           leaseUntil: null,
           cursor: null,
@@ -247,6 +248,7 @@ export async function completeGoogleOAuth(
 }
 export async function refreshGoogle(
   tokens: GoogleTokens,
+  signal?: AbortSignal,
 ): Promise<GoogleTokens> {
   if (tokens.expiresAt > Date.now() + 60_000) return tokens;
   const cfg = config();
@@ -257,6 +259,7 @@ export async function refreshGoogle(
       refresh_token: tokens.refresh,
       grant_type: "refresh_token",
     }),
+    signal,
   );
   return {
     access: next.access_token,
@@ -307,6 +310,7 @@ export async function listGmailMessages(
   since: Date,
   pageToken?: string,
   bluReview = false,
+  signal?: AbortSignal,
 ) {
   const url = new URL(
     "https://gmail.googleapis.com/gmail/v1/users/me/messages",
@@ -318,7 +322,7 @@ export async function listGmailMessages(
   }).toString();
   const response = await fetch(url, {
     headers: { Authorization: `Bearer ${access}` },
-    signal: AbortSignal.timeout(10_000),
+    signal: AbortSignal.any([AbortSignal.timeout(10_000), ...(signal ? [signal] : [])]),
     redirect: "error",
     cache: "no-store",
   });
@@ -347,7 +351,7 @@ export async function listGmailMessages(
 
 /** Read-only, fixed-origin raw retrieval. Gmail IDs identify mailbox messages,
  * never bank transfers. Fetched Authentication-Results is still not trusted. */
-export async function getGmailRawMessage(access: string, id: string) {
+export async function getGmailRawMessage(access: string, id: string, signal?: AbortSignal) {
   if (!/^[A-Za-z0-9_-]{1,256}$/.test(id))
     throw new HttpError("Identitas pesan Gmail tidak valid", 422);
   const url = new URL(
@@ -356,7 +360,7 @@ export async function getGmailRawMessage(access: string, id: string) {
   url.searchParams.set("format", "raw");
   const response = await fetch(url, {
     headers: { Authorization: `Bearer ${access}` },
-    signal: AbortSignal.timeout(10_000),
+    signal: AbortSignal.any([AbortSignal.timeout(10_000), ...(signal ? [signal] : [])]),
     redirect: "error",
     cache: "no-store",
   });

@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { previewEnabled } from "@/modules/payments/evidence/policy";
 import { storeScope } from "@/modules/payments/evidence/repository";
 import { PaymentEvidenceSettings } from "@/components/admin/payment-evidence-settings";
+import { bluCheckoutEnabled } from "@/modules/payments/evidence/blu-checkout";
 
 export const dynamic = "force-dynamic";
 export default async function Page({
@@ -33,6 +34,7 @@ export default async function Page({
             health: true,
             lastCheckedAt: true,
             encryptedSecret: true,
+            enabled: true,
           },
           orderBy: { createdAt: "desc" },
           take: 30,
@@ -62,7 +64,7 @@ export default async function Page({
       </Link>
       <header>
         <span className="mb-3 inline-block rounded-full bg-zinc-100 px-3 py-1 text-xs font-medium">
-          Belum tersedia di checkout
+          {gopay ? "Koneksi GoPay belum siap" : "Aktifkan per rekening setelah terhubung"}
         </span>
         <h1>
           {gopay ? "QRIS GoPay Merchant" : "Notifikasi bank melalui Gmail"}
@@ -81,7 +83,7 @@ export default async function Page({
         <p className="text-sm leading-relaxed text-zinc-600">
           {gopay
             ? "Integrasi GoPay ini bukan API pembayaran resmi dan dapat berubah atau berhenti bekerja. Login, OTP, dan refresh sesi belum tervalidasi. Jangan masukkan password, OTP, cookie, atau token merchant ke formulir ini."
-            : "Google OAuth menggunakan izin baca isi Gmail, yang mencakup mailbox secara luas. Filter notifikasi tidak membatasi izin tersebut. Gunakan mailbox khusus notifikasi. Belum ada parser bank yang dinyatakan siap untuk penggunaan nyata."}
+            : "Notifikasi blu dibaca melalui izin Gmail yang mencakup mailbox secara luas. Gunakan mailbox khusus notifikasi. Format blu dan tanda tangan email didukung; bank lain belum didukung. Status bank yang belum pasti tetap memerlukan pemeriksaan seller."}
         </p>
         {!gopay && (
           <p className="text-sm leading-relaxed text-zinc-600">
@@ -112,6 +114,7 @@ export default async function Page({
             label: s.label,
             health: s.health,
             connected: !!s.encryptedSecret,
+            enabled: s.enabled,
             lastCheckedAt: s.lastCheckedAt?.toISOString() || null,
           }))}
           banks={banks.map((b) => ({
@@ -120,6 +123,7 @@ export default async function Page({
           }))}
           canManage={user.permissions.includes(PERMISSIONS.BANK_MANAGE)}
           oauthEnabled={oauthEnabled}
+          bluCheckoutAvailable={bluCheckoutEnabled()}
         />
       ) : (
         <section className="settings-card">

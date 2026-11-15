@@ -246,6 +246,7 @@ export default async function OrderDetailPage({
               <span>- {formatIDR(order.discount)}</span>
             </div>
           )}
+          {order.payment?.evidenceAttempt && <div className="flex justify-between"><span className="text-ink-soft">Kode unik transfer</span><span>{formatIDR(order.payment.evidenceAttempt.uniqueCode)}</span></div>}
           <div className="flex justify-between border-t border-line pt-2 font-display text-base font-black">
             <span>Total pembayaran</span>
             <span>{formatIDR(order.total)}</span>

@@ -21,6 +21,7 @@ import { addressSchema, type SelectedLocation } from "@/modules/regions/region.v
 import { validateLocation } from "@/modules/regions/region.service";
 import type { ShippingInquiry, ShippingRate } from "@/infrastructure/shipping/contracts/shipping-provider";
 import { issueShippingQuote, shippingFingerprint, verifyShippingQuote } from "./shipping-quote";
+import { BLU_CHECKOUT_METHOD, prepareBluCheckout } from "@/modules/payments/evidence/blu-checkout";
 
 export interface AddressInput {
   recipientName: string;
@@ -126,6 +127,8 @@ export async function createOrder(
     shipping: ShippingChoice;
     couponCode?: string;
     bankAccountId: string;
+    paymentEvidenceSourceId?: string;
+    codeConsent?: boolean;
     note?: string;
     expectedLines?: CheckoutLines;
     expectedQuote?: CheckoutQuoteConfirmation;
@@ -147,7 +150,7 @@ export async function createOrder(
   // Persist idempotency through the existing Order PK and transactional audit metadata.
   if (input.intentId) await readCheckoutIntent(input.intentId, userId, prisma, true);
   const orderId = input.intentId ? `buy_${hash(`${userId}:${input.intentId}`).slice(0, 40)}` : input.requestId ? `chk_${hash(`${userId}:${input.requestId}`).slice(0, 40)}` : undefined;
-  const requestDigest = hash(JSON.stringify({ ...(input.intentId ? { intentId: input.intentId } : {}), address: Object.entries(input.address).sort(([a], [b]) => a.localeCompare(b)), shipping: { courier: input.shipping.courier, service: input.shipping.service }, bankAccountId: input.bankAccountId, couponCode: input.couponCode?.toUpperCase() || null, note: input.note || null, lines: checkoutSignature(confirmation.data), expectedQuote: acceptedQuote?.success ? acceptedQuote.data : null }));
+  const requestDigest = hash(JSON.stringify({ ...(input.intentId ? { intentId: input.intentId } : {}), ...(input.paymentEvidenceSourceId ? { paymentEvidenceSourceId: input.paymentEvidenceSourceId, codeConsent: input.codeConsent === true } : {}), address: Object.entries(input.address).sort(([a], [b]) => a.localeCompare(b)), shipping: { courier: input.shipping.courier, service: input.shipping.service }, bankAccountId: input.bankAccountId, couponCode: input.couponCode?.toUpperCase() || null, note: input.note || null, lines: checkoutSignature(confirmation.data), expectedQuote: acceptedQuote?.success ? acceptedQuote.data : null }));
   const replay = async (tx: Prisma.TransactionClient) => {
     if (!orderId) return null;
     const existing = await tx.order.findUnique({ where: { id: orderId, userId } });
@@ -263,6 +266,10 @@ export async function createOrder(
       acceptedQuote.data.total !== total
     )) throw new HttpError("Harga, ongkir, atau kupon berubah. Muat ulang checkout dan konfirmasi ulang total pesanan.", 409);
     if (![current.subtotal, shippingCost, discount, total].every(n => Number.isSafeInteger(n) && n >= 0 && n <= 2_147_483_647)) throw new HttpError("Total pesanan tidak valid", 422);
+    const blu = input.paymentEvidenceSourceId
+      ? await prepareBluCheckout(tx, input.paymentEvidenceSourceId, bank.id, total, input.codeConsent === true)
+      : null;
+    const payableTotal = blu?.payable ?? total;
     const created = await tx.order.create({
       data: {
         ...(orderId ? { id: orderId } : {}),
@@ -273,10 +280,10 @@ export async function createOrder(
         subtotal: current.subtotal,
         shippingCost,
         discount,
-        total,
+        total: payableTotal,
         couponCode: code,
         note: input.note,
-        expiresAt,
+        expiresAt: blu?.expiresAt ?? expiresAt,
         items: {
           create: current.lines.map((l) => ({
             variantId: l.variantId,
@@ -315,16 +322,17 @@ export async function createOrder(
     if (savedAddress) await tx.customerAddress.update({ where: { id: savedAddress.id }, data: { isDefault: true } });
     else await tx.customerAddress.create({ data: { customerId: customer.id, ...canonicalAddress, isDefault: true } });
 
-    await tx.payment.create({
+    const payment = await tx.payment.create({
       data: {
         orderId: created.id,
         provider: "manual",
-        method: "bank_transfer",
-        amount: total,
+        method: blu ? BLU_CHECKOUT_METHOD : "bank_transfer",
+        amount: payableTotal,
         status: "PENDING_PAYMENT",
         bankAccountId: bank.id,
       },
     });
+    if (blu) await tx.paymentEvidenceAttempt.create({ data: { ...blu, paymentId: payment.id } });
 
     if (input.intentId) {
       await tx.checkoutIntent.update({ where: { id: input.intentId }, data: { consumedAt: new Date(), orderId: created.id } });
@@ -334,7 +342,7 @@ export async function createOrder(
     }
 
     await writeAudit(
-      { userId, action: "order.create", entity: "Order", entityId: created.id, meta: { orderNumber, total, requestDigest } },
+      { userId, action: "order.create", entity: "Order", entityId: created.id, meta: { orderNumber, total: payableTotal, requestDigest } },
       tx,
     );
     return { order: created, created: true };
@@ -353,7 +361,7 @@ export async function createOrder(
       accountHolder: bank.accountHolder,
       displayName: bank.displayName,
     },
-    expiresAt,
+    expiresAt: order.expiresAt ?? expiresAt,
   });
 
   return order;

@@ -9,6 +9,7 @@ interface Source {
   label: string;
   health: string;
   connected: boolean;
+  enabled?: boolean;
   lastCheckedAt: string | null;
 }
 const healthLabels: Record<string, string> = {
@@ -25,12 +26,14 @@ export function PaymentEvidenceSettings({
   banks,
   canManage,
   oauthEnabled,
+  bluCheckoutAvailable = false,
 }: {
   kind: "GOPAY_QRIS" | "GMAIL_BANK";
   sources: Source[];
   banks: Array<{ id: string; label: string }>;
   canManage: boolean;
   oauthEnabled: boolean;
+  bluCheckoutAvailable?: boolean;
 }) {
   const router = useRouter();
   const [pending, setPending] = useState(false),
@@ -58,7 +61,9 @@ export function PaymentEvidenceSettings({
         window.location.assign(result.url);
         return;
       }
-      if (result.reviewOnly) {
+      if (result.reconciled) {
+        setMessage(`${result.reviewed} kandidat diperbarui. Belum ada pembayaran yang dinyatakan lunas.`); router.refresh();
+      } else if (result.reviewOnly) {
         setMessage(
           `${result.count} email diperiksa. ${result.limited ? "Masih ada halaman berikutnya; baca lagi setelah satu menit." : "Pembacaan selesai."} Semua hasil perlu pemeriksaan manual; pesanan tidak dilunasi.`,
         );
@@ -107,6 +112,7 @@ export function PaymentEvidenceSettings({
         {message ||
           (pending
             ? "Memproses…"
+            : sources.some(s => s.enabled) ? "Pembacaan otomatis dan checkout aktif untuk rekening yang dipilih. Hasil tidak pasti tetap diperiksa seller."
             : "Konfigurasi draf tidak mengaktifkan pembayaran di checkout.")}
       </p>
       {sources.map((s) => (
@@ -114,7 +120,22 @@ export function PaymentEvidenceSettings({
           <h2 className="!mb-0">{s.label}</h2>
           <p className="text-sm">
             {healthLabels[s.health] || "Perlu pemeriksaan operator"}
+            {s.enabled ? " · Pembacaan otomatis aktif" : " · Checkout nonaktif"}
           </p>
+          {canManage && kind === "GMAIL_BANK" && (
+            <form className="space-y-3 rounded-xl bg-zinc-50 p-3" onSubmit={event => {
+              event.preventDefault(); void perform({ action: "set-blu-enabled", sourceId: s.id, enabled: !s.enabled });
+            }}>
+              {!s.enabled && <label className="flex items-start gap-3 text-sm">
+                <input type="checkbox" required className="mt-1 size-4 shrink-0 accent-black" disabled={pending || !bluCheckoutAvailable} />
+                <span>Aktifkan rekening ini untuk checkout berkode unik dan pembacaan Gmail otomatis. Saya akan memeriksa mutasi asli sebelum menyetujui hasil yang belum pasti.</span>
+              </label>}
+              <button className={button + " bg-black !text-white"} disabled={pending || (!s.enabled && (!bluCheckoutAvailable || !s.connected))}>
+                {s.enabled ? "Nonaktifkan checkout blu" : "Aktifkan checkout blu"}
+              </button>
+              {!bluCheckoutAvailable && !s.enabled && <p className="text-xs text-zinc-600">Operator belum membuka checkout blu untuk instalasi ini. Gmail tetap dapat dibaca untuk pemeriksaan.</p>}
+            </form>
+          )}
           <p className="text-xs text-zinc-500">
             Pemeriksaan terakhir:{" "}
             {s.lastCheckedAt
@@ -139,6 +160,8 @@ export function PaymentEvidenceSettings({
                   {s.connected ? "Hubungkan ulang Google" : "Hubungkan Google"}
                 </button>
               )}
+              {kind === "GMAIL_BANK" && <button type="button" className={button} disabled={pending}
+                onClick={() => void perform({ action: "recheck-blu", sourceId: s.id })}>Periksa kandidat tersimpan</button>}
               {s.connected && (
                 <>
                   {kind === "GMAIL_BANK" && (

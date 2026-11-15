@@ -26,7 +26,8 @@ try {
   const admin = await db.user.create({ data: { name: 'Fixture seller', email: `${run}@example.test`, passwordHash: 'disabled-browser-fixture', roles: { create: { roleId: role.id } } } });
   const source = await db.paymentEvidenceSource.create({ data: { storeScope: installation, kind: 'GMAIL_BANK', label: 'Notifikasi rekening toko', accountRef: 'synthetic-incoming-' + run, encryptedSecret: 'synthetic-ui-fixture-never-used-for-network', health: 'CONNECTED_PARSER_BLOCKED' } });
   const windowStart = new Date(), expiresAt = new Date(+windowStart + 5 * 60000), orderNumber = 'PAYMENT-WINDOW-' + run.slice(0,8);
-  const payment = await db.payment.create({ data: { amount: 45341, order: { create: { orderNumber, userId: admin.id, subtotal: 45000, total: 45341, expiresAt } } } });
+  const bank = await db.bankAccount.create({ data: { bankName: 'blu synthetic', displayName: 'Synthetic bank', accountHolder: 'Synthetic recipient', accountNumber: '0000000000' } });
+  const payment = await db.payment.create({ data: { amount: 45341, method: 'blu_email_transfer', bankAccount: { connect: { id: bank.id } }, order: { create: { orderNumber, userId: admin.id, subtotal: 45000, total: 45341, expiresAt } } } });
   await db.paymentEvidenceAttempt.create({ data: { sourceId: source.id, paymentId: payment.id, baseAmount: 45000, uniqueCode: 341, payable: 45341, expiresAt, retainUntil: new Date(+expiresAt + 7*86400000) } });
   const evidence = await db.incomingPaymentEvidence.create({ data: { sourceId: source.id, externalId: 'synthetic-1', fingerprint: 'synthetic-only', amount: 45341, occurredAt: new Date(+windowStart + 30000), currency: 'IDR', direction: 'CREDIT', providerStatus: 'UNKNOWN', accountRef: source.accountRef, trusted: false, reason: 'MISSING_STABLE_TRANSACTION_ID' } });
   const log = createWriteStream(resolve(out, 'server.log'));
@@ -47,6 +48,13 @@ try {
   page.on('pageerror', error => errors.push(error.message));
   for (const viewport of [{ width: 390, height: 844 }, { width: 1440, height: 1000 }]) {
     await page.setViewportSize(viewport);
+    await page.goto(origin + `/checkout/payment/${payment.orderId}`);
+    await page.getByRole('heading', { name: 'Transfer blu · nominal harus tepat' }).waitFor();
+    assert.equal(await page.getByRole('button', { name: 'Salin nominal', exact: true }).count(), 1);
+    assert.equal(await page.getByRole('button', { name: 'Salin rekening', exact: true }).count(), 1);
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
+    await page.screenshot({ path: resolve(out, `blu-instructions-${viewport.width}.png`), fullPage: true });
+    checks.push(`${viewport.width}: owned blu payment has exact nominal, countdown and copy actions`);
     for (const [path, heading, name] of [
       ['/admin/settings/payment-methods', 'Metode Pembayaran', 'methods'],
       ['/admin/settings/payment-methods/gopay-qris', 'QRIS GoPay Merchant', 'gopay'],
@@ -90,6 +98,12 @@ try {
   const unauth = await browser.newContext();
   const denied = await unauth.request.post(origin + '/api/v1/admin/payment-evidence', { headers: { Origin: origin }, data: { action: 'disconnect', sourceId: source.id } });
   assert.equal(denied.status(), 401); checks.push('Anonymous mutation rejected');
+  assert.equal((await unauth.request.get(origin + `/api/v1/orders/${payment.orderId}/payment-state`)).status(), 401);
+  const state = await context.request.get(origin + `/api/v1/orders/${payment.orderId}/payment-state`);
+  assert.equal(state.status(), 200); assert.equal(state.headers()['cache-control'], 'private, no-store');
+  assert.equal((await state.json()).data.paymentStatus, 'PENDING_PAYMENT');
+  assert.equal((await context.request.post(origin + '/api/internal/cron/payment-evidence')).status(), 401);
+  checks.push('Owned status is private; anonymous status and unauthenticated cron are rejected');
   const otherAdmin = await db.user.create({ data: { name: 'Unenrolled admin fixture', email: `${randomUUID()}@example.test`, passwordHash: 'disabled', roles: { create: { roleId: role.id } } } });
   const otherToken = await new SignJWT({ email: otherAdmin.email, ver: 0 }).setProtectedHeader({ alg: 'HS256' }).setSubject(otherAdmin.id).setJti(randomUUID()).setIssuedAt().setIssuer(origin).setAudience('storefront').setExpirationTime('30m').sign(new TextEncoder().encode(secret));
   await unauth.addCookies([{ name: 'store_session', value: otherToken, url: origin, httpOnly: true, sameSite: 'Lax' }]);

@@ -1,7 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { HttpError } from "@/lib/response";
 import { canTransitionPayment } from "@/modules/payments/domain/state-machine";
-import { commitSale } from "@/modules/inventory/inventory.service";
+import { settlePaymentInTransaction } from "./payment-settlement";
+import { BLU_CHECKOUT_METHOD } from "./evidence/blu-checkout";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import {
   assertStaffPermission,
@@ -132,6 +133,7 @@ export async function approvePayment(paymentId: string, adminId: string) {
     });
     if (!payment) throw new HttpError("Pembayaran tidak ditemukan", 404);
     if (payment.method === BLU_TEST_METHOD) throw new HttpError("Pesanan uji blu tidak menerima bukti atau pelunasan. Gunakan halaman Uji transfer blu.", 409);
+    if (payment.method === BLU_CHECKOUT_METHOD) throw new HttpError("Periksa dan setujui bukti blu melalui halaman Pemeriksaan Notifikasi Bank", 409);
     if (["CANCELLED", "EXPIRED", "REFUNDED"].includes(payment.order.status))
       throw new HttpError("Order tidak menerima approval pembayaran", 409);
     if (payment.status === "PAID") {
@@ -173,53 +175,7 @@ export async function approvePayment(paymentId: string, adminId: string) {
         },
       });
     }
-    await tx.payment.update({
-      where: { id: paymentId },
-      data: { status: "PAID" },
-    });
-
-    // Convert reserved stock into a committed sale.
-    for (const item of payment.order.items) {
-      await commitSale(
-        tx,
-        item.variantId,
-        item.quantity,
-        payment.order.orderNumber,
-      );
-    }
-
-    await tx.order.update({
-      where: { id: payment.orderId },
-      data: { status: "PAID", paymentStatus: "PAID" },
-    });
-    await tx.orderStatusHistory.create({
-      data: {
-        orderId: payment.orderId,
-        fromStatus: payment.order.status,
-        toStatus: "PAID",
-        note: "Pembayaran diverifikasi",
-        createdBy: adminId,
-      },
-    });
-    await tx.notification.create({
-      data: {
-        userId: payment.order.userId,
-        type: "payment",
-        title: "Pembayaran dikonfirmasi",
-        body: `Pembayaran untuk order ${payment.order.orderNumber} telah diverifikasi.`,
-      },
-    });
-    await writeAudit(
-      {
-        userId: adminId,
-        action: "payment.approve",
-        entity: "Payment",
-        entityId: paymentId,
-        meta: { orderId: payment.orderId },
-      },
-      tx,
-    );
-    return { ok: true };
+    return settlePaymentInTransaction(tx, payment, adminId);
   });
 }
 

@@ -618,7 +618,7 @@ model Payment {
   events       PaymentEvent[]
 }
 
-// Experimental payment evidence. Live activation is intentionally not exposed.
+// Payment evidence sources activate only through an explicit seller opt-in.
 model PaymentEvidenceSource {
   id               String @id @default(cuid())
   storeScope       String
@@ -630,6 +630,7 @@ model PaymentEvidenceSource {
   encryptedSecret  String?
   staticQris       String?
   enabled          Boolean @default(false)
+  automationActorId String?
   generation       Int @default(0)
   health           String @default("NOT_CONNECTED")
   lastCheckedAt    DateTime?

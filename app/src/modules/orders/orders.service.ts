@@ -29,6 +29,7 @@ const orderInclude = {
   payment: {
     include: {
       bankAccount: true,
+      evidenceAttempt: { select: { baseAmount: true, uniqueCode: true, payable: true, expiresAt: true } },
       confirmations: { orderBy: { createdAt: "desc" } },
     },
   },

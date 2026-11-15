@@ -13,6 +13,7 @@ export async function ingestBluEmailReview(input: {
   leaseToken: string;
   raw: Uint8Array;
   apiMessageId?: string;
+  signal?: AbortSignal;
 }) {
   requirePreview();
   const source = await prisma.paymentEvidenceSource.findFirst({
@@ -25,6 +26,7 @@ export async function ingestBluEmailReview(input: {
   const signature = parsed.observation.amount !== null
     ? await verifyBluDkim(input.raw)
     : null;
+  input.signal?.throwIfAborted();
   const evidenceId = await ingestObservation(
     source.id,
     input.generation,

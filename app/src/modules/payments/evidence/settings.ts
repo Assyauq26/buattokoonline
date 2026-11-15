@@ -92,6 +92,7 @@ export async function disconnectSource(actorId: string, sourceId: string) {
       data: {
         enabled: false,
         encryptedSecret: null,
+        automationActorId: null,
         generation: { increment: 1 },
         leaseToken: null,
         leaseUntil: null,

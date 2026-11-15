@@ -35,7 +35,7 @@ export async function evidenceCandidateSuggestions(
         order: {
           total: e.amount,
           status: "PENDING_PAYMENT",
-          OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+          OR: [{ expiresAt: null }, { expiresAt: { gt: now } }, { paymentStatus: "WAITING_VERIFICATION" }],
         },
       },
     },
@@ -44,7 +44,7 @@ export async function evidenceCandidateSuggestions(
       baseAmount: true,
       uniqueCode: true,
       payable: true,
-      payment: { select: { order: { select: { orderNumber: true } } } },
+      payment: { select: { method: true, order: { select: { orderNumber: true } } } },
     },
     take: 50,
   });

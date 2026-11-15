@@ -86,7 +86,7 @@ export default async function AdminPaymentsPage({ searchParams }: AdminPaymentsP
                       </a>
                     )
                   )}
-                  {actor.permissions.includes(PERMISSIONS.PAYMENT_VERIFY) && <PaymentVerify paymentId={p.id} />}
+                  {actor.permissions.includes(PERMISSIONS.PAYMENT_VERIFY) && <PaymentVerify paymentId={p.id} method={p.method} />}
                 </div>
               </div>
             );

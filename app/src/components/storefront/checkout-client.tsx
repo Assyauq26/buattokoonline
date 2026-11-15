@@ -86,6 +86,7 @@ export function CheckoutClient({
   requestId,
   intentId,
   banks,
+  bluSources = [],
   address,
   jntCheckout = false,
 }: {
@@ -94,6 +95,7 @@ export function CheckoutClient({
   requestId: string;
   intentId?: string;
   banks: Bank[];
+  bluSources?: Array<{ id: string; label: string; bankAccountId: string }>;
   address: Addr | null;
   jntCheckout?: boolean;
 }) {
@@ -128,6 +130,7 @@ export function CheckoutClient({
   const [street, setStreet] = useState(address?.line || "");
   const [now, setNow] = useState(0);
   const [bankId, setBankId] = useState(banks[0]?.id ?? "");
+  const [bluSourceId, setBluSourceId] = useState("");
   const [couponCode, setCouponCode] = useState("");
   const [couponDraft, setCouponDraft] = useState("");
   const [retry, setRetry] = useState(0);
@@ -545,12 +548,21 @@ export function CheckoutClient({
             </p>
           )}
           <div className="space-y-2">
+            <input type="hidden" name="paymentEvidenceSourceId" value={bluSourceId} />
+            {bluSources.map(s => (
+              <label key={s.id} className={cn("flex cursor-pointer items-start gap-3 rounded-xl border p-3", bluSourceId === s.id ? "checkout-option-selected" : "border-line")}>
+                <input type="radio" name="bankAccountId" value={s.bankAccountId} checked={bluSourceId === s.id}
+                  onChange={() => { setBluSourceId(s.id); setBankId(s.bankAccountId); }} className="checkout-radio mt-1" />
+                <span><span className="block text-sm font-semibold">Transfer blu · notifikasi otomatis</span>
+                  <span className="block text-xs text-ink-muted">{s.label}. Waktu bayar 10 menit. Hasil yang belum pasti diperiksa seller.</span></span>
+              </label>
+            ))}
             {banks.map((b) => (
               <label
                 key={b.id}
                 className={cn(
                   "flex cursor-pointer items-center gap-3 rounded-xl border p-3",
-                  bankId === b.id ? "checkout-option-selected" : "border-line",
+                  !bluSourceId && bankId === b.id ? "checkout-option-selected" : "border-line",
                 )}
                 data-testid={`bank-option-${b.id}`}
               >
@@ -558,8 +570,8 @@ export function CheckoutClient({
                   type="radio"
                   name="bankAccountId"
                   value={b.id}
-                  checked={bankId === b.id}
-                  onChange={() => setBankId(b.id)}
+                  checked={!bluSourceId && bankId === b.id}
+                  onChange={() => { setBluSourceId(""); setBankId(b.id); }}
                   className="checkout-radio"
                   required
                 />
@@ -577,6 +589,12 @@ export function CheckoutClient({
                 </div>
               </label>
             ))}
+            {bluSourceId && (
+              <label className="flex items-start gap-3 rounded-xl bg-zinc-50 p-3 text-sm">
+                <input type="checkbox" name="codeConsent" required className="mt-1 size-4 shrink-0 accent-black" />
+                <span>Saya menyetujui tambahan kode unik Rp1–Rp999 pada total. Nominal tepat ditetapkan setelah pesanan dibuat. Transfer minimal Rp10.000; jangan transfer sebelum nominal akhir tampil.</span>
+              </label>
+            )}
           </div>
         </section>
 

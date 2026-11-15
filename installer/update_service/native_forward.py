@@ -71,6 +71,10 @@ class NativeForward:
     snapshot_omit = {'FlashSaleCampaign': "-'draft'", 'OrderItem': "-'flashOfferId'"}
     after_schema = None
 
+    @property
+    def migration_additions(self):
+        return {self.migration_name: self.migration_checksum}
+
     def __init__(self,engine,job,policy=None):
         self.e=engine;self.config=engine.config;self.job=job
         self.release=json.loads(job['release']);self.sha=self.release['sha'];self.digest=self.release['digest']
@@ -135,7 +139,15 @@ class NativeForward:
         self.e.resources()
         persistent=int(core.sql("SELECT pg_database_size('store');"))
         persistent+=sum(p.stat().st_size for root in (core.DATA/'media',core.CONFIG) for p in root.rglob('*') if p.is_file())
-        require(shutil.disk_usage(core.ROOT).free >= (2 if self.load() else 6)*1024**3+2*persistent,'insufficient_disk')
+        prepared=self.load()
+        if prepared:
+            require(prepared.get('phase')=='prepare_done' and prepared.get('sha')==self.sha
+                and prepared.get('digest')==self.digest and prepared.get('candidate'),'reconciliation_required')
+            for name in ('app','tools'):
+                image=prepared['candidate']['services'][name]['image']
+                identity=core.run(['docker','image','inspect','--format','{{.Id}}',image])
+                require(identity.startswith('sha256:') and (name!='app' or identity==prepared.get('image')),'prepared_image_changed')
+        require(shutil.disk_usage(core.ROOT).free >= (2 if prepared else 6)*1024**3+2*persistent,'insufficient_disk')
         require(self.carrier_idle(),'carrier_work_pending')
         hashes=proxy_hashes(self.config)
         report={'installed':installed,'guards':self.guards(),'flags':{k:env.get(k) for k in FLAGS},'proxy':hashes}
@@ -144,8 +156,7 @@ class NativeForward:
         expected={'db_contract':1,'minimum_installed_contract':1,'maximum_installed_contract':1,'postgres_major':16,
             'rollback_compatible':False,'minimum_installed_version':self.from_version,'maximum_installed_version':self.from_version}
         require(self.manifest['compatibility']==expected and self.manifest['migrations']==self.policy['afterMigrations'],'manifest_compatibility')
-        require(set(self.policy['afterMigrations'])-set(self.policy['beforeMigrations'])=={self.migration_name}
-            and self.policy['afterMigrations'][self.migration_name]==self.migration_checksum,'migration_history')
+        require(self.policy['afterMigrations']=={**self.policy['beforeMigrations'],**self.migration_additions},'migration_history')
         return report
 
     def initial(self,report):
@@ -229,7 +240,7 @@ class NativeForward:
     def verify_migration(self,j):
         require(self.database_state(j)=='new','migration_verification')
         if not j.get('traffic_may_have_opened'):
-            require([r for r in self.ledger_rows() if r['migration_name']!=self.migration_name]==j['before_ledger'],'migration_history')
+            require([r for r in self.ledger_rows() if r['migration_name'] not in self.migration_additions]==j['before_ledger'],'migration_history')
             require(self.data_snapshot()==j['before_data'],'transaction_history_changed')
             for name in self.new_tables:
                 require(core.sql('SELECT count(*) FROM "'+name+'";')=='0','unexpected_data_activation')

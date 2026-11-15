@@ -25,6 +25,32 @@ import sqlite3
 
 
 class WorkerUpgradeTests(unittest.TestCase):
+    def test_only_completed_exact_additive_guard_can_be_attested(self):
+        import hashlib
+        from update_service.worker_upgrade import installed_revision,files_digest
+        from payment_evidence_cutover import OLD_GUARD
+        from payment_test_cutover import PreparedAuthNative
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder);target=root/'worker';(target/'update_service').mkdir(parents=True)
+            original=b'# reviewed original\ndef guard():\n'+OLD_GUARD+b'\n'
+            current=original.replace(OLD_GUARD,PreparedAuthNative.next_guard)
+            engine=target/'update_service/engine.py';engine.write_bytes(current)
+            (target/'core.py').write_bytes(b'# unchanged\n')
+            prior={'sourceSha':'1239bec7b8c769810841a4aeb8f719e4770db8fa','afterFiles':{**files_digest(target),'update_service/engine.py':hashlib.sha256(original).hexdigest()}}
+            config=root/'etc';config.mkdir()
+            names=('hubify-promotions-cutover.json','hubify-payment-evidence-cutover.json','hubify-payment-test-cutover.json','hubify-blu-auth-cutover.json','hubify-blu-auth-retry-cutover.json')
+            for name in names:(config/name).write_text(json.dumps({'phase':'complete','sha':'8e65f4a74eb7b597afa27e87f28e3a5d141da1c2'}))
+            with patch('core.CONFIG',config),patch('update_service.worker_upgrade.secure_path'),patch('subprocess.check_output',return_value=original):
+                proof=installed_revision(root,prior,target)
+                self.assertEqual(proof['kind'],'completed-hubify-additive-guards-v1')
+                self.assertEqual(len(proof['receipts']),5)
+                (config/names[0]).write_text('{"phase":"recovery_required"}')
+                with self.assertRaisesRegex(Rejected,'operator_cutover_in_progress'):installed_revision(root,prior,target)
+                (config/names[0]).write_text('{"phase":"complete"}')
+                engine.write_bytes(current+b'# unrelated local edit\n')
+                with self.assertRaisesRegex(Rejected,'worker_source_bytes'):installed_revision(root,prior,target)
+                engine.write_bytes(current);(target/'core.py').write_bytes(b'# changed\n')
+                with self.assertRaisesRegex(Rejected,'worker_source_bytes'):installed_revision(root,prior,target)
     def test_source_inventory_and_tampering(self):
         with tempfile.TemporaryDirectory() as folder:
             p=Path(folder)

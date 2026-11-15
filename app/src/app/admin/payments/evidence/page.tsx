@@ -5,12 +5,20 @@ import { requireEvidenceAdmin } from "@/modules/payments/evidence/access";
 import { prisma } from "@/lib/prisma";
 import { previewEnabled } from "@/modules/payments/evidence/policy";
 import { storeScope } from "@/modules/payments/evidence/repository";
+import { notFound } from "next/navigation";
 export const dynamic = "force-dynamic";
-export default async function Page() {
+export default async function Page({ searchParams }: { searchParams: Promise<{ paymentId?: string }> }) {
   await requireEvidenceAdmin(true);
+  const { paymentId } = await searchParams;
+  if (paymentId && paymentId.length > 100) notFound();
+  const attempt = paymentId ? await prisma.paymentEvidenceAttempt.findFirst({ where: { paymentId,
+    source: { storeScope: storeScope() } }, select: { sourceId: true, payable: true, createdAt: true, expiresAt: true,
+      payment: { select: { order: { select: { orderNumber: true } } } } } }) : null;
+  if (paymentId && !attempt) notFound();
   const rows = previewEnabled()
     ? await prisma.incomingPaymentEvidence.findMany({
-        where: { source: { storeScope: storeScope() } },
+        where: { source: { storeScope: storeScope() }, ...(attempt ? { sourceId: attempt.sourceId, amount: attempt.payable,
+          occurredAt: { gte: attempt.createdAt, lt: attempt.expiresAt } } : {}) },
         select: {
           id: true,
           amount: true,
@@ -18,7 +26,7 @@ export default async function Page() {
           reason: true,
           createdAt: true,
           source: { select: { label: true } },
-          claim: { select: { createdAt: true } },
+          claim: { select: { createdAt: true, attempt: { select: { payment: { select: { status: true } } } } } },
         },
         orderBy: [{ createdAt: "desc" }, { id: "desc" }],
         take: 100,
@@ -36,7 +44,7 @@ export default async function Page() {
       <header>
         <h1 className="text-2xl font-bold tracking-tight">Perlu pemeriksaan</h1>
         <p className="mt-2 text-sm text-zinc-600">
-          Bukti dari sumber pembayaran. Pencocokan belum berarti pesanan lunas.
+          {attempt ? `Pesanan ${attempt.payment.order.orderNumber}. ` : ""}Bukti dari sumber pembayaran. Pencocokan belum berarti pesanan lunas.
         </p>
       </header>
       <Link href="/admin/payments/evidence/test" className="inline-flex min-h-11 items-center rounded-xl bg-black px-4 text-sm font-medium text-white">Uji transfer blu</Link>
@@ -82,7 +90,7 @@ export default async function Page() {
                 </h2>
                 <p className="mt-1 text-sm text-zinc-500">
                   {row.claim
-                    ? "Sudah dikaitkan · belum menyatakan lunas"
+                    ? row.claim.attempt.payment.status === "PAID" ? "Pembayaran disetujui seller" : "Sudah dikaitkan · belum menyatakan lunas"
                     : "Perlu pemeriksaan seller"}
                 </p>
                 <p className="mt-1 break-all text-xs text-zinc-500">

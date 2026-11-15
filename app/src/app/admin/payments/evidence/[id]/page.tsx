@@ -8,6 +8,10 @@ import { prisma } from "@/lib/prisma";
 import { previewEnabled } from "@/modules/payments/evidence/policy";
 import { storeScope } from "@/modules/payments/evidence/repository";
 import { signatureAuditState } from "@/modules/payments/evidence/signature-audit";
+import { PaymentEvidenceReview } from "@/components/admin/payment-evidence-review";
+import { BLU_CHECKOUT_METHOD, bluCheckoutEnabled } from "@/modules/payments/evidence/blu-checkout";
+import { PERMISSIONS } from "@/lib/auth/permissions";
+import { BluReviewNote } from "@/components/admin/blu-review-note";
 
 export const dynamic = "force-dynamic";
 export default async function Page({
@@ -15,7 +19,7 @@ export default async function Page({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requireEvidenceAdmin(true);
+  const actor = await requireEvidenceAdmin(true);
   if (!previewEnabled()) notFound();
   const { id } = await params,
     now = new Date();
@@ -29,7 +33,7 @@ export default async function Page({
           reason: true,
           attempt: {
             select: {
-              payment: { select: { order: { select: { orderNumber: true } } } },
+              payment: { select: { status: true, order: { select: { orderNumber: true } } } },
             },
           },
         },
@@ -45,6 +49,10 @@ export default async function Page({
   const candidates = e.claim
     ? []
     : await evidenceCandidateSuggestions(e.id, now);
+  const realCandidates = candidates.filter(c => c.payment.method === BLU_CHECKOUT_METHOD);
+  const history = await prisma.paymentEvidenceReview.findMany({ where: { sourceId: e.sourceId, evidenceId: e.id,
+    action: { not: "BLU_SIGNATURE_CHECK" } }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 30,
+    select: { id: true, reason: true, createdAt: true, action: true } });
   return (
     <div className="mx-auto max-w-3xl space-y-5">
       <Link
@@ -62,7 +70,7 @@ export default async function Page({
       <section className="space-y-3 rounded-2xl border border-zinc-200 bg-white p-4 sm:p-5">
         <h2 className="font-semibold">
           {e.claim
-            ? "Sudah dikaitkan · belum menyatakan lunas"
+            ? e.claim.attempt.payment.status === "PAID" ? "Pembayaran disetujui seller" : "Sudah dikaitkan · belum menyatakan lunas"
             : candidates.length === 1
               ? "Nominal dan waktu cocok"
               : candidates.length > 1
@@ -134,10 +142,25 @@ export default async function Page({
       )}
       {!e.claim && (
         <p className="rounded-xl bg-zinc-100 p-4 text-sm">
-          Pencocokan ini belum memproses pembayaran. Fitur belum aktif di
-          checkout.
+          {bluCheckoutEnabled() ? "Hasil pencocokan belum menyatakan lunas. Status bank yang belum pasti harus diperiksa seller pada mutasi asli."
+            : "Pencocokan ini belum memproses pembayaran. Fitur belum aktif di checkout."}
         </p>
       )}
+      {!e.claim && signature.verified && realCandidates.length > 0 && actor.permissions.includes(PERMISSIONS.PAYMENT_VERIFY) && (
+        <PaymentEvidenceReview evidenceId={e.id} candidates={realCandidates.map(c => ({ id: c.id,
+          orderNumber: c.payment.order.orderNumber, payable: c.payable }))} />
+      )}
+      {history.length > 0 && <section className="space-y-3 rounded-2xl border border-zinc-200 bg-white p-4 sm:p-5">
+        <h2 className="font-semibold">Riwayat pemeriksaan</h2>
+        <ol className="divide-y divide-zinc-100">{history.map(h => <li key={h.id} className="space-y-1 py-3 text-sm">
+          <p className="font-medium">{h.action === "BLU_BANK_CONFIRMED_BY_SELLER" ? "Disetujui setelah pemeriksaan bank"
+            : h.action === "BLU_LATE_REVIEW" ? "Pembayaran ditutup · pemeriksaan terpisah"
+            : h.action === "BLU_AMBIGUOUS_REVIEW" ? "Beberapa notifikasi cocok" : "Pemeriksaan tersimpan"}</p>
+          <p className="break-words text-zinc-600">{h.reason}</p>
+          <time className="text-xs text-zinc-500" dateTime={h.createdAt.toISOString()}>{new Intl.DateTimeFormat("id-ID", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Jakarta" }).format(h.createdAt)} WIB</time>
+        </li>)}</ol>
+      </section>}
+      {e.source.kind === "GMAIL_BANK" && actor.permissions.includes(PERMISSIONS.PAYMENT_VERIFY) && <BluReviewNote evidenceId={e.id} />}
     </div>
   );
 }

@@ -137,7 +137,7 @@ export default async function Page({
                 unggah bukan konfirmasi bank.
               </p>
               {has(PERMISSIONS.PAYMENT_VERIFY) && (
-                <PaymentVerify paymentId={p.id} amount={o.total} />
+                <PaymentVerify paymentId={p.id} amount={o.total} method={p.method} />
               )}
             </section>
           )}
@@ -273,6 +273,7 @@ export default async function Page({
                 <dt>Ongkir</dt>
                 <dd>{formatIDR(o.shippingCost)}</dd>
               </div>
+              {o.payment?.evidenceAttempt && <div><dt>Kode unik transfer</dt><dd>{formatIDR(o.payment.evidenceAttempt.uniqueCode)}</dd></div>}
               <div className="simple-total">
                 <dt>Total</dt>
                 <dd>{formatIDR(o.total)}</dd>

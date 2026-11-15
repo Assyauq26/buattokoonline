@@ -18,10 +18,12 @@ import {
 } from "./google";
 import { seal, unseal } from "./secrets";
 import { ingestBluEmailReview } from "./blu-ingestion";
+import { assertBluOperator } from "./blu-access";
+import { bluCheckoutEnabled } from "./blu-checkout";
 
 /** One admin-triggered, bounded read. No timer, checkout, claims or settlement.
  * Partial/retried reads overlap and use durable source/message deduplication. */
-export async function reviewGmailNow(actorId: string, sourceId: string) {
+export async function reviewGmailNow(actorId: string, sourceId: string, background = false, parentSignal?: AbortSignal) {
   requirePreview();
   if (process.env.PAYMENT_GMAIL_OAUTH_TEST !== "true")
     throw new HttpError("Uji Gmail belum dikonfigurasi operator", 503);
@@ -29,6 +31,11 @@ export async function reviewGmailNow(actorId: string, sourceId: string) {
   const source = await prisma.$transaction(async (tx) => {
     await assertStaffPermission(tx, actorId, PERMISSIONS.BANK_MANAGE);
     const s = await lockSource(tx, sourceId);
+    if (background) {
+      await assertBluOperator(tx, actorId);
+      if (!bluCheckoutEnabled() || !s.enabled || s.automationActorId !== actorId)
+        throw new HttpError("Pembacaan otomatis tidak aktif", 409);
+    }
     if (
       s.kind !== "GMAIL_BANK" ||
       !s.encryptedSecret ||
@@ -48,6 +55,7 @@ export async function reviewGmailNow(actorId: string, sourceId: string) {
       409,
     );
   let count = 0;
+  const signal = background ? AbortSignal.any([AbortSignal.timeout(45_000), ...(parentSignal ? [parentSignal] : [])]) : undefined;
   try {
     // Re-read under the acquired generation; disconnect/reconnect cannot supply
     // stale credentials for a newer generation.
@@ -66,7 +74,7 @@ export async function reviewGmailNow(actorId: string, sourceId: string) {
     ) as GoogleTokens;
     if (!saved.access || !saved.refresh || !Number.isFinite(saved.expiresAt))
       throw new Error("Invalid token envelope");
-    const tokens = await refreshGoogle(saved);
+    const tokens = await refreshGoogle(saved, signal);
     await prisma.$transaction(async (tx) => {
       await assertStaffPermission(tx, actorId, PERMISSIONS.BANK_MANAGE);
       const s = await lockSource(tx, sourceId);
@@ -109,16 +117,18 @@ export async function reviewGmailNow(actorId: string, sourceId: string) {
       since = new Date(resume.since);
       cursor = resume.page;
     }
-    const page = await listGmailMessages(tokens.access, since, cursor, true);
+    const page = await listGmailMessages(tokens.access, since, cursor, true, signal);
     // Five raw messages keeps the operation below the 120-second lease even
     // when Google reaches its per-request timeout. No cursor advances on failure.
     for (const message of (page.messages || []).slice(0, 5)) {
-      const raw = await getGmailRawMessage(tokens.access, message.id);
+      signal?.throwIfAborted();
+      const raw = await getGmailRawMessage(tokens.access, message.id, signal);
       await ingestBluEmailReview({
         sourceId,
         generation: lease.generation,
         leaseToken: lease.token,
         ...raw,
+        signal,
       });
       count++;
     }

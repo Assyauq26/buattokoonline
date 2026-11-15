@@ -26,21 +26,26 @@ def canonical_digest(value):
     return package.digest(json.dumps(value, sort_keys=True, separators=(',', ':')).encode())
 
 
-def reviewed_policy(policy):
-    """Called only after signature verification; no configurable SQL/commands."""
-    require(policy.get('executor') == EXECUTOR and policy.get('format') == 2,
-            'upgrade_path_unsupported')
+def reviewed_baseline(policy):
+    require(policy.get('format') == 2, 'policy_baseline_mismatch')
     require((policy['fromVersion'], policy['toVersion'], policy['fromSourceSha'],
              policy['baselineAppTree'], policy['baselineSchemaHash']) ==
             ('1.8.1', '1.8.2', BASE_SOURCE, BASE_TREE, BASE_SCHEMA), 'policy_baseline_mismatch')
     require(canonical_digest(policy['baselineFiles']) == BASE_FILES, 'policy_baseline_mismatch')
     require(len(policy['beforeMigrations']) == 31 and
             canonical_digest(policy['beforeMigrations']) == BASE_MIGRATIONS, 'migration_history')
+
+
+def reviewed_policy(policy):
+    """Called only after signature verification; no configurable SQL/commands."""
+    require(policy.get('executor') == EXECUTOR, 'upgrade_path_unsupported')
+    reviewed_baseline(policy)
     require(policy['afterMigrations'] == {**policy['beforeMigrations'], NEW_NAME: NEW_SQL},
             'migration_history')
 
 
 class EvidenceForward(NativeForward):
+    validate_policy = staticmethod(reviewed_policy)
     baseline_source = BASE_SOURCE
     baseline_tree = BASE_TREE
     baseline_schema = BASE_SCHEMA
@@ -58,10 +63,10 @@ class EvidenceForward(NativeForward):
             import core
             self.policy = fresh(self.config, self.e.state, self.release,
                                 core.read_json(core.CONFIG/'version.json'))
-        reviewed_policy(self.policy)
+        self.validate_policy(self.policy)
         report = super().preflight(inspect_only)
         # super refreshes signed policy in apply mode; pin it again before use.
-        reviewed_policy(self.policy)
+        self.validate_policy(self.policy)
         return report
 
     def verify_active(self, journal):
@@ -71,7 +76,7 @@ class EvidenceForward(NativeForward):
         require(core.sql('SELECT count(*) FROM "PaymentEvidenceSource" WHERE enabled;') == '0',
                 'unexpected_payment_activation')
         from .native_forward import schema_hash
-        require(schema_hash() == AFTER_SCHEMA, 'schema_drift')
+        require(schema_hash() == self.after_schema, 'schema_drift')
 
 
 def adapter(engine, job, policy=None):
@@ -88,6 +93,10 @@ def adapter(engine, job, policy=None):
     if policy and policy.get('executor') == EXECUTOR:
         reviewed_policy(policy)
         return EvidenceForward(engine, job, policy)
+    if policy and policy.get('executor') == 'blu-checkout-forward-v1':
+        from .blu_forward import BluCheckoutForward, reviewed_policy as validate
+        validate(policy)
+        return BluCheckoutForward(engine, job, policy)
     if policy and policy.get('executor') != 'forward-cutover-v1':
         raise Rejected('policy_executor')
     return NativeForward(engine, job, policy)

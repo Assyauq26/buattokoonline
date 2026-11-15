@@ -335,7 +335,7 @@ async function OrderDetailContent({
                 {has(PERMISSIONS.PAYMENT_VERIFY) &&
                   payment.status === "WAITING_VERIFICATION" &&
                   order.status === "PENDING_PAYMENT" && (
-                    <PaymentVerify paymentId={payment.id} />
+                    <PaymentVerify paymentId={payment.id} method={payment.method} />
                   )}
               </div>
             ) : (

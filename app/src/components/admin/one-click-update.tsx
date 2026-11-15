@@ -64,6 +64,7 @@ const errors: Record<string, string> = {
   worker_upgrade_in_progress: "Peningkatan layanan updater belum selesai. Operator perlu menyelesaikan pemeriksaannya.",
   external_work_review_required: "Hasil pekerjaan server belum dapat dipastikan. Operator perlu memeriksanya sebelum pemulihan dilanjutkan.",
   worker_upgrade_required: "Operator perlu meningkatkan layanan updater satu kali sebelum versi ini dapat dipasang.",
+  policy_executor: "Layanan updater belum mendukung jalur migrasi ini. Operator perlu memasang revisi worker resmi sebelum mencoba lagi.",
   upgrade_path_unsupported: "Versi asal toko belum memiliki jalur upgrade yang disetujui. Hubungi operator untuk menentukan urutannya.",
   database_contract_unsupported: "Struktur data toko memerlukan pemeriksaan operator sebelum update.",
   operator_migration_required: "Versi ini memerlukan migrasi khusus. Operator perlu menyiapkan jalur upgrade dan recovery yang sesuai.",

@@ -45,14 +45,25 @@ def command(args,data=None):
     return result.stdout.decode().strip()
 
 
-def prepare(case, empty=False, official=False):
+def prepare(case, empty=False, official=False, blu=None):
     root=BASE/case
     if root.exists():raise RuntimeError('Case already exists; use a new case id')
     root.mkdir(mode=0o700)
     from promotions_transition import package, BASE_ARCHIVE, BASE_RELEASE_SOURCE
+    base_version,target_version='1.7.4','1.8.0'
+    target_sha,target_digest=TARGET_SHA,TARGET_DIGEST
     old=Path('/tmp/updater-baseline-v174.tar.gz');new=Path('/tmp/updater-target-v180.tar.gz')
-    old_manifest,files=package(old,BASE_ARCHIVE,BASE_RELEASE_SOURCE,'1.7.4')
-    package(new,TARGET_DIGEST,TARGET_SHA,'1.8.0')
+    if blu:
+        from update_service.blu_policy_operator import BASE_ARCHIVE as PUBLIC_BASE_ARCHIVE
+        from update_service.evidence_forward import BASE_SOURCE
+        BASE_ARCHIVE,BASE_RELEASE_SOURCE=PUBLIC_BASE_ARCHIVE,BASE_SOURCE
+        base_version,target_version='1.8.1','1.8.2'
+        target_sha,target_digest=blu['sha'],blu['digest']
+        old,new=Path(blu['baseline']),Path(blu['archive'])
+        empty=True;official=False
+        (root/'blu-profile.json').write_text(json.dumps(blu))
+    old_manifest,files=package(old,BASE_ARCHIVE,BASE_RELEASE_SOURCE,base_version)
+    package(new,target_digest,target_sha,target_version)
     source=root/'baseline';source.mkdir()
     for name,data in files.items():
         p=source/name;p.parent.mkdir(parents=True,exist_ok=True);p.write_bytes(data)
@@ -75,12 +86,14 @@ def prepare(case, empty=False, official=False):
     (config/'runtime.env').write_text('\n'.join(k+'='+v for k,v in runtime.items())+'\n')
     (config/'migration.env').write_text('DATABASE_URL=postgresql://store_owner:'+password+'@db:5432/store?schema=public\nDIRECT_URL=postgresql://store_owner:'+password+'@db:5432/store?schema=public\n')
     (config/'db.env').write_text('POSTGRES_PASSWORD='+secrets.token_hex(24)+'\nPOSTGRES_DB=store\n')
-    data=root/'data';data.mkdir();shutil.copytree('/var/lib/single-store/media',data/'media',symlinks=True)
+    data=root/'data';data.mkdir()
+    if empty:(data/'media').mkdir()
+    else:shutil.copytree('/var/lib/single-store/media',data/'media',symlinks=True)
     for p in [data/'media',*(data/'media').rglob('*')]:os.chown(p,1000,1000,follow_symlinks=False)
     (root/'run').mkdir();(data/'jobs').mkdir()
     token=config/'updater/control-token';token.write_text(secrets.token_urlsafe(32));token.chmod(0o640);os.chown(token,0,1000)
     compose['services']['app'].update(ports=['127.0.0.1:3108:3000'],env_file=[str(config/'runtime.env')],volumes=[str(data/'media')+':/media',str(root/'run')+':/run/store-updater:ro',str(token)+':/run/store-updater-token:ro'])
-    compose['services']['app'].setdefault('environment',{}).update(STORE_INSTALLED_VERSION='1.7.4',STORE_BUILD_SHA=BASE_RELEASE_SOURCE,STORE_UPDATER_ENABLED='1',STORE_INSTALLATION_ID=identity)
+    compose['services']['app'].setdefault('environment',{}).update(STORE_INSTALLED_VERSION=base_version,STORE_BUILD_SHA=BASE_RELEASE_SOURCE,STORE_UPDATER_ENABLED='1',STORE_INSTALLATION_ID=identity)
     compose['services']['tools']['env_file']=[str(config/'migration.env')]
     compose['services']['db'].update(env_file=[str(config/'db.env')],volumes=[str(data/'postgres')+':/var/lib/postgresql/data'])
     compose['services']['proxy'].update(ports=['127.0.0.1:3088:80'],volumes=[str(config/'Caddyfile')+':/etc/caddy/Caddyfile:ro'])
@@ -133,17 +146,17 @@ def prepare(case, empty=False, official=False):
     live=(runtime['APP_ORIGIN']+' {\n  handle /api/local-updater/status {\n    reverse_proxy '+gateway+':17842\n  }\n  handle {\n    reverse_proxy app:3000\n  }\n}\nhttp://unrelated-lab.invalid {\n respond "unchanged" 200\n}\n').encode()
     maintenance=live.replace(b'reverse_proxy app:3000',b'respond "Toko sedang disiapkan oleh pemilik server." 503')
     (config/'Caddyfile').write_bytes(live)
-    (config/'version.json').write_text(json.dumps({'version':'1.7.4','source_sha':BASE_RELEASE_SOURCE,'db_contract':1,'migrations':old_manifest['migrations']}))
+    (config/'version.json').write_text(json.dumps({'version':base_version,'source_sha':BASE_RELEASE_SOURCE,'db_contract':1,'migrations':old_manifest['migrations']}))
     (config/'setup.json').write_text(json.dumps({'domain':'updater-lab.invalid','proof':'lab-only','local_test':True}))
     (config/'updater/baseline.json').write_text(json.dumps({'root':str(source),'files':old_manifest['files']}))
     key=root/'test-key.pem';command(['openssl','genpkey','-algorithm','ED25519','-out',key]);key.chmod(0o600)
     public=command(['openssl','pkey','-in',key,'-pubout'])+'\n'
     (config/'updater/trust.json').write_text(json.dumps({'lab-test':public}))
-    policy=policy_prepare(old,new,[identity],1)
+    policy=policy_prepare(old,new,[identity],1) if not blu else __import__('update_service.blu_policy_operator',fromlist=['prepare']).prepare(old,new,target_sha,target_digest,[identity],1)
     policy_envelope=sign(policy,key,'lab-test')
-    release={'version':'1.8.0','sha':TARGET_SHA,'digest':TARGET_DIGEST,'size':new.stat().st_size,
-        'url':'https://github.com/Assyauq26/buattokoonline/releases/download/v1.8.0/store-v1.8.0.tar.gz',
-        'channel':'stable','minimumUpdater':3,'minimumInstalledVersion':'1.7.4','maximumInstalledVersion':'1.7.4',
+    release={'version':target_version,'sha':target_sha,'digest':target_digest,'size':new.stat().st_size,
+        'url':'https://github.com/Assyauq26/buattokoonline/releases/download/v'+target_version+'/store-v'+target_version+'.tar.gz',
+        'channel':'stable','minimumUpdater':3,'minimumInstalledVersion':base_version,'maximumInstalledVersion':base_version,
         'dbContract':1,'rollbackCompatible':False,'notes':'Verified isolated lab upgrade','upgradePolicy':policy_envelope}
     now=int(time.time());cat={'format':2,'repository':core.REPO,'sequence':1,'issuedAt':now,'expiresAt':now+86400,'releases':[release],'revoked':[]}
     payload=root/'catalog-payload';payload.write_text(json.dumps(cat));sig=root/'catalog-sig'
@@ -164,7 +177,7 @@ def prepare(case, empty=False, official=False):
     timer.write_text('[Unit]\nDescription=Disposable updater timer\n[Timer]\nOnBootSec=999999\nUnit='+unit+'.service\n[Install]\nWantedBy=timers.target\n')
     command(['systemctl','daemon-reload']);command(['systemctl','start',unit+'.timer'])
     command(dc+['up','-d','--no-build','--wait','app','proxy'])
-    print(json.dumps({'prepared':case,'baselineVersion':'1.7.4','sourceSha':BASE_RELEASE_SOURCE,'isolatedNetworks':True,'originalStoreMutated':False}))
+    print(json.dumps({'prepared':case,'baselineVersion':base_version,'sourceSha':BASE_RELEASE_SOURCE,'isolatedNetworks':True,'originalStoreMutated':False}))
 
 
 @contextlib.contextmanager
@@ -232,6 +245,8 @@ def context(case):
 def run(case,recover=False):
     with context(case) as (root,cfg):
         controller=Controller(cfg)
+        profile=json.loads((root/'blu-profile.json').read_text()) if (root/'blu-profile.json').exists() else {}
+        target_sha,target_digest=profile.get('sha',TARGET_SHA),profile.get('digest',TARGET_DIGEST)
         if recover:
             job=controller.state.jobs()[0]
             from update_service.reconcile import reconcile
@@ -244,13 +259,13 @@ def run(case,recover=False):
         (root/'discovery.json').write_text(json.dumps(result))
         if not result['release']:raise RuntimeError('Discovery blocked: '+str(result['availability']['reason']))
         import uuid
-        result=controller.command({**body,'action':'start','sha':TARGET_SHA,'requestKey':str(uuid.uuid4())})
+        result=controller.command({**body,'action':'start','sha':target_sha,'requestKey':str(uuid.uuid4())})
         job=controller.state.jobs()[0]
         controller.engine.process(job)
         final=controller.state.jobs()[0]
         report={'case':case,'state':final['state'],'detail':json.loads(final['detail']),
             'version':core.read_json(core.CONFIG/'version.json')['version'],'ledger':len(controller.engine.ledger()),
-            'artifactDigest':TARGET_DIGEST,'nativeDocker':True,'catalogTransport':'signed test file',
+            'artifactDigest':target_digest,'nativeDocker':True,'catalogTransport':'signed test file',
             'backupPath':core.read_json(Path(cfg['jobs'])/job['id']/'forward.json').get('backup')}
         (root/'result.json').write_text(json.dumps(report));print(json.dumps(report))
         if final['state']!='succeeded':raise RuntimeError('Native upgrade did not succeed')
@@ -271,9 +286,9 @@ def serve(case):
 
 if __name__=='__main__':
     parser=argparse.ArgumentParser();parser.add_argument('command',choices=['prepare','run','recover','serve']);parser.add_argument('--case',required=True)
-    parser.add_argument('--empty',action='store_true');parser.add_argument('--official-catalog',action='store_true')
+    parser.add_argument('--blu-profile');parser.add_argument('--empty',action='store_true');parser.add_argument('--official-catalog',action='store_true')
     args=parser.parse_args()
     if os.geteuid()!=0 or not re.fullmatch('[a-f0-9]{8}',args.case):raise SystemExit('Explicit root disposable case required')
-    if args.command=='prepare':prepare(args.case,args.empty,args.official_catalog)
+    if args.command=='prepare':prepare(args.case,args.empty,args.official_catalog,json.loads(Path(args.blu_profile).read_text()) if args.blu_profile else None)
     elif args.command=='serve':serve(args.case)
     else:run(args.case,args.command=='recover')
