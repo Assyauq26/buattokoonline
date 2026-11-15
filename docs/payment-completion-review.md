@@ -47,7 +47,7 @@ application scope, set truthful metadata, rebuild, authenticate the final merge
 artifact, test actual revised-worker cutover/recovery, and sign catalog policy
 before claiming the public gate complete. Never overwrite public v1.8.1.
 
-Tests: 50 passed on Linux, three Node-specific probes skipped there; those three
+Tests: 106 passed on Linux, three Node-specific probes skipped there; those three
 Node probes and three additional native-boundary tests passed on Windows with
 Node22. Linux coverage includes actual atomic worker-directory exchange and
 interruption tests, durable forward-state-machine failures/reconciliation,
@@ -56,6 +56,15 @@ tampering and financial snapshot preservation rules. These are not a substitute
 for a full revised-worker VM cutover with Docker/systemd and real schema31.
 The prior actual Prisma31->32 upgrade/old ledger/representative financial-data
 rehearsal is still applicable because all SQL bytes are unchanged.
+
+The new adapter's actual ledger/schema verification also passed against the
+isolated PostgreSQL16 public181-ascii lab (32 rows,81 old tables hashed). The
+earlier financial/ledger rehearsal receipt was reverified and the local database
+stopped cleanly. No production SQL was run. Canonical worker source now retains
+all five known operator-cutover guards, with incomplete/unknown phases rejected.
+The old promotion test incorrectly inspected this later private candidate's
+release-policy.json; it now checks exact hash-pinned policy bytes from the
+immutable published7e81f8e release. No live release metadata was altered to pass.
 
 ## GoPay repository audit: readable authentication found
 

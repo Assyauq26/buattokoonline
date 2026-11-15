@@ -2,7 +2,7 @@
 
 Current implementation/release review: [payment-completion-review.md](payment-completion-review.md).
 Added exact signed public-schema31->32 worker adapter and regression tests.
-50 Linux tests pass; three Node probes passed separately on Windows. No worker
+106 Linux tests pass; three Node probes passed separately on Windows. No worker
 installation or public release in this checkpoint. Hubify remains healthy at
 8e65f4a, private1.8.1/schema32; the owner transfer need not be repeated.
 Readable historical GoPay OTP source was found at upstream2f9444e; no merchant

@@ -142,5 +142,19 @@ class EvidenceAdapterTests(unittest.TestCase):
                 bad={**release,'upgradePolicy':tampered}
                 with self.assertRaises(Rejected):authorized(bad,installed,config,state,{**catalog,'releases':[bad]})
 
+    def test_worker_revision_preserves_all_installed_pilot_guards(self):
+        from update_service.engine import operator_cutover_guard
+        with tempfile.TemporaryDirectory() as folder,patch('core.CONFIG',Path(folder)):
+            for name in ('hubify-promotions-cutover.json','hubify-payment-evidence-cutover.json',
+                         'hubify-payment-test-cutover.json','hubify-blu-auth-cutover.json',
+                         'hubify-blu-auth-retry-cutover.json'):
+                path=Path(folder)/name
+                for phase in ('preparing','migration_done','recovery_required',None):
+                    path.write_text(json.dumps({'phase':phase}))
+                    with self.assertRaisesRegex(Rejected,'operator_cutover_in_progress'):operator_cutover_guard()
+                for phase in ('complete','rolled_back'):
+                    path.write_text(json.dumps({'phase':phase}));operator_cutover_guard()
+                path.unlink()
+
 
 if __name__=='__main__':unittest.main()
