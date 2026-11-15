@@ -60,6 +60,17 @@ def proxy_hashes(config):
 
 
 class NativeForward:
+    baseline_source = transition.BASE_RELEASE_SOURCE
+    baseline_tree = transition.BASE_TREE
+    baseline_schema = transition.BASE_SCHEMA
+    from_version = '1.7.4'
+    before_count = 29
+    migration_name = transition.NEW_NAME
+    migration_checksum = transition.NEW_SQL
+    new_tables = ('FlashSaleSkuOffer',)
+    snapshot_omit = {'FlashSaleCampaign': "-'draft'", 'OrderItem': "-'flashOfferId'"}
+    after_schema = None
+
     def __init__(self,engine,job,policy=None):
         self.e=engine;self.config=engine.config;self.job=job
         self.release=json.loads(job['release']);self.sha=self.release['sha'];self.digest=self.release['digest']
@@ -109,12 +120,12 @@ class NativeForward:
         installed=core.read_json(core.CONFIG/'version.json')
         if not inspect_only:
             self.policy=fresh(self.config,self.e.state,self.release,installed)
-        require(self.policy['fromSourceSha']==transition.BASE_RELEASE_SOURCE and self.policy['baselineAppTree']==transition.BASE_TREE
-            and self.policy['baselineSchemaHash']==transition.BASE_SCHEMA,'policy_baseline_mismatch')
+        require(self.policy['fromSourceSha']==self.baseline_source and self.policy['baselineAppTree']==self.baseline_tree
+            and self.policy['baselineSchemaHash']==self.baseline_schema,'policy_baseline_mismatch')
         require(self.release['rollbackCompatible'] is False and self.release['dbContract']==1,'policy_recovery')
         require(160000<=int(core.sql('SHOW server_version_num;'))<170000,'postgres_version_unsupported')
         require(self.e.ledger()==self.policy['beforeMigrations']==installed['migrations'],'migration_history')
-        require(len(self.ledger_rows())==29 and all(r['finished_at'] and not r['rolled_back_at'] for r in self.ledger_rows()),'migration_history')
+        require(len(self.ledger_rows())==self.before_count and all(r['finished_at'] and not r['rolled_back_at'] for r in self.ledger_rows()),'migration_history')
         require(schema_hash()==self.policy['baselineSchemaHash'],'schema_drift')
         env=self.env()
         # Published v1.7.4/v1.8.0 provider webhooks are acknowledgement-only.
@@ -131,10 +142,10 @@ class NativeForward:
         if inspect_only: return report
         self.manifest,self.files=transition.package(self.folder/'release.tar.gz',self.digest,self.sha,self.release['version'])
         expected={'db_contract':1,'minimum_installed_contract':1,'maximum_installed_contract':1,'postgres_major':16,
-            'rollback_compatible':False,'minimum_installed_version':'1.7.4','maximum_installed_version':'1.7.4'}
+            'rollback_compatible':False,'minimum_installed_version':self.from_version,'maximum_installed_version':self.from_version}
         require(self.manifest['compatibility']==expected and self.manifest['migrations']==self.policy['afterMigrations'],'manifest_compatibility')
-        require(set(self.policy['afterMigrations'])-set(self.policy['beforeMigrations'])=={transition.NEW_NAME}
-            and self.policy['afterMigrations'][transition.NEW_NAME]==transition.NEW_SQL,'migration_history')
+        require(set(self.policy['afterMigrations'])-set(self.policy['beforeMigrations'])=={self.migration_name}
+            and self.policy['afterMigrations'][self.migration_name]==self.migration_checksum,'migration_history')
         return report
 
     def initial(self,report):
@@ -192,10 +203,11 @@ class NativeForward:
         if capture_snapshot:j['before_ledger']=self.ledger_rows();j['before_data']=self.data_snapshot()
     def data_snapshot(self):
         result={}
-        names=json.loads(core.sql("SELECT coalesce(json_agg(tablename ORDER BY tablename),'[]') FROM pg_tables WHERE schemaname='public' AND tablename NOT IN ('_prisma_migrations','FlashSaleSkuOffer');"))
+        names=json.loads(core.sql("SELECT coalesce(json_agg(tablename ORDER BY tablename),'[]') FROM pg_tables WHERE schemaname='public' AND tablename <> '_prisma_migrations';"))
         for name in names:
             require(re.fullmatch('[A-Za-z][A-Za-z0-9_]{0,62}',name) is not None,'schema_drift')
-            minus="-'draft'" if name=='FlashSaleCampaign' else "-'flashOfferId'" if name=='OrderItem' else ''
+            if name in self.new_tables: continue
+            minus=self.snapshot_omit.get(name,'')
             # Hash each row inside PostgreSQL; no customer/config payload leaves
             # the DB and large JSON rows are not aggregated in worker memory.
             raw=core.sql('SELECT count(*)::text||\':\'||coalesce(string_agg(h,\'\' ORDER BY h),\'\') FROM '
@@ -217,9 +229,12 @@ class NativeForward:
     def verify_migration(self,j):
         require(self.database_state(j)=='new','migration_verification')
         if not j.get('traffic_may_have_opened'):
-            require([r for r in self.ledger_rows() if r['migration_name']!=transition.NEW_NAME]==j['before_ledger'],'migration_history')
+            require([r for r in self.ledger_rows() if r['migration_name']!=self.migration_name]==j['before_ledger'],'migration_history')
             require(self.data_snapshot()==j['before_data'],'transaction_history_changed')
-            require(core.sql('SELECT count(*) FROM "FlashSaleSkuOffer";')=='0','unexpected_promotion_activation')
+            for name in self.new_tables:
+                require(core.sql('SELECT count(*) FROM "'+name+'";')=='0','unexpected_data_activation')
+        if self.after_schema:
+            require(schema_hash()==self.after_schema,'schema_drift')
     def activate(self,j):
         self.immutable_guards(j)
         core.grant_runtime();core.atomic_json(core.COMPOSE,j['candidate'])

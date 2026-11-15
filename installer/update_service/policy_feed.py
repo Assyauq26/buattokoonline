@@ -24,7 +24,10 @@ def authorized(release, installed, config, state, catalog=None):
     policy, digest = authenticate(json.dumps(raw).encode(), core.read_json(config.get('policyTrust',config['trust'])))
     state.policy(policy,digest)
     # Native adapter supports only the independently reviewed published pair.
-    if (policy['fromVersion'],policy['toVersion'],policy['sourceSha'],policy['artifactDigest']) != (
+    if policy.get('executor') == 'payment-evidence-forward-v1':
+        from .evidence_forward import reviewed_policy
+        reviewed_policy(policy)
+    elif (policy['fromVersion'],policy['toVersion'],policy['sourceSha'],policy['artifactDigest']) != (
         '1.7.4','1.8.0','7e81f8e60b27ab5695ac50ac6b653b63095e36d1',
         '2e15208d27a87a4aeae4446404d45a1f91b55fcc5d28da3714dc064aeeaa9223'):
         raise Rejected('upgrade_path_unsupported')

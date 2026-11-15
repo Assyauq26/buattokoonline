@@ -92,6 +92,13 @@ modified to reconcile that lab-only diagnostic difference.
 
 ## Public-release gate remains separate
 
+2026-11-15 continuation: a distinct exact-public-baseline schema31->32 worker
+adapter is now implemented and unit/regression tested, but not installed or
+published. Read [payment-completion-review.md](payment-completion-review.md)
+for its verification limits, the readable historical GoPay OTP source and the
+remaining checkout/worker/OAuth gates. The installed-worker facts below remain
+applicable; do not mistake candidate source for an installed capability.
+
 Current public v1.8.1 has 31 migrations. This candidate has 32. The existing v3
 native adapter in `update_service/policy_feed.py` and `native_forward.py` is pinned
 to the published 29→30 / v1.7.4→v1.8.0 edge. The generic grammar rejects the new

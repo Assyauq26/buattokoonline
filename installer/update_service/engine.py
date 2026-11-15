@@ -178,7 +178,7 @@ class Engine:
     if timer and current and current['state']!='recovery_required':core.run(['systemctl','start','single-store-maintenance.timer'])
  def forward(self,job,folder,installed):
   from .policy_feed import fresh
-  from .native_forward import NativeForward
+  from .evidence_forward import adapter
   from .forward_cutover import ForwardCutover
   release=json.loads(job['release'])
   try:
@@ -191,7 +191,7 @@ class Engine:
    self.mark(job,'downloading',downloaded=0,total=release['size'])
    download(release['url'],folder/'release.tar.gz',release['size'],release['digest'],
        lambda done,total:self.mark(job,'downloading',downloaded=done,total=total))
-   ForwardCutover(NativeForward(self,job,policy)).apply()
+   ForwardCutover(adapter(self,job,policy)).apply()
    self.mark(job,'succeeded',activeVersion=release['version'],finishedAt=int(time.time()))
   except BaseException as error:
    reason=str(error) if isinstance(error,Rejected) else 'operation_failed'
