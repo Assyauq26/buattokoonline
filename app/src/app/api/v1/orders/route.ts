@@ -7,6 +7,8 @@ import { createOrder } from "@/modules/checkout/checkout.service";
 import { listOrdersForUser } from "@/modules/orders/orders.service";
 import { addressSchema } from "@/modules/regions/region.validation";
 import { shippingCourierSchema } from "@/modules/shipping/shipping-settings-input";
+import { assertSameOrigin } from "@/lib/mutation-origin";
+import { jsonBody } from "@/modules/payments/midtrans/http";
 
 export const dynamic = "force-dynamic";
 
@@ -14,13 +16,15 @@ const schema = z.object({
   intentId: checkoutIntentId.optional(),
   address: addressSchema.transform(address => ({ ...address, city: address.city || "", province: address.province || "" })),
   shipping: z.object({ courier: shippingCourierSchema, service: z.string().max(30), cost: z.number().int().nonnegative(), quoteToken: z.string().min(1).max(4096) }),
-  bankAccountId: z.string().min(1),
+  bankAccountId: z.string().max(100).default(""),
+  paymentMethod: z.enum(["manual", "midtrans"]).default("manual"),
   couponCode: z.string().optional(),
   note: z.string().optional(),
   expectedLines: checkoutLinesSchema.optional(),
   expectedQuote: checkoutQuoteSchema.optional(),
   requestId: z.string().uuid().optional(),
-});
+}).strict().refine(input => input.paymentMethod === "midtrans" || input.bankAccountId.length > 0,
+  { message: "Pilih rekening untuk transfer manual", path: ["bankAccountId"] });
 
 export async function GET() {
   return handle(async () => {
@@ -31,8 +35,9 @@ export async function GET() {
 
 export async function POST(req: Request) {
   return handle(async () => {
+    assertSameOrigin(req);
     const user = await requireUser();
-    const body = schema.parse(await req.json());
+    const body = schema.parse(await jsonBody(req, 64_000));
     const order = await createOrder(user.id, body);
     return ok(order, 201);
   });
