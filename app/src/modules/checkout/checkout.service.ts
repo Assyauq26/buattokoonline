@@ -272,6 +272,7 @@ export async function createOrder(
       acceptedQuote.data.total !== total
     )) throw new HttpError("Harga, ongkir, atau kupon berubah. Muat ulang checkout dan konfirmasi ulang total pesanan.", 409);
     if (![current.subtotal, shippingCost, discount, total].every(n => Number.isSafeInteger(n) && n >= 0 && n <= 2_147_483_647)) throw new HttpError("Total pesanan tidak valid", 422);
+    if (isMidtrans && total < 1) throw new HttpError("Midtrans memerlukan total pembayaran lebih dari Rp0. Periksa diskon atau pilih metode lain.", 422);
     const payableTotal = total;
     const created = await tx.order.create({
       data: {

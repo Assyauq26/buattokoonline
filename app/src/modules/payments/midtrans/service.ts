@@ -84,7 +84,13 @@ async function credentials(attempt: BoundAttempt) {
 async function getStatus(attempt: BoundAttempt) {
   let last: unknown;
   for (const config of await credentials(attempt)) {
-    try { return await statusRequest(config.environment, serverKey(config), attempt.providerOrderId); }
+    try {
+      const data = await statusRequest(config.environment, serverKey(config), attempt.providerOrderId);
+      // A replacement key may have been pasted from another merchant. A 404 has
+      // no merchant identity, so it cannot authorize expiry after key rotation.
+      if (!data && config.id !== attempt.configId) { last = new MidtransRequestError(503, true); continue; }
+      return data;
+    }
     catch (error) { last = error; if (!(error instanceof MidtransRequestError && error.status === 401)) throw error; }
   }
   throw last;
