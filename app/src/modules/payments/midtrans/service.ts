@@ -216,8 +216,12 @@ export async function runMidtransWorker() {
   return { checked };
 }
 /** Called outside lifecycle locks; transition rechecks this receipt under its order lock. */
-export async function prepareExpiry(paymentId: string) { const attempt = await prisma.midtransAttempt.findFirst({ where: { paymentId }, orderBy: { createdAt: "desc" } });
-  if (attempt) await syncAttempt(attempt.id, true);
+export async function prepareExpiry(paymentId: string) {
+  const attempts = await prisma.midtransAttempt.findMany({ where: { paymentId }, orderBy: { createdAt: "asc" }, select: { id: true } });
+  const deadline = Date.now() + 20_000;
+  // Reconcile earlier attempts too; a later attempt cannot prove an older one unpaid.
+  // If the bounded sweep cannot finish, assertSafeExpiry keeps the reservation.
+  for (const attempt of attempts) { if (Date.now() > deadline) break; await syncAttempt(attempt.id, true); }
 }
 export async function assertSafeExpiry(tx: Prisma.TransactionClient, paymentId: string) {
   const attempts = await tx.midtransAttempt.findMany({ where: { paymentId }, orderBy: { createdAt: "desc" } });
