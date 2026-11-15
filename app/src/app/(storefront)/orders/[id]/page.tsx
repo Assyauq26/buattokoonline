@@ -47,7 +47,7 @@ export default async function OrderDetailPage({
     if (error instanceof HttpError && error.status === 404) notFound();
     throw error;
   });
-  const automaticPayment = ["blu_email_transfer","gopay_merchant_qris"].includes(order.payment?.method || "");
+  const automaticPayment = ["midtrans_snap","blu_email_transfer","gopay_merchant_qris"].includes(order.payment?.method || "");
   const reviewItems = new Map(
     (await reviewableOrderItems(user.id, id)).map((item) => [item.id, item]),
   );
@@ -302,7 +302,7 @@ export default async function OrderDetailPage({
               <CreditCard size={18} />
               {automaticPayment ? "Pembayaran otomatis" : "Pembayaran & bukti transfer"}
             </summary>
-            <p className="text-sm text-ink-soft">{order.payment.method === "gopay_merchant_qris" ? "QRIS GoPay Merchant" : order.payment.method === "blu_email_transfer" ? "Transfer blu otomatis" : "Transfer Bank Manual"}</p>
+            <p className="text-sm text-ink-soft">{order.payment.method === "midtrans_snap" ? "Midtrans Snap" : order.payment.method === "gopay_merchant_qris" ? "QRIS GoPay Merchant" : order.payment.method === "blu_email_transfer" ? "Transfer blu otomatis" : "Transfer Bank Manual"}</p>
             <p className="text-sm">
               Status:{" "}
               <Badge

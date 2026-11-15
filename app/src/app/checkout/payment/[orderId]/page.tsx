@@ -13,6 +13,8 @@ import { prisma } from "@/lib/prisma";
 import { BLU_CHECKOUT_METHOD } from "@/modules/payments/evidence/blu-checkout";
 import { GOPAY_CHECKOUT_METHOD } from "@/modules/payments/evidence/gopay-checkout";
 import { BluPaymentStatus } from "@/components/storefront/blu-payment-status";
+import { MidtransPayment } from "@/components/storefront/midtrans-payment";
+import { paymentView } from "@/modules/payments/midtrans/service";
 
 export const dynamic = "force-dynamic";
 export const metadata = {
@@ -30,6 +32,7 @@ export default async function PaymentPage({ params }: PaymentRouteProps) {
   if (!user) redirect(`/login?redirectTo=/checkout/payment/${orderId}`);
   const order = await getOrderForUser(user.id, orderId);
   const payment = order.payment!;
+  if (payment.method === "midtrans_snap") return <div className="mx-auto max-w-2xl space-y-5"><h1 className="text-2xl font-bold">Pembayaran · {order.orderNumber}</h1><MidtransPayment orderId={order.id} initial={JSON.parse(JSON.stringify(await paymentView(order.id)))} /></div>;
   if (payment.method === BLU_TEST_METHOD) redirect("/admin/payments/evidence/test");
   const bank = payment.bankAccount;
   const attempt = [BLU_CHECKOUT_METHOD,GOPAY_CHECKOUT_METHOD].includes(payment.method) ? await prisma.paymentEvidenceAttempt.findUnique({ where: { paymentId: payment.id } }) : null;

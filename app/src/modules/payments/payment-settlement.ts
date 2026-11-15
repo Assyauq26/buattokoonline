@@ -24,7 +24,7 @@ export async function settlePaymentInTransaction(tx: Prisma.TransactionClient, p
     toStatus: "PAID", note, createdBy: actorId } });
   await tx.notification.create({ data: { userId: payment.order.userId, type: "payment",
     title: "Pembayaran dikonfirmasi", body: `Pembayaran untuk order ${payment.order.orderNumber} telah diverifikasi.` } });
-  await writeAudit({ userId: actorId, action: "payment.approve", entity: "Payment", entityId: payment.id,
+  await writeAudit({ userId: actorId === "system" ? null : actorId, action: "payment.approve", entity: "Payment", entityId: payment.id,
     meta: { orderId: payment.orderId } }, tx);
   return { ok: true };
 }

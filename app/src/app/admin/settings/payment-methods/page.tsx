@@ -15,6 +15,7 @@ export default async function Page() {
         <h1>Metode Pembayaran</h1>
         <p>Metode pembayaran yang tersedia di toko Anda.</p>
       </header>
+      <section className="settings-card space-y-3"><h2>Midtrans Snap</h2><p className="text-sm text-zinc-600">Gateway resmi untuk QRIS, e-wallet, dan bank yang aktif pada merchant. Konfirmasi otomatis tanpa unggah bukti.</p><Link className="setting-outline" href="/admin/settings/payment-methods/midtrans">Kelola Midtrans</Link></section>
       <section className="settings-card identity-fields">
         <div className="flex items-center gap-3">
           <Landmark size={22} />
@@ -41,17 +42,17 @@ export default async function Page() {
         ? [
             {
               href: "gopay-qris",
-              title: "QRIS GoPay Merchant",
+              title: "Koneksi lama · GoPay Merchant",
               Icon: QrCode,
               description:
-                "Hubungkan akun merchant melalui OTP dan unggah QRIS. Konfirmasi otomatis memakai mutasi masuk berhasil. Integrasi tidak resmi.",
+                "Koneksi tersimpan dan rekonsiliasi pesanan lama. Pesanan otomatis baru menggunakan Midtrans resmi. Integrasi lama ini tidak resmi.",
             },
             {
               href: "gmail-bank",
-              title: "Notifikasi bank melalui Gmail",
+              title: "Koneksi lama · Gmail bank",
               Icon: Mail,
               description:
-                "Hubungkan Gmail penerima notifikasi blu. Aktifkan konfirmasi otomatis dengan nominal berkode unik setelah kesiapan rekening dan sumber terverifikasi.",
+                "Pertahankan koneksi Gmail dan riwayat notifikasi untuk pesanan lama. Pembayaran otomatis baru menggunakan Midtrans resmi.",
             },
           ]
         : []

@@ -86,7 +86,7 @@ export function CheckoutClient({
   requestId,
   intentId,
   banks,
-  bluSources = [],
+  midtransAvailable = false,
   address,
   jntCheckout = false,
 }: {
@@ -95,7 +95,7 @@ export function CheckoutClient({
   requestId: string;
   intentId?: string;
   banks: Bank[];
-  bluSources?: Array<{ id: string; label: string; bankAccountId: string;kind?:string }>;
+  midtransAvailable?: boolean;
   address: Addr | null;
   jntCheckout?: boolean;
 }) {
@@ -129,8 +129,8 @@ export function CheckoutClient({
   const [phone, setPhone] = useState(address?.phone || "");
   const [street, setStreet] = useState(address?.line || "");
   const [now, setNow] = useState(0);
+  const [midtrans, setMidtrans] = useState(midtransAvailable);
   const [bankId, setBankId] = useState(banks[0]?.id ?? "");
-  const [bluSourceId, setBluSourceId] = useState("");
   const [couponCode, setCouponCode] = useState("");
   const [couponDraft, setCouponDraft] = useState("");
   const [retry, setRetry] = useState(0);
@@ -298,7 +298,7 @@ export function CheckoutClient({
     !changedQuote &&
     !expired &&
     addressValid &&
-    (!!bankId || !!bluSourceId);
+    (midtrans || !!bankId);
   function refreshShipping() {
     wanted.current = rate || rates[rateIdx];
     setRateContext("");
@@ -542,27 +542,24 @@ export function CheckoutClient({
           <h2 className="flex items-center gap-2 font-display text-lg font-bold text-ink">
             <CreditCard size={18} /> Metode Pembayaran
           </h2>
-          {banks.length === 0 && bluSources.length===0 && (
+          {!midtransAvailable && banks.length === 0 && (
             <p role="alert" className="text-sm text-destructive">
               Metode pembayaran belum tersedia. Hubungi toko untuk melanjutkan.
             </p>
           )}
           <div className="space-y-2">
-            <input type="hidden" name="paymentEvidenceSourceId" value={bluSourceId} />
-            {bluSources.map(s => (
-              <label key={s.id} className={cn("flex cursor-pointer items-start gap-3 rounded-xl border p-3", bluSourceId === s.id ? "checkout-option-selected" : "border-line")}>
-                <input type="radio" name="bankAccountId" value={s.bankAccountId} checked={bluSourceId === s.id}
-                  onChange={() => { setBluSourceId(s.id); setBankId(s.bankAccountId); }} className="checkout-radio mt-1" />
-                <span><span className="block text-sm font-semibold">{s.kind==="GOPAY_QRIS"?"QRIS GoPay Merchant":"Transfer blu · otomatis"}</span>
-                  <span className="block text-xs text-ink-muted">{s.label}. Waktu bayar {s.kind==="GOPAY_QRIS"?"5":"10"} menit. Konfirmasi dari backend.</span></span>
-              </label>
-            ))}
+            <input type="hidden" name="paymentMethod" value={midtrans ? "midtrans" : "manual"} />
+            {midtrans && <input type="hidden" name="bankAccountId" value="" />}
+            {midtransAvailable && <label className={cn("flex min-h-16 cursor-pointer items-start gap-3 rounded-xl border p-3", midtrans ? "checkout-option-selected" : "border-line")}>
+              <input type="radio" name="payment-choice" checked={midtrans} onChange={() => { setMidtrans(true); }} className="checkout-radio mt-1" />
+              <span><strong className="block text-sm">Midtrans</strong><span className="text-xs text-ink-muted">QRIS, e-wallet, dan bank yang tersedia. Tanpa kode unik atau unggah bukti. Pilih kanal setelah pesanan dibuat.</span></span>
+            </label>}
             {banks.map((b) => (
               <label
                 key={b.id}
                 className={cn(
                   "flex cursor-pointer items-center gap-3 rounded-xl border p-3",
-                  !bluSourceId && bankId === b.id ? "checkout-option-selected" : "border-line",
+                  !midtrans && bankId === b.id ? "checkout-option-selected" : "border-line",
                 )}
                 data-testid={`bank-option-${b.id}`}
               >
@@ -570,10 +567,10 @@ export function CheckoutClient({
                   type="radio"
                   name="bankAccountId"
                   value={b.id}
-                  checked={!bluSourceId && bankId === b.id}
-                  onChange={() => { setBluSourceId(""); setBankId(b.id); }}
+                  checked={!midtrans && bankId === b.id}
+                  onChange={() => { setMidtrans(false); setBankId(b.id); }}
                   className="checkout-radio"
-                  required
+                  required={!midtrans}
                 />
                 <div>
                   <p className="text-sm font-semibold text-ink">
@@ -589,12 +586,7 @@ export function CheckoutClient({
                 </div>
               </label>
             ))}
-            {bluSourceId && (
-              <label className="flex items-start gap-3 rounded-xl bg-zinc-50 p-3 text-sm">
-                <input type="checkbox" name="codeConsent" required className="mt-1 size-4 shrink-0 accent-black" />
-                <span>Saya menyetujui tambahan kode unik Rp1–Rp999 pada total. Nominal tepat ditetapkan setelah pesanan dibuat. Transfer minimal Rp10.000; jangan transfer sebelum nominal akhir tampil.</span>
-              </label>
-            )}
+
           </div>
         </section>
 

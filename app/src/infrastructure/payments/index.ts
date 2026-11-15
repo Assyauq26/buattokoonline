@@ -5,16 +5,17 @@ import { TripayProvider } from "./tripay/tripay-provider";
 
 const registry: Record<string, PaymentProvider> = {
   manual: new ManualTransferProvider(),
-  // Adapters below are prepared but disabled for MVP.
+  // Midtrans is configured per installation; manual remains an explicit choice.
   midtrans: new MidtransProvider(),
   tripay: new TripayProvider(),
 };
 
-/** Only `manual` is active in MVP (PAYMENT_PROVIDER env controls future switch). */
+/** A selected provider must never silently become a manual transfer. */
 export function getPaymentProvider(
   code = process.env.PAYMENT_PROVIDER || "manual",
 ): PaymentProvider {
-  return registry[code] ?? registry.manual;
+  if (!registry[code]) throw new Error("Provider pembayaran tidak dikenal");
+  return registry[code];
 }
 
 export type { PaymentProvider, PaymentInstruction } from "./contracts/payment-provider";

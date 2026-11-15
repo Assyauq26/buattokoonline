@@ -101,6 +101,10 @@ def adapter(engine, job, policy=None):
         from .payment_live_forward import PaymentLiveForward,reviewed_policy as validate
         validate(policy)
         return PaymentLiveForward(engine,job,policy)
+    if policy and policy.get('executor') == 'midtrans-snap-forward-v1':
+        from .midtrans_forward import MidtransForward,reviewed_policy as validate
+        validate(policy)
+        return MidtransForward(engine,job,policy)
     if policy and policy.get('executor') != 'forward-cutover-v1':
         raise Rejected('policy_executor')
     return NativeForward(engine, job, policy)
