@@ -138,6 +138,8 @@ export async function createOrder(
     intentId?: string;
   },
 ) {
+  if (input.paymentMethod !== undefined && !["manual", "midtrans"].includes(input.paymentMethod))
+    throw new HttpError("Metode pembayaran tidak didukung", 422);
   const confirmation = checkoutLinesSchema.safeParse(input.expectedLines);
   if (!confirmation.success) throw new HttpError("Muat ulang checkout dan konfirmasi harga sebelum membuat pesanan.", 409);
   const acceptedQuote = input.expectedQuote ? checkoutQuoteSchema.safeParse(input.expectedQuote) : null;
