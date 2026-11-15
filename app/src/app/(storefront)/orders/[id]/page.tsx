@@ -47,6 +47,7 @@ export default async function OrderDetailPage({
     if (error instanceof HttpError && error.status === 404) notFound();
     throw error;
   });
+  const automaticPayment = ["blu_email_transfer","gopay_merchant_qris"].includes(order.payment?.method || "");
   const reviewItems = new Map(
     (await reviewableOrderItems(user.id, id)).map((item) => [item.id, item]),
   );
@@ -150,13 +151,13 @@ export default async function OrderDetailPage({
       {needPayment && order.status === "PENDING_PAYMENT" && (
         <div className="flex items-center justify-between rounded-2xl border border-warning/40 bg-amber-50 p-4">
           <p className="text-sm font-semibold text-amber-800">
-            {order.payment?.status === "REJECTED"
+            {order.payment?.status === "REJECTED" && !automaticPayment
               ? "Perbaiki bukti pembayaran. Jangan membayar ulang sebelum toko memeriksa dana masuk."
               : "Selesaikan pembayaran pesananmu."}
           </p>
           <Button asChild size="sm">
             <Link href={`/checkout/payment/${order.id}`}>
-              {order.payment?.status === "REJECTED"
+              {order.payment?.status === "REJECTED" && !automaticPayment
                 ? "Perbaiki bukti"
                 : "Bayar sekarang"}
             </Link>
@@ -164,7 +165,7 @@ export default async function OrderDetailPage({
         </div>
       )}
 
-      {order.payment?.status === "REJECTED" &&
+      {order.payment?.status === "REJECTED" && !automaticPayment &&
         order.payment.confirmations[0]?.rejectionReason && (
           <p role="status" className="rounded-xl border p-4">
             Alasan perbaikan: {order.payment.confirmations[0].rejectionReason}
@@ -299,9 +300,9 @@ export default async function OrderDetailPage({
           <details className="customer-panel customer-accordion">
             <summary>
               <CreditCard size={18} />
-              Pembayaran &amp; bukti transfer
+              {automaticPayment ? "Pembayaran otomatis" : "Pembayaran & bukti transfer"}
             </summary>
-            <p className="text-sm text-ink-soft">Transfer Bank Manual</p>
+            <p className="text-sm text-ink-soft">{order.payment.method === "gopay_merchant_qris" ? "QRIS GoPay Merchant" : order.payment.method === "blu_email_transfer" ? "Transfer blu otomatis" : "Transfer Bank Manual"}</p>
             <p className="text-sm">
               Status:{" "}
               <Badge

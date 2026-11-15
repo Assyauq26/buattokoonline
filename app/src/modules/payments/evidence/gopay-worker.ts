@@ -52,23 +52,31 @@ export async function reconcileGoPay(sourceId:string,actor:string,deadline=Date.
 }
 export async function runGoPayWorker(sourceId?:string,budgetMs=55000){
   if(!goPayCheckoutEnabled())return {read:0,settled:0,failed:0};
-  const now=new Date(),deadline=Date.now()+budgetMs;
+  const now=new Date(),deadline=Date.now()+budgetMs,signal=AbortSignal.timeout(Math.min(45000,budgetMs-3000));
   const sources=await prisma.paymentEvidenceSource.findMany({where:{storeScope:storeScope(),kind:"GOPAY_QRIS",...(sourceId?{id:sourceId}:{}),enabled:true,automationActorId:{not:null},encryptedSecret:{not:null},OR:[{nextPollAt:null},{nextPollAt:{lte:now}}]},orderBy:{nextPollAt:"asc"},take:10});
   let read=0,settled=0,failed=0;
   for(const s of sources){if(Date.now()>deadline-10000)break;
-    await prisma.$transaction(tx=>assertBluOperator(tx,s.automationActorId!));
+    try{await prisma.$transaction(tx=>assertBluOperator(tx,s.automationActorId!));}
+    catch(error){
+      if(!(error instanceof HttpError) || error.status!==403)throw error;
+      await prisma.$transaction(async tx=>{const current=await lockSource(tx,s.id);if(current.generation!==s.generation || current.automationActorId!==s.automationActorId)return;
+        await tx.paymentEvidenceSource.update({where:{id:s.id},data:{enabled:false,automationActorId:null,generation:{increment:1},leaseToken:null,leaseUntil:null}});
+        await tx.paymentEvidenceReview.create({data:{sourceId:s.id,action:"GOPAY_OPERATOR_ACCESS_REVOKED",reason:"Akses pengelola berubah; pembacaan dan checkout otomatis dihentikan."}});});
+      failed++;continue;
+    }
     const lease=await acquireSourceLease(s.id,new Date(),s.generation);if(!lease)continue;
     try{
-      let session=await validGoPaySession(s.id,lease.generation,false,lease.token);
+      let session=await validGoPaySession(s.id,lease.generation,false,lease.token,signal);
       let cursor:{start:string;end:string;offset:number};
       try{cursor=JSON.parse(lease.cursor||"null");if(!cursor || !Number.isSafeInteger(cursor.offset) || cursor.offset<0 || !Number.isFinite(+new Date(cursor.start)) || !Number.isFinite(+new Date(cursor.end)))throw Error();}
       catch{cursor={start:new Date(+now-15*60000).toISOString(),end:now.toISOString(),offset:0};}
       let next:string|undefined=lease.cursor||undefined;
       for(let page=0;page<5 && Date.now()<deadline-5000;page++){
         let result;
-        try{result=await readGoPayPage(session.access,session.merchantId,new Date(cursor.start),new Date(cursor.end),cursor.offset);}
-        catch(error){if(!(error instanceof HttpError) || error.status!==401)throw error;session=await validGoPaySession(s.id,lease.generation,true,lease.token);result=await readGoPayPage(session.access,session.merchantId,new Date(cursor.start),new Date(cursor.end),cursor.offset);}
+        try{result=await readGoPayPage(session.access,session.merchantId,new Date(cursor.start),new Date(cursor.end),cursor.offset,signal,session.refresh);}
+        catch(error){if(!(error instanceof HttpError) || error.status!==401)throw error;session=await validGoPaySession(s.id,lease.generation,true,lease.token,signal);result=await readGoPayPage(session.access,session.merchantId,new Date(cursor.start),new Date(cursor.end),cursor.offset,signal,session.refresh);}
         for(const raw of result.transactions){
+          signal.throwIfAborted();
           let observation;
           try{observation=authenticatedGoPayObservation(raw,session.merchantId);}catch{
             const fingerprint=createHash("sha256").update(JSON.stringify(raw)).digest("hex");
@@ -90,8 +98,9 @@ export async function runGoPayWorker(sourceId?:string,budgetMs=55000){
         try{history=JSON.parse(old?.reason||"null");if(!history || !Number.isSafeInteger(history.offset) || history.offset<0 || !Number.isFinite(+new Date(history.start)) || !Number.isFinite(+new Date(history.end)))throw Error();
           if(new Date(history.end)<monthStart)throw Error();}
         catch{history={start:monthStart.toISOString(),end:now.toISOString(),offset:0};}
-        const page=await readGoPayPage(session.access,session.merchantId,new Date(history.start),new Date(history.end),history.offset);
+        const page=await readGoPayPage(session.access,session.merchantId,new Date(history.start),new Date(history.end),history.offset,signal,session.refresh);
         for(const raw of page.transactions){
+          signal.throwIfAborted();
           try{const observation=authenticatedGoPayObservation(raw,session.merchantId);await ingestObservation(s.id,lease.generation,lease.token,observation);read++;}
           catch(error){if(error instanceof HttpError)throw error;/* Unsupported row cannot authorize settlement. */}
         }
@@ -102,6 +111,11 @@ export async function runGoPayWorker(sourceId?:string,budgetMs=55000){
       }
       await finishSourceLease(s.id,lease.token,lease.generation,{ok:true,cursor:next});
       settled+=(await reconcileGoPay(s.id,s.automationActorId!,deadline)).settled;
-    }catch(error){failed++;try{await finishSourceLease(s.id,lease.token,lease.generation,{ok:false,authFailed:error instanceof HttpError && error.status===401});}catch{/* New generation owns state. */}}
+    }catch(error){failed++;try{await finishSourceLease(s.id,lease.token,lease.generation,{ok:false,authFailed:error instanceof HttpError && error.status===401});}catch{/* New generation owns state. */}
+      await prisma.$transaction(async tx=>{const current=await lockSource(tx,s.id);if(current.generation!==lease.generation)return;
+        const hour=new Date(Date.now()-3600000);
+        if(!await tx.paymentEvidenceReview.findFirst({where:{sourceId:s.id,action:"GOPAY_CHECK_DEFERRED",createdAt:{gte:hour}},select:{id:true}}))
+          await tx.paymentEvidenceReview.create({data:{sourceId:s.id,action:"GOPAY_CHECK_DEFERRED",reason:"Pemeriksaan provider atau settlement belum selesai. Klaim dan perubahan finansial tetap atomik; periksa koneksi serta reservasi stok."}});});
+    }
   }return {read,settled,failed};
 }

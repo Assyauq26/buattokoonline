@@ -10,7 +10,7 @@ from .package import extract
 def operator_cutover_guard():
  for name in ('hubify-promotions-cutover.json','hubify-payment-evidence-cutover.json',
               'hubify-payment-test-cutover.json','hubify-blu-auth-cutover.json',
-              'hubify-blu-auth-retry-cutover.json','hubify-blu-checkout-cutover.json'):
+              'hubify-blu-auth-retry-cutover.json','hubify-blu-checkout-cutover.json','hubify-payment-live-cutover.json'):
   path=core.CONFIG/name
   if path.exists() and core.read_json(path).get('phase') not in ('complete','rolled_back'):
    raise Rejected('operator_cutover_in_progress')

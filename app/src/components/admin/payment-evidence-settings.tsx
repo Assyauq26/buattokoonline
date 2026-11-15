@@ -10,6 +10,7 @@ interface Source {
   health: string;
   connected: boolean;
   enabled?: boolean;
+  autoSettlement?:boolean;
   readiness?: { ready: boolean; reason: string };
   qrisConfigured?:boolean;
   qrisVersion?:string;
@@ -145,7 +146,8 @@ export function PaymentEvidenceSettings({
         {message ||
           (pending
             ? "Memproses…"
-            : sources.some(s => s.enabled) ? "Pembacaan otomatis dan checkout aktif untuk rekening yang dipilih. Hasil tidak pasti tetap diperiksa seller."
+            : sources.some(s => s.enabled && (kind==="GOPAY_QRIS" || s.autoSettlement)) ? "Pembacaan dan konfirmasi otomatis aktif untuk rekening yang dipilih. Konflik dan pembayaran terlambat tetap ditahan."
+            : sources.some(s=>s.enabled) ? "Koneksi masih memakai mode pemeriksaan lama. Konfirmasi aktivasi otomatis untuk tagihan baru."
             : "Konfigurasi draf tidak mengaktifkan pembayaran di checkout.")}
       </p>
       {sources.map((s) => (
@@ -153,7 +155,7 @@ export function PaymentEvidenceSettings({
           <h2 className="!mb-0">{s.label}</h2>
           <p className="text-sm">
             {healthLabels[s.health] || "Perlu pemeriksaan operator"}
-            {s.enabled ? " · Pembacaan otomatis aktif" : " · Checkout nonaktif"}
+            {s.enabled ? kind==="GMAIL_BANK" && !s.autoSettlement ? " · Mode pemeriksaan lama" : " · Pembacaan otomatis aktif" : " · Checkout nonaktif"}
           </p>
           {s.readiness && <p role="status" className="rounded-xl bg-zinc-50 p-3 text-sm text-zinc-700">{s.readiness.reason}</p>}
           {s.merchant && <p className="text-sm">{s.merchant.merchantName||"Identitas merchant belum diperiksa"} · ID {s.merchant.merchantId||"belum tersedia"} · akun ••••{s.merchant.phoneSuffix}</p>}
@@ -161,9 +163,10 @@ export function PaymentEvidenceSettings({
             {s.qrisConfigured && <img src={`/api/v1/admin/payment-evidence/qris-image?sourceId=${encodeURIComponent(s.id)}&v=${encodeURIComponent(s.qrisVersion||"")}`} alt="Preview QRIS statis merchant" className="mx-auto aspect-square w-56 max-w-full rounded-xl bg-white" />}
             <label className="block space-y-2 text-sm"><span>{s.qrisConfigured?"Ganti gambar QRIS":"Unggah QRIS merchant"}</span><input type="file" accept="image/png,image/jpeg,image/webp" disabled={pending} onChange={event=>void uploadQris(event.target.files?.[0],s.id)} /></label>
             {s.qrisConfigured && <button type="button" className={button} disabled={pending} onClick={()=>void perform({action:"set-gopay-qris",sourceId:s.id,payload:null})}>Hapus QRIS konfigurasi</button>}
-            <p className="text-sm">Integrasi tidak resmi. OTP menghubungkan sesi akun; aktivasi menunggu verifikasi merchant dan kontrak sesi.</p>
+            <details><summary className="min-h-11 cursor-pointer py-3 text-sm">Gunakan payload QRIS teks</summary><form className="space-y-3" onSubmit={event=>{event.preventDefault();const values=new FormData(event.currentTarget);void perform({action:"set-gopay-qris",sourceId:s.id,payload:values.get("payload")});}}><label className="block text-sm">Payload QRIS statis<textarea name="payload" required maxLength={4096} rows={4} autoComplete="off" spellCheck={false} className="mt-1 w-full rounded-xl border border-zinc-200 bg-white p-3 text-xs" /></label><button className={button} disabled={pending}>Simpan QRIS</button></form></details>
+            <p className="text-sm">Integrasi tidak resmi. Hubungkan akun melalui OTP, unggah QRIS merchant yang sama, lalu aktifkan checkout. Perubahan layanan GoPay dapat memerlukan koneksi ulang.</p>
             <form className="flex flex-wrap gap-2" onSubmit={event=>{event.preventDefault();const form=new FormData(event.currentTarget);void perform({action:"gopay-request-otp",sourceId:s.id,phone:form.get("phone")});}}>
-              <label className="grow text-sm">Nomor GoBiz/merchant<input name="phone" type="tel" autoComplete="tel" required pattern="\\+?62[0-9]{8,13}" maxLength={17} placeholder="6281234567890" className="mt-1 block w-full rounded-xl border border-zinc-200 bg-white p-3" /></label>
+              <label className="grow text-sm">Nomor GoBiz/merchant<input name="phone" type="tel" autoComplete="tel" required pattern={"\\+?62[0-9]{8,13}"} maxLength={17} placeholder="6281234567890" className="mt-1 block w-full rounded-xl border border-zinc-200 bg-white p-3" /></label>
               <button className={button} disabled={pending}>Kirim OTP</button>
             </form>
             <button type="button" className={button} disabled={pending} onClick={()=>void perform({action:"gopay-check-connection",sourceId:s.id})}>Periksa koneksi merchant</button>
@@ -179,14 +182,14 @@ export function PaymentEvidenceSettings({
           </div>}
           {canManage && kind === "GMAIL_BANK" && (
             <form className="space-y-3 rounded-xl bg-zinc-50 p-3" onSubmit={event => {
-              event.preventDefault(); void perform({ action: "set-blu-enabled", sourceId: s.id, enabled: !s.enabled });
+              event.preventDefault(); void perform({ action: "set-blu-enabled", sourceId: s.id, enabled: !(s.enabled && s.autoSettlement) });
             }}>
-              {!s.enabled && <label className="flex items-start gap-3 text-sm">
+              {!(s.enabled && s.autoSettlement) && <label className="flex items-start gap-3 text-sm">
                 <input type="checkbox" required className="mt-1 size-4 shrink-0 accent-black" disabled={pending || !bluCheckoutAvailable} />
                 <span>Aktifkan pembayaran otomatis berdasarkan notifikasi dana masuk blu yang tervalidasi, rekening sesuai, dan nominal berkode unik yang cocok tepat satu tagihan. Konflik dan pembayaran terlambat tetap diperiksa terpisah.</span>
               </label>}
               <button className={button + " bg-black !text-white"} disabled={pending || (!s.enabled && (!bluCheckoutAvailable || !s.connected))}>
-                {s.enabled ? "Nonaktifkan checkout blu" : "Aktifkan checkout blu"}
+                {s.enabled && s.autoSettlement ? "Nonaktifkan checkout blu" : "Aktifkan checkout blu otomatis"}
               </button>
               {!bluCheckoutAvailable && !s.enabled && <p className="text-xs text-zinc-600">Operator belum membuka checkout blu untuk instalasi ini. Gmail tetap dapat dibaca untuk pemeriksaan.</p>}
             </form>
@@ -251,8 +254,9 @@ export function PaymentEvidenceSettings({
         <p className="rounded-xl bg-zinc-50 p-3 text-sm text-zinc-600">
           Pembacaan manual hanya mencari notifikasi blu dalam 24 jam terakhir,
           hingga lima email per halaman. Lanjutkan halaman berikutnya setelah
-          jeda satu menit. Nominal dan waktu adalah kandidat pencocokan, bukan
-          bukti pasti asal dana atau konfirmasi lunas.{" "}
+          jeda satu menit. Untuk tagihan otomatis baru, satu notifikasi dana masuk
+          tervalidasi dengan nominal tepat akan melunasi pesanan. Konflik dan
+          pembayaran terlambat tetap memerlukan penanganan terpisah.{" "}
           <Link
             href="/admin/payments/evidence"
             className="font-medium text-zinc-950 underline underline-offset-4"
@@ -314,7 +318,6 @@ export function PaymentEvidenceSettings({
                 value={qrisPayload}
                 onChange={event=>setQrisPayload(event.target.value)}
                 rows={4}
-                required
                 maxLength={4096}
                 autoComplete="off"
                 spellCheck={false}

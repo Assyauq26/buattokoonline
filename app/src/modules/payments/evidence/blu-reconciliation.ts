@@ -64,7 +64,10 @@ export async function reconcileBluSource(sourceId: string, actorId: string, now 
       const found = await candidates(tx, a, s, now);
       if (!found.length) return;
       const late = p.order.status !== "PENDING_PAYMENT" || !p.order.expiresAt || p.order.expiresAt <= now;
-      if (!late && found.length === 1 && s.enabled && s.automationActorId === actorId &&
+      // Persisted in the same order/allocation transaction after seller opt-in
+      // was checked under this source lock. Never infer policy from two clocks.
+      const automatic=!!await tx.paymentEvidenceReview.findFirst({where:{sourceId,attemptId:a.id,action:"BLU_AUTOMATIC_ATTEMPT"},select:{id:true}});
+      if (!late && automatic && found.length === 1 && s.enabled && s.automationActorId === actorId &&
           p.bankAccountId === s.bankAccountId && p.order.expiresAt?.getTime() === a.expiresAt.getTime() &&
           a.expiresAt > now && ["PENDING_PAYMENT", "WAITING_VERIFICATION"].includes(p.status) &&
           found[0].externalId.startsWith("rfc-message:")) {
@@ -92,19 +95,25 @@ export async function reconcileBluSource(sourceId: string, actorId: string, now 
         reason: late ? "Notifikasi untuk pembayaran yang ditutup; jangan hidupkan kembali pesanan. Periksa pengembalian secara manual."
           : found.length === 1 ? "Nominal, rekening, waktu dan tanda tangan email cocok. Status bank tidak diketahui; mutasi asli wajib diperiksa seller."
           : "Beberapa notifikasi cocok. Jangan menyatakan lunas sebelum konflik diselesaikan di sumber asli." } });
-      if (!late && ["PENDING_PAYMENT", "REJECTED"].includes(p.status)) {
+      if (!late && !automatic && ["PENDING_PAYMENT", "REJECTED"].includes(p.status)) {
         await tx.payment.update({ where: { id: p.id }, data: { status: "WAITING_VERIFICATION" } });
         await tx.order.update({ where: { id: p.orderId }, data: { paymentStatus: "WAITING_VERIFICATION" } });
       }
       await tx.notification.create({ data: { userId: actorId, type: "payment", title: "Transfer blu perlu pemeriksaan",
         body: `${p.order.orderNumber}: ${late ? "pembayaran ditutup" : found.length > 1 ? "beberapa notifikasi cocok" : "kandidat transfer ditemukan"}. Periksa notifikasi bank; belum dinyatakan lunas.` } });
       if (!late) await tx.notification.create({ data: { userId: p.order.userId, type: "payment",
-        title: "Notifikasi transfer ditemukan", body: `Pembayaran ${p.order.orderNumber} sedang diperiksa seller. Jangan transfer ulang.` } });
+        title: "Notifikasi transfer ditemukan", body: automatic ? `Konfirmasi ${p.order.orderNumber} tertunda karena konflik notifikasi. Jangan transfer ulang; hubungi toko untuk penyelesaian.` : `Pembayaran ${p.order.orderNumber} sedang diperiksa seller. Jangan transfer ulang.` } });
       reviewed++;
     }); } catch (error) {
       // A poisoned/ambiguous candidate must not starve later orders. Financial
       // approval still fails closed; database/runtime failures stop the scan.
       if (!(error instanceof HttpError) || error.status !== 409) throw error;
+      await prisma.$transaction(async tx=>{
+        await assertBluOperator(tx,actorId);const s=await lockSource(tx,sourceId);
+        if(!s.enabled || s.automationActorId!==actorId)return;
+        if(!await tx.paymentEvidenceReview.findFirst({where:{sourceId,attemptId:a.id,action:"BLU_AUTO_SETTLEMENT_HELD"},select:{id:true}}))
+          await tx.paymentEvidenceReview.create({data:{sourceId,attemptId:a.id,action:"BLU_AUTO_SETTLEMENT_HELD",reason:"Konflik bukti atau reservasi stok menahan konfirmasi otomatis. Tidak ada klaim atau pelunasan parsial yang disimpan."}});
+      });
     }
     last = a;
   }

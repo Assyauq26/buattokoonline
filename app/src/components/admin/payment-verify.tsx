@@ -2,6 +2,7 @@ import { formatIDR } from "@/lib/money";
 import { OperationForm } from "./operation-form";
 import Link from "next/link";
 import { BLU_CHECKOUT_METHOD } from "@/modules/payments/evidence/blu-checkout";
+import { GOPAY_CHECKOUT_METHOD } from "@/modules/payments/evidence/gopay-checkout";
 export function PaymentVerify({
   paymentId,
   amount,
@@ -13,6 +14,7 @@ export function PaymentVerify({
 }) {
   if (method === BLU_CHECKOUT_METHOD) return <Link className="inline-flex min-h-11 items-center rounded-xl bg-black px-4 text-sm font-medium text-white"
     href={`/admin/payments/evidence?paymentId=${encodeURIComponent(paymentId)}`}>Periksa notifikasi blu dan mutasi bank</Link>;
+  if(method===GOPAY_CHECKOUT_METHOD)return <Link className="inline-flex min-h-11 items-center rounded-xl bg-black px-4 text-sm font-medium text-white" href="/admin/settings/payment-methods/gopay-qris">Lihat koneksi dan mutasi QRIS</Link>;
   return (
     <div
       data-testid={`payment-verify-${paymentId}`}

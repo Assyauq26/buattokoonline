@@ -45,7 +45,7 @@ def command(args,data=None):
     return result.stdout.decode().strip()
 
 
-def prepare(case, empty=False, official=False, blu=None):
+def prepare(case, empty=False, official=False, blu=None, payments=None, baseline_images=None):
     root=BASE/case
     if root.exists():raise RuntimeError('Case already exists; use a new case id')
     root.mkdir(mode=0o700)
@@ -62,6 +62,15 @@ def prepare(case, empty=False, official=False, blu=None):
         old,new=Path(blu['baseline']),Path(blu['archive'])
         empty=True;official=False
         (root/'blu-profile.json').write_text(json.dumps(blu))
+    if payments:
+        if blu:raise RuntimeError('One exact lab profile required')
+        from update_service.payment_live_forward import BASE_ARCHIVE,BASE_SOURCE
+        BASE_RELEASE_SOURCE=BASE_SOURCE
+        base_version,target_version='1.8.2','1.8.3'
+        target_sha,target_digest=payments['sha'],payments['digest']
+        old,new=Path(payments['baseline']),Path(payments['archive'])
+        empty=True;official=False
+        (root/'blu-profile.json').write_text(json.dumps(payments))
     old_manifest,files=package(old,BASE_ARCHIVE,BASE_RELEASE_SOURCE,base_version)
     package(new,target_digest,target_sha,target_version)
     source=root/'baseline';source.mkdir()
@@ -105,8 +114,20 @@ def prepare(case, empty=False, official=False, blu=None):
     if empty:
         # A newly created disposable DB: official 29 migrations and bootstrap,
         # never clone/downgrade the current QA store's 30-migration database.
-        result=subprocess.run(dc+['build','app','tools'],stdout=(root/'build.log').open('wb'),stderr=subprocess.STDOUT,timeout=1800)
-        if result.returncode:raise RuntimeError('Pilot baseline build failed')
+        if baseline_images:
+            from promotions_transition import runtime_paths
+            paths=sorted(runtime_paths(files))
+            js="const f=require('fs'),c=require('crypto');let s='';process.stdin.on('data',x=>s+=x);process.stdin.on('end',()=>{const o={};for(const p of JSON.parse(s)){try{o[p]=c.createHash('sha256').update(f.readFileSync('/app/'+p.slice(4))).digest('hex')}catch{o[p]=null}}console.log(JSON.stringify(o))})"
+            for name in ('app','tools'):
+                image=baseline_images[name]
+                if not re.fullmatch('sha256:[a-f0-9]{64}',image):raise RuntimeError('Exact baseline image required')
+                found=json.loads(command(['docker','run','--rm','-i','--network','none','--read-only','--cap-drop','ALL','--security-opt','no-new-privileges','--user','node','--entrypoint','node',image,'-e',js],json.dumps(paths).encode()))
+                if found!={p:hashlib.sha256(files[p]).hexdigest() for p in paths}:raise RuntimeError('Baseline runtime bytes differ from authenticated public artifact')
+                command(['docker','tag',image,compose['services'][name]['image']])
+            (root/'baseline-image-proof.json').write_text(json.dumps(dict(source=BASE_RELEASE_SOURCE,archive=BASE_ARCHIVE,images=baseline_images,files=len(paths),authenticatedPublicBaseline=True)))
+        else:
+            result=subprocess.run(dc+['build','app','tools'],stdout=(root/'build.log').open('wb'),stderr=subprocess.STDOUT,timeout=1800)
+            if result.returncode:raise RuntimeError('Pilot baseline build failed')
         command(dc+['run','--rm','-T','tools','npm','run','db:migrate'])
         bootstrap=('Isolated public-catalog pilot\0pilot-bootstrap@example.invalid\0'+secrets.token_urlsafe(28)).encode()
         command(dc+['run','--rm','-T','tools','npm','run','bootstrap'],bootstrap)
@@ -152,7 +173,8 @@ def prepare(case, empty=False, official=False, blu=None):
     key=root/'test-key.pem';command(['openssl','genpkey','-algorithm','ED25519','-out',key]);key.chmod(0o600)
     public=command(['openssl','pkey','-in',key,'-pubout'])+'\n'
     (config/'updater/trust.json').write_text(json.dumps({'lab-test':public}))
-    policy=policy_prepare(old,new,[identity],1) if not blu else __import__('update_service.blu_policy_operator',fromlist=['prepare']).prepare(old,new,target_sha,target_digest,[identity],1)
+    if payments:policy=__import__('update_service.payment_live_policy_operator',fromlist=['prepare']).prepare(old,new,target_sha,target_digest,[identity],1)
+    else:policy=policy_prepare(old,new,[identity],1) if not blu else __import__('update_service.blu_policy_operator',fromlist=['prepare']).prepare(old,new,target_sha,target_digest,[identity],1)
     policy_envelope=sign(policy,key,'lab-test')
     release={'version':target_version,'sha':target_sha,'digest':target_digest,'size':new.stat().st_size,
         'url':'https://github.com/Assyauq26/buattokoonline/releases/download/v'+target_version+'/store-v'+target_version+'.tar.gz',

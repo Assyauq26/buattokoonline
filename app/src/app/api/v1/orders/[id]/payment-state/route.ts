@@ -36,12 +36,15 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
     if (!order) return fail("Pesanan tidak ditemukan", 404);
     const bucket = Math.floor(Date.now() / 60_000);
     await consumeAuthBucket("payment-check:"+createHash("sha256").update(user.id).digest("hex")+":"+bucket, 3, new Date((bucket+1)*60_000));
+    let checkDeferred=false;
     if (order.payment?.method === BLU_CHECKOUT_METHOD && order.payment.evidenceAttempt &&
         ["PENDING_PAYMENT", "WAITING_VERIFICATION"].includes(order.payment.status))
-      await runBluWorker(order.payment.evidenceAttempt.sourceId, 15_000);
+      checkDeferred=(await runBluWorker(order.payment.evidenceAttempt.sourceId, 15_000)).failed>0;
     if (order.payment?.method === GOPAY_CHECKOUT_METHOD && order.payment.evidenceAttempt &&
         ["PENDING_PAYMENT", "WAITING_VERIFICATION"].includes(order.payment.status))
-      await runGoPayWorker(order.payment.evidenceAttempt.sourceId,15_000);
-    return GET(req, context);
+      checkDeferred=(await runGoPayWorker(order.payment.evidenceAttempt.sourceId,15_000)).failed>0;
+    const current=await GET(req,context);if(!current.ok)return current;
+    const payload=await current.json();const response=ok({...payload.data,checkDeferred});
+    response.headers.set("Cache-Control","private, no-store");return response;
   });
 }

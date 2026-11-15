@@ -21,7 +21,7 @@ export const sourceInput = z
 export async function createSource(actorId: string, raw: unknown) {
   requirePreview();
   const input = sourceInput.parse(raw);
-  if (input.kind === "GOPAY_QRIS") {
+  if (input.kind === "GOPAY_QRIS" && input.staticQris) {
     try {
       validateStaticQris(input.staticQris || "");
     } catch (error) {
@@ -30,7 +30,7 @@ export async function createSource(actorId: string, raw: unknown) {
         422,
       );
     }
-  } else if (input.staticQris)
+  } else if (input.kind === "GMAIL_BANK" && input.staticQris)
     throw new HttpError("QRIS tidak berlaku untuk bank", 422);
   return prisma.$transaction(async (tx) => {
     await assertStaffPermission(tx, actorId, PERMISSIONS.BANK_MANAGE);
@@ -124,7 +124,7 @@ export async function disconnectSource(actorId: string, sourceId: string) {
     }
   }
   // Local disconnection succeeds even if Google is unavailable. Report remote state honestly.
-  if (!revoked)
+  if (!revoked && secret.kind === "GMAIL_BANK")
     await prisma.paymentEvidenceReview.create({
       data: {
         sourceId,

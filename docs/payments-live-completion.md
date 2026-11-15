@@ -1,8 +1,8 @@
-# Payments live completion — working checkpoint
+# Payments live completion — release candidate review
 
 Base: main ef7b338413b33d05e864deb858ccc75a5269189a, published v1.8.2.
 Hubify was freshly checked at that source/version, schema33 and healthy services.
-This document is not evidence of a new deployment. Current edits are local only.
+Deployment state must be read from the final root journal and smoke receipt. This review records source validation, not proof of deployment.
 The owner authorizes implementation, merge, Hubify deployment and publication
 after gates, without another approval or bank transfer before release.
 
@@ -62,23 +62,38 @@ rejects redirects, bounds bodies/timeouts and never returns provider tokens/erro
 to the browser. No missing transaction status defaults to success. Unknown,
 refund/partial-refund, pending and failed mutations cannot settle.
 
-## Database / release work still required
+## Database and release procedure
 
 Only new migration20261115120000_gopay_payment_attempt adds nullable QR snapshot
 columns and indexes, plus a connected-source opt-in CHECK. Existing source flags,
 prices, orders, stock, history and old migration SQL are not changed. It was applied
 only to the isolated local test database. Production remains schema33.
 
-Do not publish or deploy this checkpoint. Remaining gates include full session
-and worker failure/restart/security tests, desktop/mobile flow verification, complete
-mutation coverage/cursor review, migration snapshot/restore rehearsal, official
-updater/private Hubify33→34 cutover capability, packaging/version metadata,
-artifact identity, capacity/backup preflight, actual deployment and smoke, then
-tag/release/catalog. Preserve J&T Production flags, historical SQL/ledger/artifacts,
-other tenants and central web services. Post-SQL recovery must be forward-only;
-never automatically restore a database after new orders may have arrived.
+See docs/v1.8.3-release.md for the exact baseline, migration, backup, recovery,
+worker revision, packaging and publication procedure. Deployment/publication gates
+remain mandatory; use their actual receipts instead of inferring success here.
 
-Local evidence so far: typecheck passes; one production build passed before the
-later GoPay checkout/worker additions; targeted lint had no errors and one image
-warning;27 current payment/database/adapter/image tests pass. Those results do
-not replace the outstanding gates or prove a live GoPay connection.
+Local verification on Node22/PostgreSQL16:
+- Production build/type validation passed; scoped lint32 source files had0 errors
+  and4 image warnings (private authenticated QR endpoints deliberately use img).
+-101 payment/security/database tests passed,2 optional provider/DNS tests skipped.
+  Included exact-once concurrent blu/GoPay settlement, legacy policy preservation,
+  manual-transfer regression, OTP/session limits, rotation retained on503,
+  single401 refresh/retry, true second page, refund/pending/unknown refusal,
+  cancellation protection, isolated access and PNG/JPEG/WebP decode/CRC.
+- The production browser test exercised real seller configuration→OTP mocks→QR
+  upload→activation→real shipping quote/checkout→customer check→PAID, then a
+  second checkout paid by authenticated cron after its tab closed.390/1440px
+  screenshots had no horizontal overflow or runtime errors. No real provider
+  traffic, payment or production data was used. Sessions were synthetic; this
+  does not claim an actual password login or live GoPay connection.
+- Canonical33→34 rehearsal preserved33 historical ledger rows and all87 old table
+  projections. Production dependencies audit reported0 vulnerabilities.
+- Exact-edge executor tests and shared crash/backup/readiness/reconciliation
+  tests are run separately; Linux rehearsal and production receipts remain the
+  authority for real Docker/systemd/backup/migration results.
+
+Review found and corrected a QRIS checkout bank-ID requirement, clock-based blu
+opt-in classification, token loss risk after refresh rotation/profile outage and
+legacy UI copy. New blu attempts carry an explicit immutable policy receipt in
+the order transaction; old attempts keep their review-based behavior.

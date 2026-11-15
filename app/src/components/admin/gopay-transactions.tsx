@@ -5,8 +5,9 @@ import { formatIDR } from "@/lib/money";
 type Page={source:{health:string;lastCheckedAt:string|null};transactions:Array<{id:string;amount:number|null;occurredAt:string|null;providerStatus:string;bankTxId:string|null;reason:string;order:{id:string;orderNumber:string}|null}>;nextCursor:string|null;logs:Array<{id:string;action:string;createdAt:string}>;coverage:string};
 export function GoPayTransactions({sources}:{sources:Array<{id:string;label:string}>}){
   const [source,setSource]=useState(sources[0]?.id||""),[month,setMonth]=useState(new Date(Date.now()+7*3600000).toISOString().slice(0,7)),[status,setStatus]=useState(""),[cursor,setCursor]=useState(""),[page,setPage]=useState<Page|null>(null),[message,setMessage]=useState(""),[busy,setBusy]=useState(false);
+  useEffect(()=>{if(!sources.some(s=>s.id===source)){setSource(sources[0]?.id||"");setCursor("");}},[sources,source]);
   useEffect(()=>{
-    if(!source)return;const controller=new AbortController();setBusy(true);setMessage("");
+    if(!source)return;const controller=new AbortController();setBusy(true);setMessage("");setPage(null);
     const query=new URLSearchParams({sourceId:source,month,status,...(cursor?{cursor}:{})});
     void fetch("/api/v1/admin/payment-evidence/gopay-transactions?"+query,{cache:"no-store",signal:controller.signal}).then(async r=>{
       const body=await r.json();if(!r.ok || !body.success)throw Error(body.error?.message||"Mutasi belum dapat dibaca");setPage(body.data);
@@ -28,7 +29,8 @@ export function GoPayTransactions({sources}:{sources:Array<{id:string;label:stri
       <div className="flex flex-wrap items-center justify-between gap-2"><strong>{row.amount===null?"Nominal tidak dikenal":formatIDR(row.amount)}</strong><span>{row.providerStatus}</span></div>
       <p>{row.occurredAt?new Intl.DateTimeFormat("id-ID",{dateStyle:"medium",timeStyle:"short",timeZone:"Asia/Jakarta"}).format(new Date(row.occurredAt))+" WIB":"Waktu belum diketahui"}</p>
       <p className="break-all text-xs text-zinc-500">ID transaksi: {row.bankTxId||"Belum tersedia"}</p>
-      {row.order?<Link className="underline underline-offset-4" href={`/admin/orders/${row.order.id}`}>{row.order.orderNumber}</Link>:<p className="text-zinc-600">{row.reason==="SOURCE_CHANGED_REQUIRES_REVIEW"?"Status sumber berubah; periksa refund atau konflik.":row.providerStatus!=="SETTLEMENT"?"Bukan dana masuk dengan status settlement.":"Belum cocok dengan satu tagihan aktif atau nominal berbeda."}</p>}
+      {row.order?<Link className="underline underline-offset-4" href={`/admin/orders/${row.order.id}`}>{row.order.orderNumber}</Link>:<p className="text-zinc-600">{row.providerStatus!=="SETTLEMENT"?"Bukan dana masuk dengan status settlement.":"Belum cocok dengan satu tagihan aktif atau nominal berbeda."}</p>}
+      {row.reason==="SOURCE_CHANGED_REQUIRES_REVIEW" && <p className="rounded-lg bg-zinc-100 p-2 text-zinc-950">Status sumber berubah; periksa refund atau konflik. Klaim asli tidak dihapus atau digunakan ulang.</p>}
     </li>)}</ul>
     <div className="flex gap-2"><button type="button" className={input} disabled={!cursor||busy} onClick={()=>setCursor("")}>Halaman awal</button><button type="button" className={input} disabled={!page?.nextCursor||busy} onClick={()=>setCursor(page!.nextCursor!)}>Halaman berikutnya</button></div>
     {page && <details><summary className="min-h-11 cursor-pointer py-3 text-sm font-medium">Riwayat pemeriksaan dan sesi</summary><ul className="space-y-2 text-xs">{page.logs.map(log=><li key={log.id}>{new Date(log.createdAt).toLocaleString("id-ID",{timeZone:"Asia/Jakarta"})} WIB · {log.action.replaceAll("_"," ")}</li>)}</ul><p className="mt-3 text-xs text-zinc-500">{page.coverage}</p></details>}

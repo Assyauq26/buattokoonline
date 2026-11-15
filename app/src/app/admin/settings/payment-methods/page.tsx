@@ -44,14 +44,14 @@ export default async function Page() {
               title: "QRIS GoPay Merchant",
               Icon: QrCode,
               description:
-                "Integrasi tidak resmi. Koneksi merchant belum tervalidasi; belum tersedia di checkout.",
+                "Hubungkan akun merchant melalui OTP dan unggah QRIS. Konfirmasi otomatis memakai mutasi masuk berhasil. Integrasi tidak resmi.",
             },
             {
               href: "gmail-bank",
               title: "Notifikasi bank melalui Gmail",
               Icon: Mail,
               description:
-                "Akses baca Gmail melalui Google OAuth. Parser bank belum tervalidasi; belum tersedia di checkout.",
+                "Hubungkan Gmail penerima notifikasi blu. Aktifkan konfirmasi otomatis dengan nominal berkode unik setelah kesiapan rekening dan sumber terverifikasi.",
             },
           ]
         : []
@@ -63,7 +63,7 @@ export default async function Page() {
               {title}
             </h2>
             <span className="shrink-0 rounded-full bg-zinc-100 px-3 py-1 text-xs text-zinc-700">
-              Belum aktif
+              Kelola koneksi
             </span>
           </div>
           <p className="text-sm text-zinc-600">{description}</p>

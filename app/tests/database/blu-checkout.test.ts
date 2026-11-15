@@ -8,7 +8,9 @@ import { prepareBluCheckout, BLU_CHECKOUT_METHOD, listBluCheckoutSources } from 
 import { setBluEnabled } from "@/modules/payments/evidence/blu-activation";
 import { reconcileBluSource, approveBluManually, recordBluReview } from "@/modules/payments/evidence/blu-reconciliation";
 import { observationFingerprint } from "@/modules/payments/evidence/repository";
-import { seal } from "@/modules/payments/evidence/secrets";
+import { seal,unseal } from "@/modules/payments/evidence/secrets";
+import { beginGoPayOtp,finishGoPayOtp,validGoPaySession } from "@/modules/payments/evidence/gopay-session";
+import { acquireSourceLease } from "@/modules/payments/evidence/repository";
 import { setGoPayEnabled,prepareGoPayCheckout,GOPAY_CHECKOUT_METHOD } from "@/modules/payments/evidence/gopay-checkout";
 import { reconcileGoPay,runGoPayWorker } from "@/modules/payments/evidence/gopay-worker";
 import { crc16 } from "@/modules/payments/evidence/qris";
@@ -65,7 +67,7 @@ async function activeSource() {
   const s = await source(); await evidence(s, 12345, new Date(Date.now() - 86400000));
   await setBluEnabled(actor, s.id, true); return s;
 }
-async function order(s: Awaited<ReturnType<typeof source>>, issued = new Date(), base = 10000) {
+async function order(s: Awaited<ReturnType<typeof source>>, issued = new Date(), base = 10000, legacy = false) {
   const product = await prisma.product.create({ data: { name: "Synthetic item", slug: randomUUID(), basePrice: base,
     variants: { create: { sku: randomUUID(), inventory: { create: { onHand: 20 } } } } }, include: { variants: true } });
   const variant = product.variants[0];
@@ -77,6 +79,7 @@ async function order(s: Awaited<ReturnType<typeof source>>, issued = new Date(),
       payment: { create: { bankAccountId: s.bankAccountId, method: BLU_CHECKOUT_METHOD, amount: allocation.payable } } }, include: { payment: true } });
     await reserveStock(tx, variant.id, 1, o.orderNumber);
     const attempt = await tx.paymentEvidenceAttempt.create({ data: { ...allocation, paymentId: o.payment!.id } });
+    if(!legacy)await tx.paymentEvidenceReview.create({data:{sourceId:s.id,attemptId:attempt.id,action:"BLU_AUTOMATIC_ATTEMPT",reason:"Synthetic checkout transaction after explicit opt-in."}});
     return { ...o, attempt, variantId: variant.id };
   });
 }
@@ -105,6 +108,66 @@ async function activeGoPaySource(){
   await setGoPayEnabled(actor,base.id,true,true);
   return prisma.paymentEvidenceSource.findUniqueOrThrow({where:{id:base.id}});
 }
+
+it("persists encrypted OTP/session state and does not return provider tokens to the dashboard",async()=>{
+  const s=await activeGoPaySource();
+  const provider=vi.fn().mockImplementation(async(url:string)=>new Response(JSON.stringify(url.includes("/login/request")?{otp_token:"synthetic-challenge"}:url.includes("/users/config")?{merchant:{id:s.accountRef,outlet_name:"FIXTURE STORE"}}:{access_token:"synthetic-access",refresh_token:"synthetic-refresh",expires_in:3600})));
+  vi.stubGlobal("fetch",provider);
+  try{
+    const started=await beginGoPayOtp(actor,s.id,"6281234567890");expect(started.otpRequired).toBe(true);
+    const pending=await prisma.paymentEvidenceSource.findUniqueOrThrow({where:{id:s.id}});
+    expect(pending.encryptedSecret).not.toContain("synthetic-challenge");expect(pending.enabled).toBe(false);
+    const result=await finishGoPayOtp(actor,s.id,"123456");
+    expect(result).toMatchObject({authenticated:true,merchantVerified:true,checkoutEnabled:false});
+    expect(JSON.stringify(result)).not.toMatch(/synthetic-access|synthetic-refresh|otp_token/);
+    const connected=await prisma.paymentEvidenceSource.findUniqueOrThrow({where:{id:s.id}});
+    const session=JSON.parse(unseal(connected.encryptedSecret!,scope,s.id,"gopay-session"));
+    expect(session.access).toBe("synthetic-access");expect(session.challenge).toBeUndefined();
+    await expect(finishGoPayOtp(actor,s.id,"123456")).rejects.toMatchObject({status:409});
+    expect(provider.mock.calls.length).toBe(3);
+  }finally{vi.unstubAllGlobals();}
+});
+
+it("enforces persistent OTP attempt limits without making a sixth provider request",async()=>{
+  const s=await activeGoPaySource();
+  const provider=vi.fn().mockImplementation(async(url:string)=>new Response(JSON.stringify(url.includes("/login/request")?{otp_token:"synthetic-challenge"}:{message:"invalid token must not leak"}),{status:url.includes("/login/request")?200:401}));
+  vi.stubGlobal("fetch",provider);
+  try{
+    await beginGoPayOtp(actor,s.id,"6281234567890");
+    for(let i=0;i<5;i++)await expect(finishGoPayOtp(actor,s.id,"123456")).rejects.toMatchObject({status:409});
+    await expect(finishGoPayOtp(actor,s.id,"123456")).rejects.toThrow("batas percobaan");
+    expect(provider.mock.calls.length).toBe(6); // One OTP request plus five token attempts.
+    expect((await prisma.paymentEvidenceSource.findUniqueOrThrow({where:{id:s.id}})).enabled).toBe(false);
+  }finally{vi.unstubAllGlobals();}
+});
+
+it("refreshes an expired session once under its durable source lease and persists the rotated token",async()=>{
+  const s=await activeGoPaySource();
+  const old=JSON.parse(unseal(s.encryptedSecret!,scope,s.id,"gopay-session"));old.expiresAt=Date.now()-1000;
+  await prisma.paymentEvidenceSource.update({where:{id:s.id},data:{encryptedSecret:seal(JSON.stringify(old),scope,s.id,"gopay-session")}});
+  const provider=vi.fn().mockImplementation(async(url:string)=>new Response(JSON.stringify(url.includes("/users/config")?{merchant:{id:s.accountRef,outlet_name:"FIXTURE STORE"}}:{access_token:"synthetic-rotated",refresh_token:"synthetic-refresh-rotated",expires_in:3600})));
+  vi.stubGlobal("fetch",provider);
+  try{
+    const lease=await acquireSourceLease(s.id,new Date(),s.generation);expect(lease).not.toBeNull();
+    const refreshed=await validGoPaySession(s.id,s.generation,false,lease!.token);expect(refreshed.access).toBe("synthetic-rotated");
+    await validGoPaySession(s.id,s.generation,false,lease!.token);expect(provider.mock.calls.length).toBe(2);
+    const saved=await prisma.paymentEvidenceSource.findUniqueOrThrow({where:{id:s.id}});
+    expect(JSON.parse(unseal(saved.encryptedSecret!,scope,s.id,"gopay-session")).refresh).toBe("synthetic-refresh-rotated");
+    await expect(validGoPaySession(s.id,s.generation,false,"wrong-lease")).rejects.toMatchObject({status:409});
+  }finally{vi.unstubAllGlobals();}
+});
+
+it("retains rotated refresh credentials across a temporary merchant-profile outage",async()=>{
+  const s=await activeGoPaySource(),old=JSON.parse(unseal(s.encryptedSecret!,scope,s.id,"gopay-session"));old.expiresAt=Date.now()-1000;
+  await prisma.paymentEvidenceSource.update({where:{id:s.id},data:{encryptedSecret:seal(JSON.stringify(old),scope,s.id,"gopay-session")}});
+  const provider=vi.fn().mockImplementation(async(url:string)=>url.includes("/users/config")?new Response("{}",{status:503}):new Response(JSON.stringify({access_token:"rotated-before-outage",refresh_token:"retained-rotation",expires_in:3600})));
+  vi.stubGlobal("fetch",provider);
+  try{const lease=await acquireSourceLease(s.id,new Date(),s.generation);
+    await expect(validGoPaySession(s.id,s.generation,false,lease!.token)).rejects.toMatchObject({status:503});
+    const saved=await prisma.paymentEvidenceSource.findUniqueOrThrow({where:{id:s.id}});
+    expect(JSON.parse(unseal(saved.encryptedSecret!,scope,s.id,"gopay-session")).refresh).toBe("retained-rotation");expect(saved.health).not.toBe("RECONNECT_REQUIRED");
+  }finally{vi.unstubAllGlobals();}
+});
 
 it("snapshots dynamic QRIS and permanently claims a merchant transaction under concurrent settlement",async()=>{
   const base=await activeGoPaySource(),merchant=base.accountRef;
@@ -174,6 +237,30 @@ it.each(["SETTLEMENT","REFUND","PARTIAL_REFUND","PENDING","FAILED","UNKNOWN"])("
   }finally{vi.unstubAllGlobals();}
 });
 
+it("refreshes one 401 and reads the actual second mutation page before claiming a payment",async()=>{
+  const s=await activeGoPaySource(),f=await checkout(s),o=await createOrder(f.user,{...f.input,bankAccountId:""});
+  const p=await prisma.payment.findUniqueOrThrow({where:{orderId:o.id},include:{evidenceAttempt:true}});let reads=0,refreshes=0;const offsets:number[]=[];const providerTime=new Date().toISOString();
+  const provider=vi.fn().mockImplementation(async(raw:string|URL)=>{
+    const input=String(raw);
+    if(input.includes("/goid/token")){refreshes++;return new Response(JSON.stringify({access_token:"retry-access",refresh_token:"retry-refresh",expires_in:3600}));}
+    if(input.includes("/users/config"))return new Response(JSON.stringify({merchant:{id:s.accountRef,outlet_name:"FIXTURE STORE"}}));
+    if(++reads===1)return new Response("{}",{status:401});const offset=Number(new URL(input).searchParams.get("from"));offsets.push(offset);
+    const row=(id:string,amount:number)=>({id,merchant_id:s.accountRef,gross_amount:amount,transaction_status:"SETTLEMENT",transaction_time:providerTime,currency:"IDR",payment_type:"QRIS"});
+    return new Response(JSON.stringify({transactions:offset===0?Array.from({length:50},(_,i)=>row("other-"+i,100+i)):[row("page-two-match",p.amount)]}));
+  });vi.stubGlobal("fetch",provider);
+  try{const result=await runGoPayWorker(s.id);expect(result.failed).toBe(0);expect(refreshes).toBe(1);expect(offsets).toContain(50);expect((await prisma.payment.findUniqueOrThrow({where:{id:p.id}})).status).toBe("PAID");expect(await prisma.paymentEvidenceClaim.count({where:{attemptId:p.evidenceAttempt!.id}})).toBe(1);}
+  finally{vi.unstubAllGlobals();}
+});
+
+it("never reopens a cancelled QRIS order when a successful provider credit arrives",async()=>{
+  const s=await activeGoPaySource(),f=await checkout(s),o=await createOrder(f.user,{...f.input,bankAccountId:""});
+  const p=await prisma.payment.findUniqueOrThrow({where:{orderId:o.id},include:{evidenceAttempt:true}});
+  await prisma.$transaction(async tx=>{await releaseStock(tx,f.variant,1,o.orderNumber);await tx.order.update({where:{id:o.id},data:{status:"CANCELLED"}});});
+  vi.stubGlobal("fetch",vi.fn().mockImplementation(async()=>new Response(JSON.stringify({transactions:[{id:randomUUID(),gross_amount:p.amount,transaction_status:"SETTLEMENT",transaction_time:new Date().toISOString(),currency:"IDR",payment_type:"QRIS"}]}))));
+  try{await runGoPayWorker(s.id);expect((await prisma.order.findUniqueOrThrow({where:{id:o.id}})).status).toBe("CANCELLED");expect(await prisma.paymentEvidenceClaim.count({where:{attemptId:p.evidenceAttempt!.id}})).toBe(0);expect(await prisma.inventoryMovement.count({where:{variantId:f.variant,type:"SALE"}})).toBe(0);}
+  finally{vi.unstubAllGlobals();}
+});
+
 it("uses the actual checkout with server shipping quotes, reservation and idempotent retries", async () => {
   const s = await activeSource(), f = await checkout(s);
   const [a,b] = await Promise.all([createOrder(f.user, f.input), createOrder(f.user, f.input)]);
@@ -234,7 +321,7 @@ it("requires code consent and bank minimum before issuing an attempt", async () 
   expect(await prisma.paymentEvidenceAttempt.count({ where: { sourceId: s.id } })).toBe(before);
 });
 it("unsupported notification identity stays in manual review; explicit approval remains exactly once", async () => {
-  const s = await activeSource(), o = await order(s), e = await evidence(s, o.total, new Date(+o.attempt.createdAt + 100));
+  const s = await activeSource(), o = await order(s, new Date(Date.now()-2000), 10000, true), e = await evidence(s, o.total, new Date(+o.attempt.createdAt + 100));
   await Promise.all([reconcileBluSource(s.id, actor), reconcileBluSource(s.id, actor)]);
   expect((await prisma.payment.findUniqueOrThrow({ where: { id: o.payment!.id } })).status).toBe("WAITING_VERIFICATION");
   expect(await prisma.paymentEvidenceClaim.count({ where: { attemptId: o.attempt.id } })).toBe(0);
@@ -249,7 +336,7 @@ it("unsupported notification identity stays in manual review; explicit approval 
   expect(await prisma.orderStatusHistory.count({ where: { orderId: o.id, toStatus: "PAID" } })).toBe(1);
 });
 it("rolls claim and payment back together when inventory commit fails", async () => {
-  const s = await activeSource(), o = await order(s), e = await evidence(s, o.total, new Date(+o.attempt.createdAt + 100));
+  const s = await activeSource(), o = await order(s, new Date(Date.now()-2000), 10000, true), e = await evidence(s, o.total, new Date(+o.attempt.createdAt + 100));
   await reconcileBluSource(s.id, actor);
   await prisma.inventory.update({ where: { variantId: o.variantId }, data: { reserved: 0 } });
   await expect(approveBluManually(actor, approval(e.id, o.attempt.id))).rejects.toThrow("Reservasi stok");
@@ -268,11 +355,12 @@ it("resumes a bounded reconciliation scan instead of starving the 51st order", a
   const s = await activeSource();
   for (let i = 0; i < 50; i++) await order(s);
   const o = await order(s), e = await evidence(s, o.total, new Date(+o.attempt.createdAt + 100));
+  await prisma.incomingPaymentEvidence.update({where:{id:e.id},data:{externalId:"rfc-message:"+randomBytes(32).toString("hex")}});
   await reconcileBluSource(s.id, actor, new Date(), Date.now() + 20000);
   expect((await prisma.payment.findUniqueOrThrow({ where: { id: o.payment!.id } })).status).toBe("PENDING_PAYMENT");
   await reconcileBluSource(s.id, actor, new Date(), Date.now() + 20000);
-  expect((await prisma.payment.findUniqueOrThrow({ where: { id: o.payment!.id } })).status).toBe("WAITING_VERIFICATION");
-  expect(await prisma.paymentEvidenceClaim.count({ where: { evidenceId: e.id } })).toBe(0);
+  expect((await prisma.payment.findUniqueOrThrow({ where: { id: o.payment!.id } })).status).toBe("PAID");
+  expect(await prisma.paymentEvidenceClaim.count({ where: { evidenceId: e.id } })).toBe(1);
   expect(await prisma.paymentEvidenceReview.count({ where: { sourceId: s.id, action: "BLU_RECONCILE_CHECKPOINT" } })).toBe(2);
 });
 it("records manual findings idempotently without consuming evidence or changing money", async () => {

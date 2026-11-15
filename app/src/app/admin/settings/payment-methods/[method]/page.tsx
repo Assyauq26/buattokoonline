@@ -41,6 +41,8 @@ export default async function Page({
             enabled: true,
             staticQris: true,
             updatedAt: true,
+            generation:true,
+            reviews:{where:{action:"BLU_AUTO_MATCH_OPT_IN"},orderBy:[{createdAt:"desc"},{id:"desc"}],take:1,select:{reason:true}},
           },
           orderBy: { createdAt: "desc" },
           take: 30,
@@ -102,8 +104,9 @@ export default async function Page({
         )}
         <p className="flex items-start gap-2 rounded-xl bg-zinc-50 p-3 text-sm">
           <ShieldCheck className="shrink-0" size={18} aria-hidden="true" />
-          Nominal dan waktu hanya membantu pemeriksaan. Bukti yang terdeteksi
-          tidak otomatis membuat pesanan lunas.
+          Setelah metode diaktifkan, satu transaksi masuk yang tervalidasi dan
+          cocok tepat satu tagihan aktif akan melunasi pesanan otomatis.
+          Konflik, refund dan pembayaran terlambat tetap ditahan untuk pemeriksaan.
         </p>
       </section>
       {oauth && (
@@ -127,6 +130,7 @@ export default async function Page({
             merchant: gopay ? publicGoPayStatus(s.id,s.encryptedSecret) : null,
             qrisVersion: s.updatedAt.toISOString(),
             enabled: s.enabled,
+            autoSettlement:s.reviews[0]?.reason===`generation:${s.generation}`,
             lastCheckedAt: s.lastCheckedAt?.toISOString() || null,
           }))}
           banks={banks.map((b) => ({

@@ -340,7 +340,10 @@ export async function createOrder(
         bankAccountId: bank?.id,
       },
     });
-    if (blu) await tx.paymentEvidenceAttempt.create({ data: { ...blu, paymentId: payment.id } });
+    if (blu) {
+      const attempt=await tx.paymentEvidenceAttempt.create({ data: { ...blu, paymentId: payment.id } });
+      if(payment.method===BLU_CHECKOUT_METHOD)await tx.paymentEvidenceReview.create({data:{sourceId:blu.sourceId,attemptId:attempt.id,action:"BLU_AUTOMATIC_ATTEMPT",reason:"Tagihan diterbitkan melalui checkout blu otomatis setelah opt-in seller diverifikasi di bawah kunci sumber dalam transaksi yang sama."}});
+    }
 
     if (input.intentId) {
       await tx.checkoutIntent.update({ where: { id: input.intentId }, data: { consumedAt: new Date(), orderId: created.id } });

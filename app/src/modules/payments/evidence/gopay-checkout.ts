@@ -39,6 +39,7 @@ export async function setGoPayEnabled(actorId:string,sourceId:string,enabled:boo
       const qrName=qr.tags.find(t=>t.tag==="59")?.value.trim().replace(/\s+/g," ").toUpperCase();
       if(qrName!==merchant.merchantName.trim().replace(/\s+/g," ").toUpperCase())throw new HttpError("Nama QRIS tidak sama dengan merchant terhubung. Gunakan QRIS merchant ini.",409);
     }
+    if(s.enabled===enabled && (!enabled || s.automationActorId===actorId))return {enabled};
     await tx.paymentEvidenceSource.update({where:{id:sourceId},data:{enabled,automationActorId:enabled?actorId:null,generation:{increment:1},leaseToken:null,leaseUntil:null,nextPollAt:null,cursor:null}});
     await tx.paymentEvidenceReview.create({data:{sourceId,actorId,action:enabled?"GOPAY_CHECKOUT_ENABLED":"GOPAY_CHECKOUT_DISABLED",reason:enabled?"Seller mengonfirmasi QRIS merchant sendiri; identitas akun dan nama QRIS sesuai.":"Checkout dihentikan; tagihan lama dan klaim tetap dipertahankan."}});
     return {enabled};

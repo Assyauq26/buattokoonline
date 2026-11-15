@@ -37,12 +37,14 @@ export async function setBluEnabled(actorId: string, sourceId: string, enabled: 
       if (!verified) throw new HttpError("Belum ada notifikasi blu dengan rekening dan tanda tangan yang terverifikasi", 409);
     }
     if (inspectOnly) return { enabled: s.enabled };
-    if (s.enabled === enabled && (!enabled || s.automationActorId === actorId)) return { enabled };
+    const consent = enabled ? await tx.paymentEvidenceReview.findFirst({where:{sourceId,action:"BLU_AUTO_MATCH_OPT_IN",reason:`generation:${s.generation}`},select:{id:true}}) : null;
+    if (s.enabled === enabled && (!enabled || (s.automationActorId === actorId && consent))) return { enabled };
     await tx.paymentEvidenceSource.update({ where: { id: sourceId }, data: {
       enabled, automationActorId: enabled ? actorId : null, generation: { increment: 1 },
       leaseToken: null, leaseUntil: null, cursor: null, nextPollAt: null,
     } });
     await tx.paymentEvidenceOAuthState.deleteMany({ where: { sourceId } });
+    if(enabled)await tx.paymentEvidenceReview.create({data:{sourceId,actorId,action:"BLU_AUTO_MATCH_OPT_IN",reason:`generation:${s.generation+1}`}});
     await tx.paymentEvidenceReview.create({ data: { sourceId, actorId,
       action: enabled ? "BLU_CHECKOUT_ENABLED" : "BLU_CHECKOUT_DISABLED",
       reason: enabled ? "Seller mengaktifkan notifikasi otomatis dan checkout berkode unik; hasil tidak pasti tetap diperiksa manual."

@@ -17,7 +17,7 @@ const mailSync = await fetch('http://127.0.0.1:3000/api/internal/cron/mail-brand
 if (!mailSync.ok) throw new Error(`Local maintenance mail-brand failed (${mailSync.status})`);
 // Keep the existing 120-second systemd budget and carrier/expiry work. An
 // overdue read retries from its durable cursor next tick; buyer tabs never poll Gmail.
-if (process.env.PAYMENT_BLU_CHECKOUT_ENABLED === 'true' && Date.now() - maintenanceStarted < 45000) {
+if ((process.env.PAYMENT_BLU_CHECKOUT_ENABLED === 'true' || process.env.PAYMENT_GOPAY_CHECKOUT_ENABLED === 'true') && Date.now() - maintenanceStarted < 45000) {
   const evidence = await fetch('http://127.0.0.1:3000/api/internal/cron/payment-evidence', {
     method: 'POST', headers: { Authorization: `Bearer ${process.env.CRON_SECRET}` },
     signal: AbortSignal.timeout(60000),

@@ -15,7 +15,7 @@ export async function GET(req:Request){return handle(async()=>{
   if(cursor && !await prisma.incomingPaymentEvidence.findFirst({where:{id:cursor,sourceId:id},select:{id:true}}))return fail("Halaman tidak ditemukan",404);
   const rows=await prisma.incomingPaymentEvidence.findMany({where:{sourceId:id,occurredAt:{gte:start,lt:end},...(status?{providerStatus:status}:{})},orderBy:[{createdAt:"desc"},{id:"desc"}],...(cursor?{cursor:{id:cursor},skip:1}:{}),take:51,
     select:{id:true,amount:true,occurredAt:true,providerStatus:true,bankTxId:true,reason:true,claim:{select:{attempt:{select:{payment:{select:{order:{select:{id:true,orderNumber:true}}}}}}}}}});
-  const logs=await prisma.paymentEvidenceReview.findMany({where:{sourceId:id,action:{startsWith:"GOPAY_"},NOT:{action:{in:["GOPAY_RECONCILE_CHECKPOINT"]}}},orderBy:[{createdAt:"desc"},{id:"desc"}],take:50,select:{id:true,action:true,createdAt:true}});
+  const logs=await prisma.paymentEvidenceReview.findMany({where:{sourceId:id,action:{startsWith:"GOPAY_"},NOT:{action:{in:["GOPAY_RECONCILE_CHECKPOINT","GOPAY_HISTORY_CURSOR"]}}},orderBy:[{createdAt:"desc"},{id:"desc"}],take:50,select:{id:true,action:true,createdAt:true}});
   const result=ok({source:{...source,cursor:undefined,backfillPending:!!source.cursor},transactions:rows.slice(0,50).map(row=>({...row,order:row.claim?.attempt.payment.order||null,claim:undefined})),nextCursor:rows.length>50?rows[49].id:null,logs,coverage:"Hanya mutasi yang telah berhasil dibaca backend; status pagination tidak membuktikan seluruh mutasi provider sudah terbaca."});
   result.headers.set("Cache-Control","private, no-store");return result;
 });}

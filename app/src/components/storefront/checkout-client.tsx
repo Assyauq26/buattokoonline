@@ -298,7 +298,7 @@ export function CheckoutClient({
     !changedQuote &&
     !expired &&
     addressValid &&
-    !!bankId;
+    (!!bankId || !!bluSourceId);
   function refreshShipping() {
     wanted.current = rate || rates[rateIdx];
     setRateContext("");

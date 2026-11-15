@@ -61,7 +61,7 @@ export async function finishGoPayOtp(actor:string,sourceId:string,otp:string){
     if(s.generation!==saved.generation || !s.encryptedSecret || decode(sourceId,s.encryptedSecret).nonce!==saved.nonce)throw new HttpError("Koneksi berubah saat menerima sesi",409);
     await tx.paymentEvidenceSource.update({where:{id:sourceId},data:{health:"MERCHANT_CHECK_REQUIRED",encryptedSecret:encode(sourceId,staged)}});
   });
-  const merchant=await readGoPayMerchant(result.access_token);
+  const merchant=await readGoPayMerchant(result.access_token,undefined,result.refresh_token);
   await prisma.$transaction(async tx=>{
     await assertStaffPermission(tx,actor,PERMISSIONS.BANK_MANAGE);const s=await lockSource(tx,sourceId);
     if(s.generation!==saved.generation || !s.encryptedSecret || decode(sourceId,s.encryptedSecret).nonce!==staged.nonce)throw new HttpError("Koneksi berubah saat verifikasi",409);
@@ -74,7 +74,7 @@ export async function finishGoPayOtp(actor:string,sourceId:string,otp:string){
 /** Caller owns the durable source lease; generation fences disconnect/reconnect.
  * Refreshes are persisted before another provider call, survive a restart, and
  * are never exposed through a seller/customer response. */
-export async function validGoPaySession(sourceId:string,generation:number,force=false,leaseToken?:string){
+export async function validGoPaySession(sourceId:string,generation:number,force=false,leaseToken?:string,signal?:AbortSignal){
   const s=await prisma.paymentEvidenceSource.findFirst({where:{id:sourceId,storeScope:storeScope(),kind:"GOPAY_QRIS",generation}});
   if(!s?.encryptedSecret)throw new HttpError("Hubungkan akun GoPay terlebih dahulu",409);
   if(!leaseToken || s.leaseToken!==leaseToken || !s.leaseUntil || s.leaseUntil<=new Date())throw new HttpError("Lease koneksi GoPay sudah berubah",409);
@@ -83,13 +83,15 @@ export async function validGoPaySession(sourceId:string,generation:number,force=
   if(force || session.expiresAt<=Date.now()+60000){
     if(!session.refresh)throw new HttpError("GoPay meminta hubungkan ulang akun",401);
     try {
-      const result=await refreshGoPaySession(session.refresh,session.phone);
+      const result=await refreshGoPaySession(session.refresh,session.phone,signal);
       if(!result.expires_in)throw new HttpError("Masa berlaku refresh tidak tersedia",401);
-      const merchant=await readGoPayMerchant(result.access_token);
-      if(merchant.id!==session.merchantId)throw new HttpError("Identitas merchant berubah",401);
+      // Persist rotated tokens before another network call. A temporary profile
+      // outage must not discard the only usable refresh token after rotation.
       session={...session,access:result.access_token,refresh:result.refresh_token||session.refresh,expiresAt:Date.now()+result.expires_in*1000};
-      const changed=await prisma.paymentEvidenceSource.updateMany({where:{id:sourceId,storeScope:storeScope(),generation,encryptedSecret:s.encryptedSecret},data:{encryptedSecret:encode(sourceId,session)}});
+      const changed=await prisma.paymentEvidenceSource.updateMany({where:{id:sourceId,storeScope:storeScope(),generation,leaseToken,encryptedSecret:s.encryptedSecret},data:{encryptedSecret:encode(sourceId,session)}});
       if(changed.count!==1)throw new HttpError("Sesi berubah selama refresh",409);
+      const merchant=await readGoPayMerchant(result.access_token,signal,session.refresh);
+      if(merchant.id!==session.merchantId)throw new HttpError("Identitas merchant berubah",401);
       await prisma.paymentEvidenceReview.create({data:{sourceId,action:"GOPAY_SESSION_REFRESHED",reason:"Token diperbarui dan merchant tetap sama; kredensial tersimpan terenkripsi."}});
     } catch(error){
       if(error instanceof HttpError && error.status===503)throw error;
@@ -109,7 +111,7 @@ export async function checkGoPayConnection(actor:string,sourceId:string){
   try{
     const staged=source.encryptedSecret?decode(sourceId,source.encryptedSecret):null;
     if(staged?.access && !staged.merchantId && staged.expiresAt>Date.now()){
-      const merchant=await readGoPayMerchant(staged.access);
+      const merchant=await readGoPayMerchant(staged.access,undefined,staged.refresh);
       await prisma.$transaction(async tx=>{
         await assertStaffPermission(tx,actor,PERMISSIONS.BANK_MANAGE);const current=await lockSource(tx,sourceId);
         if(current.generation!==lease.generation || current.leaseToken!==lease.token || !current.encryptedSecret || decode(sourceId,current.encryptedSecret).nonce!==staged.nonce)throw new HttpError("Koneksi berubah",409);
@@ -118,7 +120,7 @@ export async function checkGoPayConnection(actor:string,sourceId:string){
       });
     }
     const session=await validGoPaySession(sourceId,lease.generation,false,lease.token);
-    const merchant=await readGoPayMerchant(session.access);
+    const merchant=await readGoPayMerchant(session.access,undefined,session.refresh);
     if(merchant.id!==session.merchantId)throw new HttpError("Identitas merchant berubah",401);
     await finishSourceLease(sourceId,lease.token,lease.generation,{ok:true});
     return {connectionChecked:true,merchantName:merchant.name};
