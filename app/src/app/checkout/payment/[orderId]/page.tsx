@@ -8,6 +8,10 @@ import { formatIDR } from "@/lib/money";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ProofForm } from "@/components/storefront/proof-form";
+import { BLU_TEST_METHOD } from "@/modules/payments/evidence/test-policy";
+import { prisma } from "@/lib/prisma";
+import { BLU_CHECKOUT_METHOD } from "@/modules/payments/evidence/blu-checkout";
+import { BluPaymentStatus } from "@/components/storefront/blu-payment-status";
 
 export const dynamic = "force-dynamic";
 export const metadata = {
@@ -25,7 +29,9 @@ export default async function PaymentPage({ params }: PaymentRouteProps) {
   if (!user) redirect(`/login?redirectTo=/checkout/payment/${orderId}`);
   const order = await getOrderForUser(user.id, orderId);
   const payment = order.payment!;
+  if (payment.method === BLU_TEST_METHOD) redirect("/admin/payments/evidence/test");
   const bank = payment.bankAccount;
+  const attempt = payment.method === BLU_CHECKOUT_METHOD ? await prisma.paymentEvidenceAttempt.findUnique({ where: { paymentId: payment.id } }) : null;
 
   const isRefunded = payment.status === "REFUNDED";
   const isPaid = payment.status === "PAID";
@@ -144,6 +150,8 @@ export default async function PaymentPage({ params }: PaymentRouteProps) {
             )}
           </div>
 
+          {attempt && bank && <BluPaymentStatus orderId={order.id} accountNumber={bank.accountNumber} amount={payment.amount}
+            uniqueCode={attempt.uniqueCode} expiresAt={attempt.expiresAt.toISOString()} initialStatus={payment.status} serverNow={new Date().toISOString()} />}
           {isWaiting ? (
             <div
               className="flex flex-col items-center gap-3 rounded-2xl border border-warning/40 bg-amber-50 p-8 text-center"
@@ -160,6 +168,8 @@ export default async function PaymentPage({ params }: PaymentRouteProps) {
                 <Link href={`/orders/${order.id}`}>Lihat Status Pesanan</Link>
               </Button>
             </div>
+          ) : attempt ? (
+            <p className="rounded-xl bg-zinc-50 p-4 text-sm text-zinc-600">Menunggu notifikasi transfer blu. Jika dana telah masuk tetapi belum terdeteksi, hubungi seller untuk pemeriksaan mutasi. Jangan melakukan transfer ulang.</p>
           ) : (
             <div className="space-y-3">
               {lastRejected && (

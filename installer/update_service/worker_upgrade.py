@@ -56,6 +56,57 @@ def files_digest(folder):
     return result
 
 
+def installed_revision(source, prior, target):
+    """Attest the exact additive Hubify guard installed by completed operators.
+
+    Preserve the old receipt verbatim. No arbitrary local edit, SQL exception or
+    nonterminal cutover is adopted as a new worker baseline.
+    """
+    actual = files_digest(target)
+    expected = prior.get('afterFiles', {})
+    if actual == expected:
+        return None
+    sha = prior.get('sourceSha', '')
+    if sha != '1239bec7b8c769810841a4aeb8f719e4770db8fa':
+        raise Rejected('worker_source_bytes')
+    from payment_evidence_cutover import OLD_GUARD
+    from payment_test_cutover import PreparedAuthNative
+    original = subprocess.check_output(['git', '-C', str(source), 'show', sha+':installer/update_service/engine.py'],
+        stderr=subprocess.DEVNULL, env={**os.environ, 'GIT_NO_REPLACE_OBJECTS':'1'})
+    if hashlib.sha256(original).hexdigest() != expected.get('update_service/engine.py') or original.count(OLD_GUARD) != 1:
+        raise Rejected('worker_source_bytes')
+    reviewed = original.replace(OLD_GUARD, PreparedAuthNative.next_guard)
+    sixth = b"'hubify-blu-auth-retry-cutover.json','hubify-blu-checkout-cutover.json')"
+    reviewed_six = original.replace(OLD_GUARD,PreparedAuthNative.next_guard.replace(b"'hubify-blu-auth-retry-cutover.json')",sixth))
+    six = actual.get('update_service/engine.py') == hashlib.sha256(reviewed_six).hexdigest()
+    if six:reviewed=reviewed_six
+    adopted = {**expected, 'update_service/engine.py':hashlib.sha256(reviewed).hexdigest()}
+    if actual != adopted or (Path(target)/'update_service/engine.py').read_bytes() != reviewed:
+        raise Rejected('worker_source_bytes')
+    names = ('hubify-promotions-cutover.json','hubify-payment-evidence-cutover.json',
+        'hubify-payment-test-cutover.json','hubify-blu-auth-cutover.json','hubify-blu-auth-retry-cutover.json')
+    if six:names=(*names,'hubify-blu-checkout-cutover.json')
+    receipts = {}
+    for name in names:
+        path = core.CONFIG/name
+        secure_path(path)
+        if core.read_json(path).get('phase') not in ('complete','rolled_back'):
+            raise Rejected('operator_cutover_in_progress')
+        receipts[name] = hashlib.sha256(path.read_bytes()).hexdigest()
+    latest = core.read_json(core.CONFIG/'hubify-blu-auth-retry-cutover.json')
+    if latest.get('phase') != 'complete' or latest.get('sha') != '8e65f4a74eb7b597afa27e87f28e3a5d141da1c2':
+        raise Rejected('worker_source_bytes')
+    if six:
+        completed=core.read_json(core.CONFIG/names[-1]);active=core.read_json(core.CONFIG/'version.json')
+        if (completed.get('phase')!='complete' or completed.get('from',{}).get('source_sha')!=latest['sha']
+            or completed.get('manifest',{}).get('version')!='1.8.2'
+            or completed.get('manifest',{}).get('source_sha')!=completed.get('sha')
+            or active.get('source_sha')!=completed.get('sha') or active.get('artifact_sha256')!=completed.get('digest')):
+            raise Rejected('worker_source_bytes')
+    return {'kind':'completed-hubify-additive-guards-v1', 'originalSource':sha, 'receipts':receipts,
+        'originalEngine':expected['update_service/engine.py'], 'runningEngine':adopted['update_service/engine.py']}
+
+
 def inventory(source, sha):
     source = Path(source).resolve()
     if not re.fullmatch('[a-f0-9]{40}', sha): raise Rejected('worker_source')
@@ -122,13 +173,15 @@ def install(source, sha, apply=False):
     secure_path(target)
     config = core.read_json(core.CONFIG/'updater/config.json')
     prior=None
+    guard_attestation=None
     version=(target/'update_service/__init__.py').read_text().splitlines()[-1].strip()
     if version=='VERSION = 3':
         pointer=core.CONFIG/'updater/worker-upgrade.json'
         if not pointer.is_file() or pointer.is_symlink():raise Rejected('worker_version_unsupported')
         prior=core.read_json(pointer)
-        if prior.get('phase')!='complete' or prior.get('applied') is not True or files_digest(target)!=prior.get('afterFiles'):
+        if prior.get('phase')!='complete' or prior.get('applied') is not True:
             raise Rejected('worker_source_bytes')
+        guard_attestation=installed_revision(source,prior,target)
         if not re.fullmatch('[a-f0-9]{40}',prior.get('sourceSha','')):raise Rejected('worker_source')
         if prior['sourceSha']==sha:raise Rejected('worker_already_installed')
     elif version!='VERSION = 2':raise Rejected('worker_version_unsupported')
@@ -140,6 +193,7 @@ def install(source, sha, apply=False):
         'proxyHash':hashlib.sha256((core.CONFIG/'Caddyfile').read_bytes()).hexdigest(),
         'beforeFiles':files_digest(target),'afterFiles':{n:hashlib.sha256(v).hexdigest() for n,v in files.items()}}
     if prior:receipt['supersedes']=prior['sourceSha']
+    if guard_attestation:receipt['guardAttestation']=guard_attestation
     if not apply: return receipt
     with open(OPERATION_LOCK,'a+') as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -148,7 +202,7 @@ def install(source, sha, apply=False):
         journal = core.CONFIG/'updater/worker-upgrade.json'
         if previous.exists():raise Rejected('worker_upgrade_requires_review')
         if journal.exists():
-            if not prior or core.read_json(journal)!=prior or files_digest(target)!=prior['afterFiles']:raise Rejected('worker_upgrade_requires_review')
+            if not prior or core.read_json(journal)!=prior or files_digest(target)!=receipt['beforeFiles'] or installed_revision(source,prior,target)!=guard_attestation:raise Rejected('worker_upgrade_requires_review')
             history=journal.parent/'worker-upgrade-history';history.mkdir(mode=0o700,exist_ok=True);secure_path(history)
             archived=history/(prior['sourceSha']+'.json')
             if archived.is_symlink() or (archived.exists() and core.read_json(archived)!=prior):raise Rejected('worker_upgrade_requires_review')

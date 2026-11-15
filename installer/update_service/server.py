@@ -41,9 +41,9 @@ class Controller:
        if not version(release['minimumInstalledVersion'])<=version(installed['version'])<=version(release['maximumInstalledVersion']):continue
        self.engine.inspect(release,installed);self.forward_ready[release['sha']]=None;continue
       from .policy_feed import authorized
-      from .native_forward import NativeForward
+      from .evidence_forward import adapter
       policy=authorized(release,installed,self.config,self.state,catalog)
-      NativeForward(self.engine,{'id':'read-only-preflight','release':json.dumps(release)},policy).preflight(inspect_only=True)
+      adapter(self.engine,{'id':'read-only-preflight','release':json.dumps(release)},policy).preflight(inspect_only=True)
       self.forward_ready[release['sha']]=None
      except Rejected as error:self.forward_ready[release['sha']]=str(error)
      except Exception:self.forward_ready[release['sha']]='preflight_unavailable'

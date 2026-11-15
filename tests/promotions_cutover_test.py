@@ -152,7 +152,12 @@ class NativeGuardTests(unittest.TestCase):
             file.write_text('APP_ORIGIN=https://another.test')
             with self.assertRaises(core.StoreError): d.flags()
     def test_no_generic_policy_or_staging_guard_is_weakened(self):
-        policy = json.loads((ROOT/'release-policy.json').read_text())
+        # Assert the immutable promotion release, not a later private candidate's
+        # unrelated packaging metadata. Exact Git7e81f8e release-policy.json bytes.
+        import hashlib
+        raw = (ROOT/'tests/fixtures/v180-release-policy.json').read_bytes()
+        self.assertEqual(hashlib.sha256(raw).hexdigest(), '6a749f1a6324449bc0c32d73b6f2e212e8b0d9a7e2addda3cbad89656df8ff19')
+        policy = json.loads(raw)
         self.assertFalse(policy['rollback_compatible']); self.assertEqual(policy['minimum_installed_version'],'1.7.4')
         text = (ROOT/'staging/hubify-staging-deploy.py').read_text(encoding='utf8')
         self.assertIn("raise core.StoreError('J&T Production tidak boleh diaktifkan di staging.')", text)

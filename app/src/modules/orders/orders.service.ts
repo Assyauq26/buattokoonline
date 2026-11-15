@@ -10,6 +10,7 @@ import { lockOrder, assertStaffPermission } from "./transaction-locks";
 import { assertNoActiveRefund } from "@/modules/payments/refund-state";
 import { writeAudit } from "@/modules/audit/audit.service";
 import { canExpireOrder } from "./expiry-policy";
+import { testOrderTransitionAllowed } from "@/modules/payments/evidence/test-policy";
 
 const orderInclude = {
   resolutions: {
@@ -28,6 +29,7 @@ const orderInclude = {
   payment: {
     include: {
       bankAccount: true,
+      evidenceAttempt: { select: { baseAmount: true, uniqueCode: true, payable: true, expiresAt: true } },
       confirmations: { orderBy: { createdAt: "desc" } },
     },
   },
@@ -237,6 +239,7 @@ export async function transitionOrderInTransaction(
   });
   if (!order) throw new HttpError("Order tidak ditemukan", 404);
   if (order.status === to) return order;
+  if (!testOrderTransitionAllowed(order.payment?.method, to)) throw new HttpError("Pesanan uji blu hanya dapat ditutup atau kedaluwarsa", 409);
   if (to === "EXPIRED" && order.payment?.status === "WAITING_VERIFICATION")
     throw new HttpError(
       "Bukti transfer sedang diverifikasi; selesaikan pemeriksaan finansial sebelum menutup pesanan.",

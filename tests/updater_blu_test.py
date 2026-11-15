@@ -1,0 +1,92 @@
+"""Authenticated public baseline and schema33 adapter regression tests."""
+import copy
+import hashlib
+import json
+import os
+from pathlib import Path
+import sys
+import types
+import unittest
+from unittest.mock import patch
+from unittest.mock import Mock
+ROOT=Path(__file__).resolve().parents[1]
+sys.path.insert(0,str(ROOT/'installer'))
+if os.name!='posix':sys.modules.setdefault('fcntl',types.SimpleNamespace(LOCK_EX=1,LOCK_NB=2,flock=lambda *a:None))
+from update_service import blu_forward as blu
+from update_service.evidence_forward import BASE_SOURCE,BASE_TREE,BASE_SCHEMA,NEW_NAME,NEW_SQL,adapter
+from update_service.native_forward import NativeForward
+from update_service.trust import Rejected
+
+class BluAdapterTests(unittest.TestCase):
+    def test_build_budget_is_checked_without_weakening_prepared_readiness(self):
+        from update_service.engine import Engine
+        engine=Engine(None,{})
+        with patch('pathlib.Path.read_text',return_value='MemTotal: 2000000 kB\nMemAvailable: 800000 kB\nSwapFree: 1300000 kB\n'),patch('os.cpu_count',return_value=2):
+            engine.resources()
+            with self.assertRaisesRegex(Rejected,'insufficient_build_resources'):engine.build_resources()
+        with patch.object(engine,'build_resources') as gate,patch('subprocess.run',return_value=types.SimpleNamespace(returncode=0)) as run:
+            engine.build(Path('/isolated-fixture'),'fixture:only','tools')
+            gate.assert_called_once()
+            args=run.call_args.args[0]
+            self.assertEqual(args[args.index('--memory')+1],'1792m')
+            self.assertEqual(args[args.index('--memory-swap')+1],'3072m')
+    def setUp(self):
+        self.manifest=json.loads(Path(os.environ['PUBLIC_V181_MANIFEST']).read_text())
+        self.policy=dict(format=2,executor=blu.EXECUTOR,fromVersion='1.8.1',toVersion='1.8.2',
+            fromSourceSha=BASE_SOURCE,baselineAppTree=BASE_TREE,baselineSchemaHash=BASE_SCHEMA,
+            baselineFiles={k:v for k,v in self.manifest['files'].items() if k.startswith('app/')},
+            beforeMigrations=self.manifest['migrations'],afterMigrations={**self.manifest['migrations'],**blu.ADDITIONS})
+    def test_exact_31_historical_files_and_two_additions(self):
+        blu.reviewed_policy(self.policy)
+        self.assertEqual(len(self.policy['afterMigrations']),33)
+        for name,sha in self.policy['afterMigrations'].items():
+            self.assertEqual(hashlib.sha256((ROOT/'app/prisma/migrations'/name/'migration.sql').read_bytes()).hexdigest(),sha)
+    def test_each_missing_modified_or_foreign_sql_rejected(self):
+        for name in self.policy['afterMigrations']:
+            value=copy.deepcopy(self.policy);value['afterMigrations'][name]='f'*64
+            with self.subTest(name=name),self.assertRaises(Rejected):blu.reviewed_policy(value)
+        for key in ('fromSourceSha','baselineSchemaHash','baselineAppTree'):
+            with self.subTest(key=key),self.assertRaises(Rejected):blu.reviewed_policy({**self.policy,key:'f'*64})
+        value=copy.deepcopy(self.policy);del value['afterMigrations'][blu.ACTIVATION_NAME]
+        with self.assertRaises(Rejected):blu.reviewed_policy(value)
+    def test_recovery_selects_exact_same_adapter(self):
+        engine=types.SimpleNamespace(config={'jobs':'/unused'})
+        job={'id':'fixture','release':json.dumps({'sha':'a'*40,'digest':'b'*64})}
+        self.assertIsInstance(adapter(engine,job,self.policy),blu.BluCheckoutForward)
+        with patch('pathlib.Path.exists',return_value=True),patch('core.read_json',return_value={'policy':self.policy}):
+            self.assertIsInstance(adapter(engine,job),blu.BluCheckoutForward)
+    def test_readiness_distinguishes_initial_activation_from_owner_opt_in(self):
+        driver=object.__new__(blu.BluCheckoutForward)
+        with patch.object(NativeForward,'verify_active'),patch('update_service.blu_forward.schema_hash',return_value=blu.AFTER_SCHEMA),patch('core.sql',return_value='1'):
+            with self.assertRaisesRegex(Rejected,'unexpected_payment_activation'):driver.verify_active({})
+            driver.verify_active({'traffic_may_have_opened':True})
+        with patch.object(NativeForward,'verify_active'),patch('update_service.blu_forward.schema_hash',return_value='f'*64):
+            with self.assertRaisesRegex(Rejected,'schema_drift'):driver.verify_active({'traffic_may_have_opened':True})
+    def test_all_six_private_cutover_intents_block_worker(self):
+        import tempfile
+        from update_service.engine import operator_cutover_guard
+        with tempfile.TemporaryDirectory() as folder,patch('core.CONFIG',Path(folder)):
+            p=Path(folder)/'hubify-blu-checkout-cutover.json'
+            for phase in ('initial','prepare_done','migration','recovery_required'):
+                p.write_text(json.dumps({'phase':phase}))
+                with self.assertRaisesRegex(Rejected,'operator_cutover_in_progress'):operator_cutover_guard()
+            p.write_text(json.dumps({'phase':'complete'}));operator_cutover_guard()
+    def test_full_baseline_still_authenticates_excluded_source_files(self):
+        driver=object.__new__(blu.BluCheckoutForward)
+        driver.e=Mock();driver.config={'baseline':'fixture'};driver.policy=self.policy
+        expected=self.policy['baselineFiles']
+        runtime={p:h for p,h in expected.items() if not p.startswith(('app/tests/','app/resources/'))}
+        installed={'version':'1.8.1','source_sha':BASE_SOURCE}
+        env=['STORE_BUILD_SHA='+BASE_SOURCE,'STORE_INSTALLED_VERSION=1.8.1','APP_ORIGIN=https://fixture.invalid','STORE_INSTALLATION_ID=fixture','STORE_UPDATER_ENABLED=1']
+        driver.config.update(origin='https://fixture.invalid',installation='fixture')
+        def dc(args,input=None):
+            if args[0]=='ps':return 'fixture-container'
+            self.assertEqual(set(json.loads(input)),set(runtime));return json.dumps(runtime)
+        with patch('core.read_json',side_effect=[{'files':expected},installed]),patch('core.dc',side_effect=dc),patch('core.run',return_value=json.dumps([{'Config':{'Env':env}}])):
+            driver.baseline()
+        excluded=next(p for p in expected if p.startswith('app/tests/'))
+        with patch('core.read_json',return_value={'files':{**expected,excluded:'f'*64}}),patch('core.dc') as calls:
+            with self.assertRaisesRegex(Rejected,'local_customization'):driver.baseline()
+            calls.assert_not_called()
+
+if __name__=='__main__':unittest.main()

@@ -54,7 +54,7 @@ def authenticate(raw, roots, now=None):
             raise Rejected('policy_worker')
         if policy['failureStrategy'] != 'forward-only-after-migration':
             raise Rejected('policy_recovery')
-        if policy['executor'] != 'forward-cutover-v1':
+        if policy['executor'] not in ('forward-cutover-v1', 'payment-evidence-forward-v1', 'blu-checkout-forward-v1'):
             raise Rejected('policy_executor')
         for field in ('beforeMigrations', 'afterMigrations'):
             rows = policy[field]

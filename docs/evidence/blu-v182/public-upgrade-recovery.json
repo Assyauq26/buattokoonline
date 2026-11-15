@@ -1,0 +1,18 @@
+{
+  "public31to33": "PASS",
+  "crashAfterMigrationRecovered": true,
+  "oldLedgerUnchanged": true,
+  "oldFinancialRowsUnchanged": true,
+  "all81TablesUnchanged": true,
+  "nonFinancialDifferences": [],
+  "migrations": 33,
+  "backupVerified": true,
+  "timerResumed": true,
+  "activeSource": "2d28fff0b261a1c09826acf6e73776c408779841",
+  "activeVersion": "1.8.2",
+  "appImage": "sha256:349ace34b3c10830ecc798d6c24516ff205e6387fd1367134cc2c31f7797ffef",
+  "toolsImage": "sha256:cb6c920dd8d1db807806c96ed9119f82fe65dc9bf0131f64a152b3ce06a23805",
+  "appTree": "d075b1850ed1d26197c1990a9d07881ae2237b4b",
+  "artifactDigest": "9606c44b3164c90edb46aa1654c8778cc522f7d3561470040c2c5ea613396935",
+  "realBankOrCarrierTransactions": false
+}

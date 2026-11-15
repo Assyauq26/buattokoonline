@@ -1,0 +1,9 @@
+{
+  "canonical32to33": "PASS",
+  "beforeSchema": "72f1aa730f8c992605fba501f50ffb27e779dd7a786532904f0d6830aa46b02a",
+  "afterSchema": "f2c74e00885d943c8491f4de00a6ebdbf295c6016095f3b049878320ece9d075",
+  "oldLedgerUnchanged": true,
+  "oldTablesUnchanged": 87,
+  "migrations": 33,
+  "activationCount": 0
+}

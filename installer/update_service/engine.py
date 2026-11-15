@@ -8,9 +8,12 @@ from .state import ACTIVE
 from .package import extract
 
 def operator_cutover_guard():
- path=core.CONFIG/'hubify-promotions-cutover.json'
- if path.exists() and core.read_json(path).get('phase') not in ('complete','rolled_back'):
-  raise Rejected('operator_cutover_in_progress')
+ for name in ('hubify-promotions-cutover.json','hubify-payment-evidence-cutover.json',
+              'hubify-payment-test-cutover.json','hubify-blu-auth-cutover.json',
+              'hubify-blu-auth-retry-cutover.json','hubify-blu-checkout-cutover.json'):
+  path=core.CONFIG/name
+  if path.exists() and core.read_json(path).get('phase') not in ('complete','rolled_back'):
+   raise Rejected('operator_cutover_in_progress')
 
 class Engine:
  def __init__(self,state,config):self.state=state;self.config=config
@@ -24,6 +27,10 @@ class Engine:
  def resources(self):
   memory={line.split(':')[0]:int(line.split()[1]) for line in Path('/proc/meminfo').read_text().splitlines() if ':' in line}
   if (os.cpu_count() or 0)<2 or memory.get('MemTotal',0)<1900000 or memory.get('MemAvailable',0)+memory.get('SwapFree',0)<1800000:raise Rejected('insufficient_resources')
+ def build_resources(self):
+  self.resources()
+  memory={line.split(':')[0]:int(line.split()[1]) for line in Path('/proc/meminfo').read_text().splitlines() if ':' in line}
+  if memory.get('MemAvailable',0)+memory.get('SwapFree',0)<2600000:raise Rejected('insufficient_build_resources')
  def baseline(self):
   baseline=core.read_json(self.config['baseline'])
   root=Path(baseline['root'])
@@ -34,9 +41,10 @@ class Engine:
   for p in (root/'app/src').rglob('*'):
    if p.is_file() and p.relative_to(root).as_posix() not in baseline['files']:raise Rejected('local_customization')
  def build(self,source,tag,target):
+  self.build_resources()
   # Durable events contain only allowlisted stage/error codes, never raw logs.
   with open(os.devnull,'wb') as log:
-   try:r=subprocess.run(['docker','build','--force-rm','--memory','1280m','--memory-swap','2048m','--cpu-period','100000','--cpu-quota','100000','--target',target,'-t',tag,str(source/'app')],env={**os.environ,'DOCKER_BUILDKIT':'0'},stdout=log,stderr=subprocess.STDOUT,timeout=2400)
+   try:r=subprocess.run(['docker','build','--force-rm','--memory','1792m','--memory-swap','3072m','--cpu-period','100000','--cpu-quota','100000','--target',target,'-t',tag,str(source/'app')],env={**os.environ,'DOCKER_BUILDKIT':'0'},stdout=log,stderr=subprocess.STDOUT,timeout=2400)
    except subprocess.TimeoutExpired:raise Rejected('build_timeout') from None
   if r.returncode:raise Rejected('build_failed')
  def backup(self,folder):
@@ -67,7 +75,7 @@ class Engine:
   safety.baseline()
   return safety,hashes
  def inspect(self,release,installed):
-  self.resources();self.baseline()
+  self.build_resources();self.baseline()
   if self.ledger()!=installed['migrations'] or core.sql('SELECT count(*) FROM "_prisma_migrations" WHERE finished_at IS NULL AND rolled_back_at IS NULL;')!='0':raise Rejected('migration_history')
   persistent=int(core.sql("SELECT pg_database_size('store');"))
   persistent+=sum(p.stat().st_size for p in (core.DATA/'media').rglob('*') if p.is_file())
@@ -178,12 +186,12 @@ class Engine:
     if timer and current and current['state']!='recovery_required':core.run(['systemctl','start','single-store-maintenance.timer'])
  def forward(self,job,folder,installed):
   from .policy_feed import fresh
-  from .native_forward import NativeForward
+  from .evidence_forward import adapter
   from .forward_cutover import ForwardCutover
   release=json.loads(job['release'])
   try:
    policy=fresh(self.config,self.state,release,installed)
-   self.resources();self.baseline()
+   self.build_resources();self.baseline()
    if self.ledger()!=installed['migrations']:raise Rejected('migration_history')
    persistent=int(core.sql("SELECT pg_database_size('store');"))
    persistent+=sum(p.stat().st_size for p in (core.DATA/'media').rglob('*') if p.is_file())
@@ -191,7 +199,7 @@ class Engine:
    self.mark(job,'downloading',downloaded=0,total=release['size'])
    download(release['url'],folder/'release.tar.gz',release['size'],release['digest'],
        lambda done,total:self.mark(job,'downloading',downloaded=done,total=total))
-   ForwardCutover(NativeForward(self,job,policy)).apply()
+   ForwardCutover(adapter(self,job,policy)).apply()
    self.mark(job,'succeeded',activeVersion=release['version'],finishedAt=int(time.time()))
   except BaseException as error:
    reason=str(error) if isinstance(error,Rejected) else 'operation_failed'

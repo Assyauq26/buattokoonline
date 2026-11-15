@@ -11,6 +11,7 @@ import { prisma } from "@/lib/prisma";
 import { ShoppingCart, Package } from "lucide-react";
 import { formatIDR } from "@/lib/money";
 import { CheckoutClient } from "@/components/storefront/checkout-client";
+import { listBluCheckoutSources } from "@/modules/payments/evidence/blu-checkout";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Checkout", robots: { index: false } };
@@ -34,7 +35,7 @@ export default async function CheckoutPage({ searchParams }: { searchParams: Pro
     }
   }
 
-  const [cart, banks, customer, shippingSettings] = await Promise.all([
+  const [cart, banks, customer, shippingSettings, bluSources] = await Promise.all([
     intent ? directView! : getCartView(user.id),
     listActiveBankAccounts(),
     prisma.customer.findUnique({
@@ -42,6 +43,7 @@ export default async function CheckoutPage({ searchParams }: { searchParams: Pro
       include: { addresses: { where: { isDefault: true }, take: 1 } },
     }),
     readShippingSettings(),
+    listBluCheckoutSources(),
   ]);
   if (cart.lines.length === 0) redirect("/cart");
 
@@ -77,6 +79,7 @@ export default async function CheckoutPage({ searchParams }: { searchParams: Pro
         subtotal={cart.subtotal}
         expectedLines={cart.lines.map(({ variantId, quantity, unitPrice }) => ({ variantId, quantity, unitPrice }))}
         banks={banks}
+        bluSources={bluSources.filter(s => s.bankAccountId).map(s => ({ id: s.id, label: s.label, bankAccountId: s.bankAccountId! }))}
         address={addr ? {
           recipientName: addr.recipientName,
           phone: addr.phone,
