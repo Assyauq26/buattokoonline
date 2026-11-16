@@ -40,18 +40,40 @@ class FashionPreview(Schema35):
         return result
 
 
+class FashionCorrection(FashionPreview):
+    """Exact app-only continuation of the first private fashion deployment."""
+    base_sha = '2d1e047e5c54a4cf2533f23a71e71a4d189cb820'
+    base_digest = '3ca761e187d4660fddcbc3f922f71d38804ee0f1b1685c0866a88fd0d4c0b9c1'
+    base_image = 'sha256:c4a2e53bc2f4aa2ebe780c9771e9a3a0b811520b669bbb6f1a4a7698679aa258'
+    base_tree = FashionPreview.target_tree
+    target_tree = 'abe32a103ada3d82835b1baebd7da53a5f32ef6b'
+    previous_receipt = FashionPreview.journal_name
+    journal_name = 'hubify-fashion-cylinder.json'
+    release_prefix = 'hubify-fashion-cylinder-'
+    deployment_name = 'hubify-fashion-cylinder'
+
+    def file_guards(self):
+        from promotions_transition import digest
+        result = super().file_guards()
+        path = core.CONFIG / FashionPreview.previous_receipt
+        result[str(path)] = digest(path.read_bytes())
+        return result
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('mode', choices=['dry-run', 'apply', 'reconcile'])
     parser.add_argument('sha')
     parser.add_argument('digest')
     parser.add_argument('--external-work-stopped', action='store_true')
+    parser.add_argument('--correction', action='store_true', help='Apply the carousel correction to the exact private preview baseline')
     args = parser.parse_args()
     install()
     os.umask(0o077)
     folder = core.ROOT / 'operator-packages'
-    driver = FashionPreview(ROOT, folder / ('fashion-' + args.sha + '.tar.gz'), args.digest, args.sha,
-                           folder / 'store-v1.9.1-8fb8607deb6a.tar.gz')
+    driver_type = FashionCorrection if args.correction else FashionPreview
+    baseline = ('fashion-' + FashionCorrection.base_sha + '.tar.gz') if args.correction else 'store-v1.9.1-8fb8607deb6a.tar.gz'
+    driver = driver_type(ROOT, folder / ('fashion-' + args.sha + '.tar.gz'), args.digest, args.sha, folder / baseline)
     official.check(not args.external_work_stopped or args.mode == 'reconcile', 'reconciliation only')
     driver.external_work_stopped = args.external_work_stopped
     runner = official.Cutover(driver)
