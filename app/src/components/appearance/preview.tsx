@@ -57,7 +57,7 @@ export function AppearancePreview() {
     const stop = (event: Event) => {
       if (
         event.type === "submit" ||
-        (event.target as HTMLElement)?.closest?.("a")
+        (event.target as HTMLElement)?.closest?.("a") && !(event.target as HTMLElement)?.closest?.(".fashion-slide")
       ) {
         event.preventDefault();
         event.stopPropagation();
@@ -74,7 +74,7 @@ export function AppearancePreview() {
       if (blobUrl) URL.revokeObjectURL(blobUrl);
     };
   }, []);
-  if(config.themeId === "immersive-fashion") return <AppearanceProvider config={config} preview logoUrl={logo}><div className="storefront-root fashion" data-theme-active="true" style={themeStyle(config)}><FashionShell>{frame ? <FashionCatalog frame={frame} preview/> : <p className="fashion-empty" role="status">Memuat preview koleksi…</p>}</FashionShell></div></AppearanceProvider>;
+  if(config.themeId === "immersive-fashion") return <AppearanceProvider config={config} preview logoUrl={logo}><div className="storefront-root fashion" data-theme-active="true" style={themeStyle(config)}><FashionShell>{frame ? <FashionCatalog frame={frame} previewConfig={config}/> : <p className="fashion-empty" role="status">Memuat preview koleksi…</p>}</FashionShell></div></AppearanceProvider>;
   return (
     <AppearanceProvider config={config} preview logoUrl={logo}>
       <div

@@ -1,5 +1,7 @@
 "use client";
+import { useState } from "react";
 import {
+  compositionDefaults,
   defaultCollections,
   type FashionCollection,
   type StoreAppearanceV1,
@@ -14,6 +16,70 @@ const sources = {
   flash: "Flash Sale aktif",
 };
 
+function LayerUpload({
+  label,
+  id,
+  role,
+  onChange,
+}: {
+  label: string;
+  id?: string;
+  role: "background" | "cutout";
+  onChange: (id?: string) => void;
+}) {
+  const [busy, setBusy] = useState(false),
+    [error, setError] = useState("");
+  async function upload(file: File) {
+    setBusy(true);
+    setError("");
+    try {
+      const data = new FormData();
+      data.set("image", file);
+      data.set("requestId", crypto.randomUUID());
+      data.set("role", role);
+      const response = await fetch("/api/v1/admin/store-branding", {
+        method: "POST",
+        body: data,
+      });
+      const result = await response.json();
+      if (!response.ok || !result.data?.id)
+        throw Error(result.error?.message ?? "Unggah gagal");
+      onChange(result.data.id);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Unggah gagal");
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div>
+      <label>
+        {label}
+        <input
+          type="file"
+          accept={
+            role === "cutout"
+              ? "image/png,image/webp"
+              : "image/png,image/jpeg,image/webp"
+          }
+          disabled={busy}
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            e.target.value = "";
+            if (file) void upload(file);
+          }}
+        />
+      </label>
+      {busy && <span role="status">Mengunggah…</span>}
+      {id && (
+        <button type="button" onClick={() => onChange(undefined)}>
+          Lepas {label.toLowerCase()}
+        </button>
+      )}
+      {error && <p role="alert">{error}</p>}
+    </div>
+  );
+}
 export function CollectionControls({
   draft,
   change,
@@ -23,9 +89,11 @@ export function CollectionControls({
 }) {
   const rows = draft.collections ?? defaultCollections;
   function update(index: number, patch: Partial<FashionCollection>) {
+    const id = rows[index].id;
     change((d) => {
       const list = (d.collections ??= structuredClone(defaultCollections));
-      Object.assign(list[index], patch);
+      const row = list.find((item) => item.id === id);
+      if (row) Object.assign(row, patch);
     });
   }
   function move(index: number, offset: number) {
@@ -106,6 +174,77 @@ export function CollectionControls({
                 />
               </label>
             ))}
+            <details>
+              <summary>Komposisi foto</summary>
+              <div className="grid gap-3 py-3">
+                <p>
+                  Unggah latar bersih tanpa model dan objek transparan untuk
+                  mengatur posisinya secara terpisah. Maksimal 2 MiB per gambar.
+                </p>
+                <LayerUpload
+                  label="Latar bersih"
+                  role="background"
+                  id={row.backgroundId}
+                  onChange={(backgroundId) => update(i, { backgroundId })}
+                />
+                <LayerUpload
+                  label="Objek transparan"
+                  role="cutout"
+                  id={row.cutoutId}
+                  onChange={(cutoutId) => update(i, { cutoutId })}
+                />
+                {row.cutoutId && !row.backgroundId && (
+                  <p>Tambahkan latar bersih untuk menampilkan objek.</p>
+                )}
+                {(["mobile", "desktop"] as const).map((mode) => (
+                  <fieldset
+                    key={mode}
+                    disabled={!row.cutoutId || !row.backgroundId}
+                  >
+                    <legend>Posisi objek · {mode}</legend>
+                    {(["x", "y", "scale"] as const).map((key) => {
+                      const current = row[mode] ?? compositionDefaults[mode];
+                      return (
+                        <label key={key}>
+                          {
+                            { x: "Horizontal", y: "Vertikal", scale: "Ukuran" }[
+                              key
+                            ]
+                          }{" "}
+                          · {current[key]}%
+                          <input
+                            type="range"
+                            min={{ x: 20, y: 35, scale: 55 }[key]}
+                            max={{ x: 80, y: 75, scale: 110 }[key]}
+                            value={current[key]}
+                            onChange={(e) =>
+                              update(i, {
+                                [mode]: {
+                                  ...current,
+                                  [key]: Number(e.target.value),
+                                },
+                              })
+                            }
+                          />
+                        </label>
+                      );
+                    })}
+                  </fieldset>
+                ))}
+                <button
+                  type="button"
+                  onClick={() =>
+                    update(i, {
+                      ...compositionDefaults,
+                      mobileFocus: defaultCollections[0].mobileFocus,
+                      desktopFocus: defaultCollections[0].desktopFocus,
+                    })
+                  }
+                >
+                  Reset posisi dan ukuran
+                </button>
+              </div>
+            </details>
             <div className="flex gap-4">
               <button type="button" disabled={!i} onClick={() => move(i, -1)}>
                 Naik

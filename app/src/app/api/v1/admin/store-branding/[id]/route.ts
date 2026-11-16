@@ -1,12 +1,13 @@
 import { requireCustomizePermission } from "@/modules/appearance/authorization";
 import { PERMISSIONS } from "@/lib/auth/permissions";
+import { fashionRendition } from "@/modules/catalog/fashion-rendition";
 import { handle, ok } from "@/lib/response";
 import { assertSameOrigin } from "@/lib/mutation-origin";
 import { appearanceSessionHash } from "@/modules/appearance/session";
 import { readLogo, retireLogo } from "@/modules/appearance/media";
 export const dynamic = "force-dynamic";
 type Context = { params: Promise<{ id: string }> };
-export async function GET(_: Request, ctx: Context) {
+export async function GET(req: Request, ctx: Context) {
   return handle(async () => {
     const actor = await requireCustomizePermission(PERMISSIONS.STORE_CUSTOMIZE_READ),
       id = (await ctx.params).id;
@@ -14,6 +15,8 @@ export async function GET(_: Request, ctx: Context) {
       id: actor.id,
       sessionHash: await appearanceSessionHash(),
     });
+    const rendition = await fashionRendition(req, "brand-" + (await ctx.params).id, async () => object.data);
+    if (rendition) return rendition;
     return new Response(Buffer.from(object.data), {
       headers: {
         "Content-Type": "image/webp",

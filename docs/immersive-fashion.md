@@ -2,10 +2,12 @@
 
 Tema opsional untuk instalasi single-store. Kandidat berangkat dari `8fb8607` (v1.9.1). Versi aplikasi, konfigurasi pengiriman dan kanal pembaruan seller berada di luar perubahan ini.
 
+Hasil koreksi carousel dan rekaman drag terbaru tersedia di [verifikasi carousel horizontal](immersive-fashion/cylinder/README.md).
+
 ## Cara seller menggunakan tema
 
 1. Buka **Dekorasi Toko → Tema → Immersive Fashion** di `/admin/customize`.
-2. Pilih logo atau nama toko di kontrol identitas. Logo terang akan lebih terbaca di atas foto. Di tab Tema, buka setiap koleksi untuk mengatur judul, deskripsi, sumber, urutan dan titik fokus mobile/desktop. Sampul opsional menerima path gambar produk terbit dari instalasi ini, misalnya `/api/v1/product-images/<id>`. Bila kosong, latar memakai foto produk aktif.
+2. Pilih logo atau nama toko di kontrol identitas. Logo terang akan lebih terbaca di atas foto. Di tab Tema, buka setiap koleksi untuk mengatur judul, deskripsi, sumber, urutan dan titik fokus mobile/desktop. Sampul opsional menerima path gambar produk terbit dari instalasi ini, misalnya `/api/v1/product-images/<id>`. Seller juga dapat mengunggah latar bersih dan objek PNG/WebP transparan untuk komposisi pembuka, lalu mengatur posisi dan ukuran objek secara terpisah untuk mobile dan desktop. Tanpa aset terpisah, tema menggunakan foto utuh. Setelah produk berganti, latar mengikuti produk aktif.
 3. Untuk koleksi manual, tandai produk sebagai unggulan di editor produk. Koleksi kategori memakai slug kategori. Produk terbaru diurutkan berdasarkan waktu pembuatan produk terbit, dengan ID sebagai pembeda jika waktunya sama. Terlaris menjumlahkan **unit** pada item pesanan berstatus pembayaran PAID yang masih terkait dengan SKU produk terbit. Pesanan dibatalkan, kedaluwarsa, atau direfund dikecualikan. Sumber Flash Sale mengikuti waktu dan kelayakan dari service promosi.
 4. Pilih lebar preview **390px**, **768px** atau **1360px**. **Simpan Draft** mempertahankan perubahan untuk editor. Pengunjung melihat konfigurasi terbit. Pilih **Terbitkan** untuk mengganti tampilan toko.
 5. Untuk kembali, buka **Riwayat**, pilih revisi yang dikehendaki lalu **Rollback**. Jika editor lain telah menerbitkan perubahan, muat revisi terbaru sebelum mencoba lagi. Rollback menulis revisi tampilan. Riwayat pembelian, keranjang dan persediaan tetap berada di database transaksi.
@@ -15,7 +17,7 @@ Tema opsional untuk instalasi single-store. Kandidat berangkat dari `8fb8607` (v
 | Tahap | Titik integrasi | Hasil |
 | --- | --- | --- |
 | M0–M1 | Appearance V1, runtime token, layout storefront dan checkout | ID `immersive-fashion` dan koleksi berupa field JSON opsional. Instalasi tanpa pilihan ini merender tema sebelumnya. Tidak perlu migrasi SQL. |
-| M2 | `modules/catalog/fashion-catalog.ts`, `components/fashion/catalog.tsx`, halaman search | Katalog fullscreen berisi tautan produk asli. Setiap permintaan mengirim paling banyak lima kartu berbeda. Data dimuat per halaman 12. Status favorit terbatas pada pengguna dan produk terlihat. |
+| M2 | `modules/catalog/fashion-catalog.ts`, `components/fashion/catalog.tsx`, halaman search | Katalog fullscreen berisi tautan produk asli. Carousel menampilkan hingga lima kartu produk. Server mengirim data ringkas hingga sebelas produk sekitar posisi aktif agar drag dan pergantian arah tidak perlu menunggu jaringan. Katalog yang lebih panjang dimuat bertahap. |
 | M3 | `product/[slug]`, galeri, pemilih SKU, purchase panel | Foto, varian, stok, harga, tambah ke keranjang dan beli langsung menggunakan domain produk existing. |
 | M4 | Wishlist, CartClient, cart service | Grid favorit, pemilihan SKU, ubah variasi dan jumlah. Badge memakai jumlah unit keranjang. Ringkasan memakai baris eligible yang dipilih. |
 | M5 | CheckoutClient, checkout action, preview API, createOrder | Pilihan baris ikut dalam konfirmasi harga, kuotasi pengiriman dan idempotensi pesanan. Server membaca ulang keranjang pemilik di dalam transaksi. Checkout mengonsumsi hanya baris yang dibeli. |
@@ -51,7 +53,7 @@ Urutan navigasi bawah adalah **Beranda · Search · Keranjang · Profil**. Heade
 
 Token utama menggunakan charcoal `#191817`, ivory `#faf9f6`, divider terang transparan dan judul Georgia dengan fallback serif. CSS khusus berada di `components/fashion/fashion.css`. Gambar produk tetap dilayani storage existing. Interaksi menghormati reduced motion, safe area dan zoom. Pada layar pendek konten boleh digulir. Kartu samping dapat diketuk, carousel menerima tombol panah keyboard. Tidak ada autoplay atau penangkapan wheel global.
 
-### Matriks verifikasi lokal
+### Matriks verifikasi lokal implementasi awal
 
 Pengujian memakai build produksi Next.js, Chromium, PostgreSQL terisolasi, 15 produk sintetis, dua akun uji dengan peran berbeda, tarif dan rekening simulasi. Seluruh interaksi browser berlangsung di loopback HTTPS. Untuk mengulang pemeriksaan transaksi, gunakan instalasi uji yang memiliki dua baris keranjang, dua SKU pada satu produk, alamat valid, metode pembayaran dan ongkir lokal.
 

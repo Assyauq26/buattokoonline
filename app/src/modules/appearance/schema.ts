@@ -192,6 +192,14 @@ export const GRADIENT_TARGETS = [
   "footer",
   "highlightCard",
 ] as const;
+export const compositionDefaults = {
+  mobile: { x: 50, y: 57, scale: 86 },
+  desktop: { x: 56, y: 53, scale: 94 },
+};
+const placement = z.object({
+  x: z.number().int().min(20).max(80), y: z.number().int().min(35).max(75),
+  scale: z.number().int().min(55).max(110),
+}).strict();
 export const fashionCollectionSchema = z.object({
   id: z.string().regex(/^[a-z0-9-]{1,40}$/),
   title: label,
@@ -199,16 +207,20 @@ export const fashionCollectionSchema = z.object({
   source: z.enum(["featured", "newest", "bestselling", "category", "flash"]),
   category: z.string().max(100).regex(/^[a-z0-9-]*$/),
   cover: z.string().max(160).regex(/^$|^\/api\/v1\/product-images\/[a-zA-Z0-9_-]+$/),
+  backgroundId: z.string().uuid().optional(),
+  cutoutId: z.string().uuid().optional(),
+  mobile: placement.optional(),
+  desktop: placement.optional(),
   mobileFocus: z.number().int().min(0).max(100),
   desktopFocus: z.number().int().min(0).max(100),
-}).strict().refine(c => c.source !== "category" || !!c.category, "Pilih kategori koleksi");
+}).strict().refine(c => !c.cutoutId || c.cutoutId !== c.backgroundId, "Gunakan latar bersih dan objek yang berbeda").refine(c => c.source !== "category" || !!c.category, "Pilih kategori koleksi");
 export type FashionCollection = z.infer<typeof fashionCollectionSchema>;
 export const defaultCollections: FashionCollection[] = [
   { id: "pilihan", title: "Koleksi Pilihan", description: "Gaya pilihan untuk setiap hari.", source: "featured" },
   { id: "baru", title: "Produk Terbaru", description: "Temukan koleksi yang baru hadir.", source: "newest" },
   { id: "favorit", title: "Paling Diminati", description: "Jelajahi pilihan favorit.", source: "bestselling" },
   { id: "promo", title: "Flash Sale", description: "", source: "flash" },
-].map(c => ({ ...c, source: c.source as FashionCollection["source"], category: "", cover: "", mobileFocus: 40, desktopFocus: 16 }));
+].map(c => ({ ...c, source: c.source as FashionCollection["source"], category: "", cover: "", mobileFocus: 24, desktopFocus: 10 }));
 export const appearanceSchema = z
   .object({
     schemaVersion: z.literal(1),

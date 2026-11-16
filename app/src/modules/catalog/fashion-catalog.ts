@@ -73,25 +73,51 @@ const readPage = cache(
   },
 );
 
+const collectionCount = cache(
+  async (source: FashionCollection["source"], category: string) => {
+    // Flash eligibility includes active prices and quota; use the catalog's existing check.
+    if (source === "flash")
+      return (await readPage(source, category, 1, 1)).total;
+    if (source === "bestselling") {
+      const [row] = await prisma.$queryRaw<{ total: number }[]>(
+        Prisma.sql`SELECT COUNT(DISTINCT p.id)::int AS total ${rankedSales}`,
+      );
+      return row.total;
+    }
+    return prisma.product.count({
+      where: {
+        status: "PUBLISHED",
+        ...(source === "featured" ? { isFeatured: true } : {}),
+        ...(source === "category" ? { category: { slug: category } } : {}),
+      },
+    });
+  },
+);
+
 export async function fashionFrame(
   config = defaultCollections,
   selected = "",
   position = 0,
 ) {
+  const preferred = config.find((c) => c.id === selected) ?? config[0];
   const counts = await Promise.all(
-    config.map((c) => readPage(c.source, c.category, 1, 1)),
+    config.map((c) =>
+      c === preferred && position < pageSize
+        ? readPage(c.source, c.category, 1, pageSize).then((page) => page.total)
+        : collectionCount(c.source, c.category),
+    ),
   );
-  const collections = config.filter((_, i) => counts[i].total > 0);
+  const collections = config.filter((_, i) => counts[i] > 0);
   const collection =
     collections.find((c) => c.id === selected) ?? collections[0];
   if (!collection)
     return { collections, collection: null, total: 0, index: 0, cards: [] };
-  const total = counts[config.indexOf(collection)].total;
+  const total = counts[config.indexOf(collection)];
   const index = Number.isSafeInteger(position)
     ? Math.max(0, Math.min(total - 1, position))
     : 0;
   const cards = await Promise.all(
-    fashionWindow(total, index).map(async ({ offset, pos }) => {
+    fashionWindow(total, index, 5).map(async ({ offset, pos }) => {
       const page = await readPage(
         collection.source,
         collection.category,
