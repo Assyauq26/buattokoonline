@@ -18,6 +18,8 @@ from update_service.worker_upgrade import files_digest,inventory
 check=official.check
 class Native(previous.Native):
     base_sha,base_digest,base_image,base_tree=BASE_SOURCE,BASE_ARCHIVE,'sha256:f4dda33da2e643da3dc47fbd96e2bad79dc86e67d20f8e36a1385b93b0250963',BASE_TREE
+    baseline_version='1.9.0'
+    release_prefix='hubify-midtrans-patch-'
     previous_receipt='hubify-midtrans-cutover.json'
     journal_name='hubify-midtrans-patch-cutover.json'
     deployment_name='hubify-midtrans-v191'
@@ -28,16 +30,16 @@ class Native(previous.Native):
     data_snapshot=NativeForward.data_snapshot
     def __init__(self,repository,archive,digest,sha,baseline):
         official.Native.__init__(self,repository,archive,digest,sha,baseline)
-        self.folder=core.ROOT/'releases'/('hubify-midtrans-patch-'+sha[:12]+'-'+digest[:12]);self.journal_path=core.CONFIG/self.journal_name
+        self.folder=core.ROOT/'releases'/(self.release_prefix+sha[:12]+'-'+digest[:12]);self.journal_path=core.CONFIG/self.journal_name
         self.private=core.CONFIG/'payment-evidence'
-        self.old_manifest,self.old_files=package.package(baseline,self.base_digest,self.base_sha,'1.9.0')
+        self.old_manifest,self.old_files=package.package(baseline,self.base_digest,self.base_sha,self.baseline_version)
         self.manifest,self.files=package.package(archive,digest,sha,'1.9.1')
         official.verify_git_package(self.repository,sha,self.manifest,self.files,expected_tree=core.run(['git','-C',str(self.repository),'rev-parse',sha+':app']))
         check(len(self.old_manifest['migrations'])==35 and self.manifest['migrations']==self.old_manifest['migrations'],'exact unchanged schema35')
         for name in self.old_manifest['migrations']:
             p='app/prisma/migrations/'+name+'/migration.sql';check(self.old_files[p]==self.files[p],'historical SQL changed')
         check(self.old_files['app/prisma/migrations/migration_lock.toml']==self.files['app/prisma/migrations/migration_lock.toml'],'migration provider changed')
-        check(self.manifest['compatibility']==dict(db_contract=1,minimum_installed_contract=1,maximum_installed_contract=1,postgres_major=16,rollback_compatible=True,minimum_installed_version='1.9.0',maximum_installed_version='1.9.0'),'manifest compatibility')
+        check(self.manifest['compatibility']==dict(db_contract=1,minimum_installed_contract=1,maximum_installed_contract=1,postgres_major=16,rollback_compatible=True,minimum_installed_version=self.baseline_version,maximum_installed_version=self.baseline_version),'manifest compatibility')
     def preflight(self,own_journal=False):
         check(os.geteuid()==0,'root operator required');self.worker_idle();check(self.carrier_idle(),'carrier operation pending')
         for name in ('hubify-promotions-cutover.json','hubify-payment-evidence-cutover.json','hubify-payment-test-cutover.json','hubify-blu-auth-cutover.json','hubify-blu-auth-retry-cutover.json','hubify-blu-checkout-cutover.json','hubify-payment-live-cutover.json','hubify-midtrans-cutover.json'):
@@ -49,10 +51,10 @@ class Native(previous.Native):
         check(worker.get('phase')=='complete' and worker.get('applied') is True and worker.get('sourceSha')==self.sha,'reviewed canonical worker revision required')
         expected={p:package.digest(b) for p,b in inventory(self.repository,self.sha).items()}
         check(files_digest(core.ROOT/'updater')==worker['afterFiles']==expected,'worker source bytes')
-        check(b"'hubify-midtrans-patch-cutover.json'" in (core.ROOT/'updater/update_service/engine.py').read_bytes(),'worker recovery guard required')
+        check(repr(self.journal_name).encode() in (core.ROOT/'updater/update_service/engine.py').read_bytes(),'worker recovery guard required')
         bundle=self.observe();obs=bundle['observation'];installed=obs['version']
         check(bundle['context']=={'installation':previous.pilot.history.INSTALLATION,'origin':'https://hubify.web.id'},'exact Hubify installation')
-        check((installed['version'],installed['source_sha'],installed['artifact_sha256'],installed['image_digest'])==('1.9.0',self.base_sha,self.base_digest,self.base_image),'active baseline metadata')
+        check((installed['version'],installed['source_sha'],installed['artifact_sha256'],installed['image_digest'])==(self.baseline_version,self.base_sha,self.base_digest,self.base_image),'active baseline metadata')
         check(obs['source_commit']==self.base_sha and obs['app_tree']==self.base_tree and obs['source_inventory']==self.old_manifest['migrations'],'source baseline')
         apps=[c for c in obs['containers'] if c['service']=='app'];check(len(apps)==1 and apps[0]['image']==self.base_image and apps[0]['running'] and apps[0]['health']=='healthy','baseline health/image')
         paths=package.runtime_paths(self.old_files)
@@ -86,7 +88,7 @@ class Native(previous.Native):
         core.atomic_json(source/'.hubify-provenance.json',dict(source_sha=self.sha,app_tree=core.run(['git','-C',str(self.repository),'rev-parse',self.sha+':app']),archive_sha256=self.digest))
         candidate=copy.deepcopy(j['old_compose'])
         for name,target in (('app','runtime'),('tools','tools')):
-            image=self.prepared_images[name] if self.prepared_images else 'single-store-'+name+':hubify-midtrans-patch-'+self.sha[:12]
+            image=self.prepared_images[name] if self.prepared_images else 'single-store-'+name+':'+self.release_prefix+self.sha[:12]
             if not self.prepared_images:Engine(None,{}).build(source,image,target)
             candidate['services'][name].update(image=image,build={'context':str(source/'app'),'target':target})
         candidate['services']['app'].setdefault('environment',{}).update(STORE_INSTALLED_VERSION='1.9.1',STORE_BUILD_SHA=self.sha,)
@@ -116,7 +118,7 @@ class Native(previous.Native):
     rollback_before_migration=official.Native.rollback_before_migration
     def check_runtime(self,sha,image):
         item=json.loads(core.run(['docker','inspect',core.dc(['ps','-q','app'])]))[0];env=dict(x.split('=',1) for x in item['Config']['Env'] if '=' in x)
-        check(item['Image']==image and env.get('STORE_BUILD_SHA')==sha and env.get('STORE_INSTALLED_VERSION')==('1.9.0' if sha==self.base_sha else '1.9.1'),'runtime version/source/image')
+        check(item['Image']==image and env.get('STORE_BUILD_SHA')==sha and env.get('STORE_INSTALLED_VERSION')==(self.baseline_version if sha==self.base_sha else '1.9.1'),'runtime version/source/image')
         check(env.get('STORE_INSTALLATION_ID')==previous.pilot.history.INSTALLATION and env.get('PAYMENT_PROVIDER','manual')=='manual' and all(env.get(k)=='yes' for k in official.FLAGS),'installation/provider/J&T guards')
         if sha!=self.base_sha:check(env.get('PAYMENT_GOPAY_CHECKOUT_ENABLED')=='true','QRIS runtime capability')
     def ledger_valid(self,j):
