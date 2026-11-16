@@ -80,6 +80,25 @@ class FashionFiveCard(FashionCorrection):
         return result
 
 
+class FashionMobilePhoto(FashionFiveCard):
+    base_sha = 'e0542cc96eb99f323de52f326f3bb99d2ca9702b'
+    base_digest = '956864751e9837df1df7f1360c986e45fde18e4af4b6afcede5eb408d71960e3'
+    base_image = 'sha256:7e81e6904e8d4371051b21bfe6a5e3984ed33e59ec4aee53ce563298ed33dbff'
+    base_tree = FashionFiveCard.target_tree
+    target_tree = '31570821fe5bc14a64c04207c3b4644ee11a0095'
+    previous_receipt = FashionFiveCard.journal_name
+    journal_name = 'hubify-fashion-mobile-photo.json'
+    release_prefix = 'hubify-fashion-mobile-photo-'
+    deployment_name = 'hubify-fashion-mobile-photo'
+
+    def file_guards(self):
+        from promotions_transition import digest
+        result = super().file_guards()
+        path = core.CONFIG / FashionFiveCard.previous_receipt
+        result[str(path)] = digest(path.read_bytes())
+        return result
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('mode', choices=['dry-run', 'apply', 'reconcile'])
@@ -87,13 +106,15 @@ def main():
     parser.add_argument('digest')
     parser.add_argument('--external-work-stopped', action='store_true')
     target = parser.add_mutually_exclusive_group()
-    target.add_argument('--five-card', action='store_true', help='Deploy five-card composition over the reviewed cylinder baseline')
-    target.add_argument('--correction', action='store_true', help='Apply the carousel correction to the exact private preview baseline')
+    parser.set_defaults(driver_type=FashionPreview)
+    target.add_argument('--mobile-photo', dest='driver_type', action='store_const', const=FashionMobilePhoto, help='Deploy the reviewed mobile photo correction')
+    target.add_argument('--five-card', dest='driver_type', action='store_const', const=FashionFiveCard, help='Deploy five-card composition over the reviewed cylinder baseline')
+    target.add_argument('--correction', dest='driver_type', action='store_const', const=FashionCorrection, help='Apply the carousel correction to the exact private preview baseline')
     args = parser.parse_args()
     install()
     os.umask(0o077)
     folder = core.ROOT / 'operator-packages'
-    driver_type = FashionFiveCard if args.five_card else FashionCorrection if args.correction else FashionPreview
+    driver_type = args.driver_type
     baseline = ('fashion-' + driver_type.base_sha + '.tar.gz') if driver_type != FashionPreview else 'store-v1.9.1-8fb8607deb6a.tar.gz'
     driver = driver_type(ROOT, folder / ('fashion-' + args.sha + '.tar.gz'), args.digest, args.sha, folder / baseline)
     official.check(not args.external_work_stopped or args.mode == 'reconcile', 'reconciliation only')
