@@ -1,5 +1,5 @@
 "use client";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { fashionImage } from "@/modules/catalog/fashion-image";
 
 type Scene = { photo: string; object?: string };
@@ -28,9 +28,9 @@ export function Cover({
       : null;
   const desired = candidate && identity(candidate);
   const first = useRef(desired);
-  const requested = useRef(desired);
-  requested.current = desired;
-  const loaded = useRef(new Set<string>());
+  const desiredLayer = useRef<HTMLDivElement>(null);
+  const scenePhoto = candidate?.photo;
+  const sceneObject = candidate?.object;
   const underlay = shown && identity(shown) !== desired ? shown : layers.back;
   const scenes = candidate
     ? [
@@ -40,35 +40,33 @@ export function Cover({
     : shown
       ? [shown]
       : [];
-  async function ready(img: HTMLImageElement, scene: Scene) {
-    const key = identity(scene);
-    try {
-      await img.decode();
-    } catch {
-      if (!img.naturalWidth) return;
-    }
-    if (key !== requested.current) return;
-    loaded.current.add(img.dataset.layer!);
-    if (
-      loaded.current.has(scene.photo) &&
-      (!scene.object || loaded.current.has(scene.object))
-    ) {
+  // A reverse drag can reuse the outgoing DOM image. It is already loaded,
+  // so observe the desired scene itself instead of waiting for a new load event.
+  useEffect(() => {
+    if (!scenePhoto || !desiredLayer.current) return;
+    let cancelled = false;
+    const images = Array.from(desiredLayer.current.querySelectorAll("img"));
+    const scene = { photo: scenePhoto, object: sceneObject };
+    async function reveal() {
+      const decoded = await Promise.all(images.map(async (img) => {
+        try {
+          await img.decode();
+          return true;
+        } catch {
+          return img.complete && img.naturalWidth > 0;
+        }
+      }));
+      if (cancelled || !decoded.every(Boolean)) return;
       setLayers((last) =>
-        last.front && identity(last.front) === key
-          ? last
-          : {
-              front: scene,
-              back: matchMedia("(prefers-reduced-motion: reduce)").matches
-                ? null
-                : last.front,
-            },
+        last.front && identity(last.front) === identity(scene) ? last : {
+          front: scene,
+          back: matchMedia("(prefers-reduced-motion: reduce)").matches ? null : last.front,
+        },
       );
-      loaded.current = new Set([
-        scene.photo,
-        ...(scene.object ? [scene.object] : []),
-      ]);
     }
-  }
+    void reveal();
+    return () => { cancelled = true; };
+  }, [scenePhoto, sceneObject]);
   function error(url: string) {
     setFailed((last) => [...last.slice(-7), url]);
   }
@@ -80,8 +78,9 @@ export function Cover({
         return (
           <div
             key={key}
+            ref={key === desired ? desiredLayer : undefined}
             onAnimationEnd={() => {
-              if (key === requested.current)
+              if (key === desired)
                 setLayers((last) => ({ ...last, back: null }));
             }}
             className={
@@ -99,7 +98,6 @@ export function Cover({
               loading="eager"
               fetchPriority={key === first.current ? "high" : "auto"}
               draggable={false}
-              onLoad={(e) => void ready(e.currentTarget, scene)}
               onError={() => error(scene.photo)}
             />
             {scene.object && (
@@ -110,7 +108,6 @@ export function Cover({
                   alt=""
                   data-layer={scene.object}
                   draggable={false}
-                  onLoad={(e) => void ready(e.currentTarget, scene)}
                   onError={() => error(scene.object!)}
                 />
               </div>
