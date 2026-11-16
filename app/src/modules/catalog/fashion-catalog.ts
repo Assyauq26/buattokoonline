@@ -10,7 +10,6 @@ import {
   defaultCollections,
   type FashionCollection,
 } from "@/modules/appearance/schema";
-import { getStorefrontUserContext } from "@/lib/auth/session";
 import { fashionWindow } from "./fashion-window";
 
 const pageSize = 12;
@@ -129,26 +128,12 @@ export async function fashionFrame(
     }),
   );
   const visible = cards.filter((c) => c !== null);
-  const user = await getStorefrontUserContext();
-  const saved = user
-    ? await prisma.wishlistItem.findMany({
-        where: {
-          wishlist: { userId: user.id },
-          productId: { in: visible.map((c) => c.id) },
-        },
-        select: { productId: true },
-      })
-    : [];
-  const favorites = new Set(saved.map((item) => item.productId));
   return {
     collections,
     collection,
     total,
     index,
-    cards: visible.map((card) => ({
-      ...card,
-      favorite: favorites.has(card.id),
-    })),
+    cards: visible,
   };
 }
 export type FashionFrame = Awaited<ReturnType<typeof fashionFrame>>;

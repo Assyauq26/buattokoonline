@@ -260,13 +260,12 @@ export default async function ProductPage({ params }: ProductRouteProps) {
 
           <div className="pdp-hero">
             <div className="pdp-media">
-              <ProductGallery images={product.images} name={product.name} />
+              <ProductGallery images={product.images} name={product.name} showProgress={appearance.config.themeId !== "immersive-fashion"} />
             </div>
           </div>
 
           <ProductInformationSheet>
             <div className="pdp-info">
-              {appearance.config.themeId === "immersive-fashion" && <div className="fashion-product-favorite"><WishlistButton productId={product.id} initialActive={wl.has(product.id)}/></div>}
               <div className="mb-1.5 text-sm font-medium text-zinc-400">
                 {product.brand?.name ?? appearance.config.identity.name}
               </div>

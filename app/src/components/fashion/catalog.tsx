@@ -18,7 +18,6 @@ import {
   type StoreAppearanceV1,
 } from "@/modules/appearance/schema";
 import { fashionImage } from "@/modules/catalog/fashion-image";
-import { WishlistButton } from "@/components/storefront/wishlist-button";
 import { Cover } from "./cover";
 import { offsetFrom, orbitStyle } from "./orbit";
 import { useOrbit } from "./use-orbit";
@@ -441,14 +440,6 @@ function CatalogView({
                   <span>{formatIDR(card.price)}</span>
                 </span>
               </Link>
-              {current && !preview && (
-                <span data-favorite>
-                  <WishlistButton
-                    productId={card.id}
-                    initialActive={card.favorite}
-                  />
-                </span>
-              )}
             </article>
           );
         })}

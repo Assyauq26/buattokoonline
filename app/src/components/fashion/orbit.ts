@@ -24,7 +24,7 @@ export function orbitPose(offset: number, total: number, mobile: boolean) {
     0,
     Math.min(1, (limit - Math.abs(offset)) / Math.min(0.42, limit - 1)),
   );
-  return { x, depth, yaw: -x * (mobile ? 28 : 31), opacity };
+  return { x, depth, yaw: x * (mobile ? 31 : 26), opacity };
 }
 export function orbitStyle(offset: number, total: number, mobile: boolean) {
   const { x, depth, yaw, opacity } = orbitPose(offset, total, mobile);

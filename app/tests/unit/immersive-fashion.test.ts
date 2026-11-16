@@ -80,6 +80,7 @@ describe("Immersive Fashion", () => {
       const left=orbitPose(-d,15,mobile),right=orbitPose(d,15,mobile);
       expect(left.x).toBeCloseTo(-right.x);
       expect(left.yaw).toBeCloseTo(-right.yaw);
+      expect(right.yaw).toBeGreaterThan(0);
       expect(left.depth).toBeCloseTo(right.depth);
       expect(right.depth).toBeLessThan(0);
       expect(Math.abs(right.yaw)).toBeLessThan(32);

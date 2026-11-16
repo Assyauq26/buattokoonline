@@ -300,12 +300,12 @@
 .fashion-carousel {
   z-index: 1;
   perspective: clamp(680px, 76vw, 1180px);
-  perspective-origin: 50% 52%;
+  perspective-origin: 50% 45%;
   transform-style: preserve-3d;
   position: relative;
   align-self: end;
   height: clamp(160px, 30dvh, 300px);
-  --orbit-rx: min(52vw, 67vh, 735px);
+  --orbit-rx: min(50vw, 66vh, 720px);
   --orbit-rz: clamp(640px, 74vw, 1120px);
   cursor: grab;
   margin-top: 2rem;
@@ -317,7 +317,7 @@
   top: 45%;
   left: 50%;
   height: 100%;
-  width: min(16vw, 22vh, 240px);
+  width: min(17vw, 23vh, 250px);
   transform: var(--initial-orbit);
   transform-origin: center;
   will-change: transform, opacity;
@@ -374,20 +374,6 @@
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
-}
-.fashion-slide [data-favorite] {
-  position: absolute;
-  right: 6px;
-  top: 6px;
-}
-.fashion .fashion-slide [data-favorite] button {
-  width: 44px;
-  height: 44px;
-  color: white;
-  background: #16141295;
-}
-.fashion .fashion-slide [data-favorite] svg {
-  color: white;
 }
 .fashion-meta {
   position: relative;
@@ -494,14 +480,6 @@
 }
 .fashion .pdp-heading {
   color: inherit;
-}
-.fashion-product-favorite {
-  float: right;
-  margin-left: 10px;
-}
-.fashion-product-favorite button {
-  min-width: 44px;
-  min-height: 44px;
 }
 .fashion .pdp-info > a[href="#reviews"] {
   display: none;
@@ -766,13 +744,13 @@
     background: #514d4985;
   }
   .fashion-carousel {
-    height: clamp(140px, 22dvh, 215px);
-    perspective: clamp(400px, 115vw, 600px);
-    --orbit-rx: min(83vw, 47dvh);
-    --orbit-rz: clamp(310px, 91vw, 530px);
+    height: clamp(152px, 27dvh, 255px);
+    perspective: clamp(340px, 98vw, 550px);
+    --orbit-rx: min(71vw, 43dvh);
+    --orbit-rz: clamp(370px, 116vw, 620px);
   }
   .fashion-slide {
-    width: min(34vw, 20dvh);
+    width: min(39vw, 23dvh);
     transform: var(--initial-orbit-mobile);
   }
 
@@ -812,9 +790,6 @@
     right: 0;
     height: 26%;
     background: linear-gradient(transparent, #191817);
-  }
-  .fashion .pdp-gallery-progress {
-    bottom: 20%;
   }
   .fashion .pdp-sheet {
     position: relative;

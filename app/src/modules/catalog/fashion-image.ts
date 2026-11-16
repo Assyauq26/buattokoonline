@@ -16,6 +16,6 @@ export function fashionImage(src: string, large: boolean) {
     srcSet: widths.map((w) => path + "?w=" + w + " " + w + "w").join(", "),
     sizes: large
       ? "100vw"
-      : "(max-width: 767px) min(34vw, 20vh), min(16vw, 22vh, 240px)",
+      : "(max-width: 767px) min(39vw, 23vh), min(17vw, 23vh, 250px)",
   };
 }
