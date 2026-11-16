@@ -84,8 +84,10 @@ describe("Immersive Fashion", () => {
       expect(left.depth).toBeCloseTo(right.depth);
       expect(right.depth).toBeLessThan(0);
       expect(Math.abs(right.yaw)).toBeLessThan(32);
-      expect(orbitStyle(d,15,mobile).transform).toMatch(/, 0px, .*rotateY/);
+      expect(orbitStyle(d,15,mobile).transform).toContain("var(--orbit-drop)");
     }
+    expect(orbitPose(2,5,mobile).opacity).toBe(1);
+    expect(orbitPose(-2,5,mobile).opacity).toBe(1);
     expect(orbitPose(3,15,mobile).opacity).toBe(0);
   });
   it("selects bounded local photo variants without the private object path",()=>{

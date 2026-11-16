@@ -358,91 +358,96 @@ function CatalogView({
           />
         </form>
       </div>
-      <div
-        className="fashion-carousel"
-        ref={orbit.stage}
-        aria-label="Jelajahi produk"
-        tabIndex={0}
-        onKeyDown={(e) => {
-          if (e.target !== e.currentTarget) return;
-          if (
-            ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key)
-          ) {
-            e.preventDefault();
-            if (e.key === "ArrowLeft") orbit.step(-1);
-            if (e.key === "ArrowRight") orbit.step(1);
-            if (e.key === "ArrowDown") switchCollection(1);
-            if (e.key === "ArrowUp") switchCollection(-1);
-          }
-        }}
-      >
-        {cards.map((card) => {
-          if (Math.abs(offsetFrom(card.pos, visible.pos, total)) > 2)
-            return null;
-          const current = card.pos === visible.pos,
-            offset = offsetFrom(card.pos, index, total);
-          const desktop = orbitStyle(offset, total, false),
-            mobile = orbitStyle(offset, total, true);
-          return (
-            <article
-              key={card.id}
-              className="fashion-slide"
-              data-pos={card.pos}
-              data-offset={offset}
-              style={
-                {
-                  "--initial-orbit": desktop.transform,
-                  "--initial-orbit-mobile": mobile.transform,
-                  opacity: desktop.opacity,
-                  zIndex: desktop.zIndex,
-                } as CSSProperties
-              }
-            >
-              <Link
-                href={
-                  current
-                    ? "/product/" + encodeURIComponent(card.slug)
-                    : fashionUrl(collection.id, card.pos)
+      <div className="fashion-orbit-window">
+        <div
+          className="fashion-carousel"
+          ref={orbit.stage}
+          aria-label="Jelajahi produk"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.target !== e.currentTarget) return;
+            if (
+              ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key)
+            ) {
+              e.preventDefault();
+              if (e.key === "ArrowLeft") orbit.step(-1);
+              if (e.key === "ArrowRight") orbit.step(1);
+              if (e.key === "ArrowDown") switchCollection(1);
+              if (e.key === "ArrowUp") switchCollection(-1);
+            }
+          }}
+        >
+          {cards.map((card) => {
+            if (Math.abs(offsetFrom(card.pos, visible.pos, total)) > 2)
+              return null;
+            const current = card.pos === visible.pos,
+              offset = offsetFrom(card.pos, index, total);
+            const desktop = orbitStyle(offset, total, false),
+              mobile = orbitStyle(offset, total, true);
+            return (
+              <article
+                key={card.id}
+                className="fashion-slide"
+                data-pos={card.pos}
+                data-active={current}
+                data-offset={offset}
+                style={
+                  {
+                    "--initial-orbit": desktop.transform,
+                    "--initial-orbit-mobile": mobile.transform,
+                    opacity: desktop.opacity,
+                    zIndex: desktop.zIndex,
+                  } as CSSProperties
                 }
-                prefetch={false}
-                draggable={false}
-                tabIndex={current ? 0 : -1}
-                aria-label={(current ? "Lihat " : "Pilih ") + card.name}
-                onClick={(e) => {
-                  if (!current || preview) {
-                    e.preventDefault();
-                    if (!current) orbit.choose(card.pos);
-                    return;
-                  }
-                  try {
-                    sessionStorage.setItem(
-                      "fashion-return",
-                      fashionUrl(collection.id, index),
-                    );
-                  } catch {}
-                }}
               >
-                <span className="fashion-shot">
-                  {card.image ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      {...fashionImage(card.image, card.image === initialHero)}
-                      loading={current ? "eager" : "lazy"}
-                      draggable={false}
-                      alt={card.name}
-                    />
-                  ) : (
-                    <ImageIcon aria-label="Foto belum tersedia" />
+                <Link
+                  href={
+                    current
+                      ? "/product/" + encodeURIComponent(card.slug)
+                      : fashionUrl(collection.id, card.pos)
+                  }
+                  prefetch={false}
+                  draggable={false}
+                  tabIndex={current ? 0 : -1}
+                  aria-label={(current ? "Lihat " : "Pilih ") + card.name}
+                  onClick={(e) => {
+                    if (!current || preview) {
+                      e.preventDefault();
+                      if (!current) orbit.choose(card.pos);
+                      return;
+                    }
+                    try {
+                      sessionStorage.setItem(
+                        "fashion-return",
+                        fashionUrl(collection.id, index),
+                      );
+                    } catch {}
+                  }}
+                >
+                  <span className="fashion-shot">
+                    {card.image ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        {...fashionImage(card.image, card.image === initialHero)}
+                        loading={current ? "eager" : "lazy"}
+                        draggable={false}
+                        alt={card.name}
+                      />
+                    ) : (
+                      <ImageIcon aria-label="Foto belum tersedia" />
+                    )}
+                  </span>
+                  {current && (
+                    <span className="fashion-caption">
+                      <strong>{card.name}</strong>
+                      <span>{formatIDR(card.price)}</span>
+                    </span>
                   )}
-                </span>
-                <span className="fashion-caption">
-                  <strong>{card.name}</strong>
-                  <span>{formatIDR(card.price)}</span>
-                </span>
-              </Link>
-            </article>
-          );
-        })}
+                </Link>
+              </article>
+            );
+          })}
+        </div>
       </div>
       <div className="fashion-meta">
         <div className="fashion-count" aria-live="polite">

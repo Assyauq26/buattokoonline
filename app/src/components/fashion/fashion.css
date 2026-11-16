@@ -297,27 +297,34 @@
   display: grid;
   place-items: center;
 }
-.fashion-carousel {
+.fashion-orbit-window {
+  align-self: end;
+  justify-self: center;
+  width: min(100%, 84dvh, 910px);
+  container-type: inline-size;
+  overflow: clip;
+  padding-block: 12px;
   z-index: 1;
-  perspective: clamp(680px, 76vw, 1180px);
-  perspective-origin: 50% 45%;
+}
+.fashion-carousel {
+  perspective: 120cqw;
+  perspective-origin: 50% 50%;
   transform-style: preserve-3d;
   position: relative;
-  align-self: end;
-  height: clamp(160px, 30dvh, 300px);
-  --orbit-rx: min(50vw, 66vh, 720px);
-  --orbit-rz: clamp(640px, 74vw, 1120px);
+  height: clamp(140px, 29dvh, 305px);
+  --orbit-rx: 70cqw;
+  --orbit-rz: 72cqw;
+  --orbit-drop: 14px;
   cursor: grab;
-  margin-top: 2rem;
   touch-action: pinch-zoom;
   user-select: none;
 }
 .fashion-slide {
   position: absolute;
-  top: 45%;
+  top: 50%;
   left: 50%;
   height: 100%;
-  width: min(17vw, 23vh, 250px);
+  width: 29.6cqw;
   transform: var(--initial-orbit);
   transform-origin: center;
   will-change: transform, opacity;
@@ -341,6 +348,7 @@
   height: 100%;
 }
 .fashion-slide > a {
+  position: relative;
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -361,11 +369,13 @@
   object-position: center var(--fashion-desktop-focus);
 }
 .fashion-caption {
+  position: absolute;
+  inset: auto 0 0;
   background: #fbfaf7;
   color: #171615;
   display: grid;
   text-align: center;
-  padding: 7px 6px;
+  padding: 5px 6px;
   line-height: 1.2;
   font-size: clamp(0.8rem, 1vw, 1.1rem);
 }
@@ -743,14 +753,17 @@
     border-radius: 40px;
     background: #514d4985;
   }
+  .fashion-orbit-window {
+    width: 100%;
+    padding-block: 8px;
+  }
   .fashion-carousel {
-    height: clamp(152px, 27dvh, 255px);
-    perspective: clamp(340px, 98vw, 550px);
-    --orbit-rx: min(71vw, 43dvh);
-    --orbit-rz: clamp(370px, 116vw, 620px);
+    height: clamp(136px, min(47cqw, 25dvh), 235px);
+    --orbit-rx: 68cqw;
+    --orbit-drop: 9px;
   }
   .fashion-slide {
-    width: min(39vw, 23dvh);
+    width: 30.5cqw;
     transform: var(--initial-orbit-mobile);
   }
 
