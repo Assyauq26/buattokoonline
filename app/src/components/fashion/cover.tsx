@@ -75,6 +75,7 @@ export function Cover({
       {scenes.map((scene) => {
         const key = identity(scene);
         const pending = key === desired && !!shown && key !== identity(shown);
+        const revealing = key === desired && !pending && !!layers.back;
         return (
           <div
             key={key}
@@ -85,7 +86,7 @@ export function Cover({
             }}
             className={
               "fashion-scene" +
-              (pending ? " waiting" : key === first.current ? "" : " revealed")
+              (pending ? " waiting" : revealing ? " revealed" : "")
             }
           >
             {/* Native responsive images expose the first hero in the server HTML. */}

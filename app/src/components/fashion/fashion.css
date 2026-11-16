@@ -722,6 +722,14 @@
     padding: clamp(68px, 8.6dvh, 84px) 0
       calc(78px + env(safe-area-inset-bottom));
   }
+  .fashion-stage > .fashion-cover {
+    top: clamp(48px, 8svh, 84px);
+    mask-image: linear-gradient(to bottom, transparent, #000 clamp(56px, 10svh, 96px));
+  }
+  .fashion-cover .revealed {
+    animation-duration: 280ms;
+    animation-timing-function: ease-in-out;
+  }
   .fashion-object img {
     left: var(--mobile-x);
     top: var(--mobile-y);

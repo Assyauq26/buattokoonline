@@ -36,6 +36,7 @@ it("reveals a previously mounted photo on reversal and ignores an obsolete decod
     view.rerender(show("/a.png"));
     await finish(4);
     expect(front()?.getAttribute("src")).toBe("/a.png");
+    expect(front()?.parentElement?.classList.contains("revealed")).toBe(true);
     expect(view.container.querySelector(".waiting")).toBeNull();
   } finally {
     if (previous) Object.defineProperty(HTMLImageElement.prototype, "decode", previous);
