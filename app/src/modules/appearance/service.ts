@@ -174,6 +174,11 @@ export async function changeAppearance(
           publishing &&
           !(input.kind === "rollback" && input.revision === 0)
         ) {
+          if (config.themeId === "immersive-fashion") {
+            const ids = [...new Set((config.collections ?? []).flatMap(c => c.cover ? [c.cover.split("/").pop()!] : []))];
+            if (ids.length && await tx.productImage.count({where:{id:{in:ids},product:{status:"PUBLISHED"}}}) !== ids.length)
+              throw new HttpError("Foto sampul harus berasal dari produk terbit di toko ini.",422);
+          }
           const errors = contrastErrors(config);
           if (errors.length)
             throw new HttpError(

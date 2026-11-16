@@ -266,6 +266,7 @@ export default async function ProductPage({ params }: ProductRouteProps) {
 
           <ProductInformationSheet>
             <div className="pdp-info">
+              {appearance.config.themeId === "immersive-fashion" && <div className="fashion-product-favorite"><WishlistButton productId={product.id} initialActive={wl.has(product.id)}/></div>}
               <div className="mb-1.5 text-sm font-medium text-zinc-400">
                 {product.brand?.name ?? appearance.config.identity.name}
               </div>
@@ -298,6 +299,7 @@ export default async function ProductPage({ params }: ProductRouteProps) {
                 </span>
               </a>
 
+              {appearance.config.themeId === "immersive-fashion" && product.description && <p className="mb-4 line-clamp-2">{product.description}</p>}
               <PurchasePanel product={purchase} />
 
               <ProductSizeChart
@@ -308,7 +310,7 @@ export default async function ProductPage({ params }: ProductRouteProps) {
                 name={product.name}
               />
               <div className="pdp-information-rows">
-                <ProductDisclosure title="Deskripsi" icon={<FileText size={19} aria-hidden="true" />} defaultOpen>
+                <ProductDisclosure title={appearance.config.themeId === "immersive-fashion" ? "Detail produk" : "Deskripsi"} icon={<FileText size={19} aria-hidden="true" />} defaultOpen={appearance.config.themeId !== "immersive-fashion"}>
                   <ProductDescription text={product.description} />
                 </ProductDisclosure>
                 <ProductDisclosure title="Material & Perawatan" icon={<Package size={19} aria-hidden="true" />}>

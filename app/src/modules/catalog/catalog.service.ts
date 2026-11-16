@@ -17,7 +17,7 @@ import { CATALOG_CACHE_TAG } from "./catalog-cache";
 // Listing cards only need one image and one variant id. Loading every image,
 // every variant and every inventory row for a 12/48 item grid made the RSC
 // payload and Prisma response much larger than necessary.
-const productCardInclude = {
+export const productCardInclude = {
   images: {
     where: { isVariation: false },
     select: { url: true },
@@ -153,7 +153,7 @@ async function listProductsUncached(
     client.product.findMany({
       where,
       include: productCardInclude,
-      orderBy,
+      orderBy: [orderBy, { id: "asc" }],
       skip: (page - 1) * pageSize,
       take: pageSize,
     }),
@@ -167,7 +167,7 @@ async function listProductsUncached(
     const lastItems = await client.product.findMany({
       where,
       include: productCardInclude,
-      orderBy,
+      orderBy: [orderBy, { id: "asc" }],
       skip: (pages - 1) * pageSize,
       take: pageSize,
     });

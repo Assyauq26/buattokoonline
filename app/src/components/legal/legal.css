@@ -9,6 +9,15 @@
   color: hsl(var(--ink));
   min-height: 100svh;
 }
+.legal-page[data-fashion="true"] {
+  color-scheme: dark;
+  --surface: 30 4% 10%;
+  --surface-muted: 30 4% 15%;
+  --ink: 35 12% 96%;
+  --ink-soft: 32 7% 83%;
+  --ink-muted: 32 6% 74%;
+  --line: 30 4% 38%;
+}
 .legal-site-header {
   max-width: 1152px;
   margin: 0 auto;
@@ -125,7 +134,16 @@
   .legal-document {
     padding-top: 32px;
   }
-  .legal-site-header {
+  .legal-page[data-fashion="true"] {
+  color-scheme: dark;
+  --surface: 30 4% 10%;
+  --surface-muted: 30 4% 15%;
+  --ink: 35 12% 96%;
+  --ink-soft: 32 7% 83%;
+  --ink-muted: 32 6% 74%;
+  --line: 30 4% 38%;
+}
+.legal-site-header {
     padding: 24px;
   }
   .legal-contact {

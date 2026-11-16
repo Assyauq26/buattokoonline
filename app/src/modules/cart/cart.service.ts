@@ -69,7 +69,7 @@ export const checkoutVariantSelection = {
 
 type CheckoutVariant = Prisma.ProductVariantGetPayload<{ select: typeof checkoutVariantSelection }>;
 
-export async function getCartView(userId: string, client: Prisma.TransactionClient = prisma) {
+export async function getCartView(userId: string, client: Prisma.TransactionClient = prisma, selectedIds?: string[]) {
   // A read of an empty cart must stay read-only. Cart creation is deferred to
   // the first mutation (add-to-cart), avoiding a DB write on every cart visit.
   // Load the cart and its lines in one relational query; the previous version
@@ -79,6 +79,7 @@ export async function getCartView(userId: string, client: Prisma.TransactionClie
     select: {
       id: true,
       items: {
+        where: selectedIds ? { id: { in: selectedIds } } : undefined,
         select: {
           id: true,
           variantId: true,
@@ -95,6 +96,7 @@ export async function getCartView(userId: string, client: Prisma.TransactionClie
 
   if (!cart) return { cartId: null, lines: [], subtotal: 0, count: 0 };
 
+  if (selectedIds && cart.items.length !== selectedIds.length) throw new HttpError("Pilihan keranjang berubah. Pilih kembali barang di keranjang.", 409);
   const priced = await withCampaignPricing(cart.items.map(it=>it.variant.product),client);
   const lines = cart.items.map((it,index)=>checkoutLine({...it,variant:{...it.variant,product:priced[index]}}, priced[index]));
 
@@ -191,6 +193,27 @@ export async function updateItem(userId: string, itemId: string, quantity: numbe
     const stock = item.variant.inventory ? available(item.variant.inventory.onHand, item.variant.inventory.reserved) : 0;
     if (quantity > stock) throw new HttpError("Stok tidak mencukupi", 409);
     await tx.cartItem.update({ where: { id: itemId }, data: { quantity } });
+  });
+  return getCartView(userId);
+}
+
+export async function changeCartVariant(userId:string, itemId:string, expectedVariantId:string, nextVariantId:string, expectedQuantity:number) {
+  validateQuantity(expectedQuantity);
+  await prisma.$transaction(async tx=>{
+    const cart=await lockCart(tx,userId,false);
+    if (!cart) throw new HttpError("Keranjang tidak ditemukan",404);
+    const line=await tx.cartItem.findFirst({where:{id:itemId,cartId:cart.id},include:{variant:{select:{productId:true}}}});
+    if (!line || line.variantId!==expectedVariantId || line.quantity!==expectedQuantity) throw new HttpError("Isi keranjang berubah. Muat ulang keranjang.",409);
+    if (nextVariantId===line.variantId) return;
+    const variant=await tx.productVariant.findFirst({where:{id:nextVariantId,productId:line.variant.productId,product:{status:"PUBLISHED"}},include:{inventory:true}});
+    if (!variant?.inventory) throw new HttpError("Variasi tidak tersedia",409);
+    const target=await tx.cartItem.findUnique({where:{cartId_variantId:{cartId:cart.id,variantId:nextVariantId}}});
+    const quantity=line.quantity+(target?.quantity ?? 0);
+    if (quantity>available(variant.inventory.onHand,variant.inventory.reserved)) throw new HttpError("Stok variasi tidak mencukupi",409);
+    if(target){
+      await tx.cartItem.update({where:{id:target.id},data:{quantity}});
+      await tx.cartItem.delete({where:{id:line.id}});
+    } else await tx.cartItem.update({where:{id:line.id},data:{variantId:nextVariantId}});
   });
   return getCartView(userId);
 }

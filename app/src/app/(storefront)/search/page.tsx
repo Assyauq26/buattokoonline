@@ -1,3 +1,5 @@
+import { getPublishedAppearance } from "@/modules/appearance/published";
+import { FashionSearch } from "@/components/fashion/search";
 import { ProductListing } from "@/components/storefront/product-listing";
 import { listProducts } from "@/modules/catalog/catalog.service";
 import { getCurrentUserBasic } from "@/lib/auth/session";
@@ -20,6 +22,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
   ]);
 
   return (
+    <>{(await getPublishedAppearance()).config.themeId === "immersive-fashion" && <FashionSearch value={q}/>}
     <ProductListing
       title={q ? `Hasil untuk "${q}"` : "Pencarian"}
       subtitle={`${result.total} produk ditemukan`}
@@ -31,6 +34,6 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
       currentPage={result.page}
       pageSize={result.pageSize}
       query={q ? { q } : {}}
-    />
+    /></>
   );
 }

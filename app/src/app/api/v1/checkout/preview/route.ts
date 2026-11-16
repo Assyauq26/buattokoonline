@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { selectedCartLines } from "@/modules/checkout/checkout.validation";
 import { checkoutIntentId } from "@/modules/checkout/checkout-intent";
 import { ok, handle } from "@/lib/response";
 import { requireUser } from "@/lib/auth/session";
@@ -10,6 +11,7 @@ export const dynamic = "force-dynamic";
 
 const schema = z.object({
   intentId: checkoutIntentId.optional(),
+  selectedIds: selectedCartLines.optional(),
   couponCode: z.string().max(64).optional(),
   address: checkoutLocationSchema.optional(),
   shipping: z.object({ courier: shippingCourierSchema, service: z.string().min(1).max(100), cost: z.number().int().nonnegative(), quoteToken: z.string().min(1).max(4096) }).optional(),

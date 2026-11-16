@@ -192,9 +192,29 @@ export const GRADIENT_TARGETS = [
   "footer",
   "highlightCard",
 ] as const;
+export const fashionCollectionSchema = z.object({
+  id: z.string().regex(/^[a-z0-9-]{1,40}$/),
+  title: label,
+  description: z.string().trim().max(160),
+  source: z.enum(["featured", "newest", "bestselling", "category", "flash"]),
+  category: z.string().max(100).regex(/^[a-z0-9-]*$/),
+  cover: z.string().max(160).regex(/^$|^\/api\/v1\/product-images\/[a-zA-Z0-9_-]+$/),
+  mobileFocus: z.number().int().min(0).max(100),
+  desktopFocus: z.number().int().min(0).max(100),
+}).strict().refine(c => c.source !== "category" || !!c.category, "Pilih kategori koleksi");
+export type FashionCollection = z.infer<typeof fashionCollectionSchema>;
+export const defaultCollections: FashionCollection[] = [
+  { id: "pilihan", title: "Koleksi Pilihan", description: "Gaya pilihan untuk setiap hari.", source: "featured" },
+  { id: "baru", title: "Produk Terbaru", description: "Temukan koleksi yang baru hadir.", source: "newest" },
+  { id: "favorit", title: "Paling Diminati", description: "Jelajahi pilihan favorit.", source: "bestselling" },
+  { id: "promo", title: "Flash Sale", description: "", source: "flash" },
+].map(c => ({ ...c, source: c.source as FashionCollection["source"], category: "", cover: "", mobileFocus: 40, desktopFocus: 16 }));
 export const appearanceSchema = z
   .object({
     schemaVersion: z.literal(1),
+    themeId: z.enum(["classic", "immersive-fashion"]).optional(),
+    collections: z.array(fashionCollectionSchema).min(1).max(12)
+      .refine(items => new Set(items.map(i => i.id)).size === items.length, "ID koleksi harus unik").optional(),
     identity: z
       .object({
         name: z.string().trim().min(1).max(100),

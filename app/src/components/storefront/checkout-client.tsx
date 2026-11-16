@@ -15,6 +15,7 @@ import {
 import { formatIDR } from "@/lib/money";
 import { createOrderAction } from "@/modules/checkout/checkout.actions";
 import type { CheckoutLines } from "@/modules/checkout/checkout.validation";
+import { useAppearance } from "@/components/appearance/context";
 import { cn } from "@/lib/utils";
 
 interface Rate {
@@ -83,6 +84,7 @@ function PlaceOrderBtn({ disabled }: { disabled: boolean }) {
 export function CheckoutClient({
   subtotal,
   expectedLines,
+  selectedIds,
   requestId,
   intentId,
   banks,
@@ -92,6 +94,7 @@ export function CheckoutClient({
 }: {
   subtotal: number;
   expectedLines: CheckoutLines;
+  selectedIds?: string[];
   requestId: string;
   intentId?: string;
   banks: Bank[];
@@ -99,6 +102,8 @@ export function CheckoutClient({
   address: Addr | null;
   jntCheckout?: boolean;
 }) {
+  const fashion = useAppearance().config.themeId === "immersive-fashion";
+  const [editingAddress, setEditingAddress] = useState(() => !(address && addressSchema.safeParse(address).success));
   const [state, action] = useFormState(createOrderAction, { ok: false } as any);
   const submitting = useRef(false);
   useEffect(() => {
@@ -135,7 +140,7 @@ export function CheckoutClient({
   const [couponDraft, setCouponDraft] = useState("");
   const [retry, setRetry] = useState(0);
   const [quote, setQuote] = useState<QuoteState | null>(null);
-  const shippingKey = JSON.stringify([intentId, expectedLines, location]);
+  const shippingKey = JSON.stringify([intentId, selectedIds, expectedLines, location]);
   const [rateContext, setRateContext] = useState("");
   const [shippingNotice, setShippingNotice] = useState("");
   const wanted = useRef<Rate>();
@@ -176,6 +181,7 @@ export function CheckoutClient({
             signal: controller.signal,
             body: JSON.stringify({
               intentId,
+              selectedIds,
               couponCode: couponCode || undefined,
               address: location,
               shipping: rate
@@ -318,6 +324,7 @@ export function CheckoutClient({
         submitting.current = true;
       }}
     >
+      {selectedIds && <input type="hidden" name="selectedIds" value={selectedIds.join(",")}/>}
       <input type="hidden" name="intentId" value={intentId || ""} />
       <input type="hidden" name="requestId" value={requestId} />
       <input
@@ -340,8 +347,11 @@ export function CheckoutClient({
         }
       />
       <div className="space-y-8">
-        {/* Recipient and structured address; legacy text stays intact until confirmed. */}
-        <section className="space-y-3">
+        {fashion && addressValid && <section className="fashion-checkout-address">
+          <div><h2>Alamat pengiriman</h2><button type="button" aria-expanded={editingAddress} onClick={() => setEditingAddress(!editingAddress)}>{editingAddress ? "Selesai" : "Ubah"}</button></div>
+          {!editingAddress && <><strong>{recipient}</strong><p>{phone}</p><p>{[street, location?.village,location?.city,location?.province].filter(Boolean).join(", ")}</p></>}
+        </section>}
+        <section hidden={fashion && addressValid && !editingAddress} className="space-y-3">
           <h2 className="font-display text-lg font-bold text-ink">
             Data Penerima
           </h2>
@@ -377,7 +387,7 @@ export function CheckoutClient({
             </div>
           </div>
         </section>
-        <section className="space-y-3">
+        <section hidden={fashion && addressValid && !editingAddress} className="space-y-3">
           <h2 className="font-display text-lg font-bold text-ink">
             Alamat Pengiriman
           </h2>
@@ -632,6 +642,7 @@ export function CheckoutClient({
             </p>
           )}
         </div>
+        {fashion && <details className="fashion-note"><summary>Catatan pesanan (opsional)</summary><Textarea name="note" aria-label="Catatan pesanan" maxLength={1000} placeholder="Tulis catatan untuk toko" /></details>}
       </div>
 
       <div
@@ -710,7 +721,7 @@ export function CheckoutClient({
               href={
                 intentId
                   ? `/checkout?intent=${encodeURIComponent(intentId)}`
-                  : "/checkout"
+                  : selectedIds ? "/checkout?items="+selectedIds.join(",") : "/checkout"
               }
               className="font-semibold text-primary hover:text-blue-700 focus-visible:text-blue-700 active:text-blue-800"
             >
@@ -744,7 +755,7 @@ export function CheckoutClient({
               href={
                 intentId
                   ? `/checkout?intent=${encodeURIComponent(intentId)}`
-                  : "/checkout"
+                  : selectedIds ? "/checkout?items="+selectedIds.join(",") : "/checkout"
               }
               className="font-semibold text-primary hover:text-blue-700 focus-visible:text-blue-700 active:text-blue-800"
             >

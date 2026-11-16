@@ -1,3 +1,5 @@
+import { redirect } from "next/navigation";
+import { getPublishedAppearance } from "@/modules/appearance/published";
 import { publicCampaign } from "@/modules/promotions/campaign-pricing";
 import { FlashSaleTimer } from "@/components/storefront/flash-sale-timer";
 import { ProductListing } from "@/components/storefront/product-listing";
@@ -21,6 +23,7 @@ type ShopPageProps = {
 
 export default async function ShopPage({ searchParams }: ShopPageProps) {
   const params = await searchParams;
+  if (!params.q && !params.flash && !params.sort && !params.page && (await getPublishedAppearance()).config.themeId === "immersive-fashion") redirect("/");
   const wishIdsPromise = getStorefrontUserContext().then((user) =>
     user ? wishlistProductIds(user.id) : [],
   );

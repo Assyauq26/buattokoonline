@@ -1,5 +1,7 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { FashionFrame } from "@/modules/catalog/fashion-catalog";
+import { readFashionPreview } from "@/modules/appearance/fashion-preview";
 import { useRouter } from "next/navigation";
 import {
   appearanceSchema,
@@ -94,6 +96,17 @@ export function AppearanceEditor({
     window.addEventListener("message", receive);
     return () => window.removeEventListener("message", receive);
   }, [nonce]);
+  const [previewFrame,setPreviewFrame] = useState<FashionFrame | null>(null);
+  const collectionKey = JSON.stringify(draft.collections);
+  useEffect(()=>{
+    let active=true;
+    setPreviewFrame(null);
+    if (draft.themeId !== "immersive-fashion" || !validation.success) return;
+    const timer=setTimeout(()=>{void readFashionPreview(validation.data).then(frame=>{if(active)setPreviewFrame(frame);}).catch(()=>{if(active)setError("Preview koleksi gagal dimuat.");});},300);
+    return ()=>{active=false;clearTimeout(timer);};
+    // Only membership changes require fetching catalog rows again.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[collectionKey,draft.themeId,validation.success]);
   const logoId = draft.identity.logoAssetId;
   useEffect(() => {
     setLogoBytes(null);
@@ -123,8 +136,9 @@ export function AppearanceEditor({
       type: string;
       nonce: string;
       config: StoreAppearanceV1;
+      frame: FashionFrame | null;
       logo?: ArrayBuffer;
-    } = { type: "appearance", nonce, config: validation.data };
+    } = { type: "appearance", nonce, frame:previewFrame, config: validation.data };
     if (sentLogo.current !== logoId) {
       if (logoBytes?.id === logoId) {
         message.logo = logoBytes.bytes;
@@ -132,7 +146,7 @@ export function AppearanceEditor({
       } else sentLogo.current = null;
     }
     iframe.current?.contentWindow?.postMessage(message, "*");
-  }, [validation, ready, nonce, logoId, logoBytes]);
+  }, [validation, ready, nonce, logoId, logoBytes, previewFrame]);
   async function history(before?: number) {
     const r = await appearanceHistory(before);
     if (r.ok && r.data)
@@ -180,6 +194,7 @@ export function AppearanceEditor({
           mobile: "Navigasi",
           footer: "Footer",
           styling: "Tombol/Kartu",
+          themeId: "Tema", collections: "Koleksi",
           schemaVersion: "",
         })[k],
     );

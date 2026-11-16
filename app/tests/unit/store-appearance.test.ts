@@ -16,8 +16,8 @@ import { themeStyle, isLegacy } from "@/modules/appearance/runtime";
 import { PERMISSIONS, ROLE_PERMISSIONS } from "@/lib/auth/permissions";
 import { resolveStorageObject } from "@/lib/storage-path";
 describe("store appearance contract", () => {
-  it("all eleven complete presets pass AA", () => {
-    expect(PRESETS).toHaveLength(11);
+  it("all complete presets pass AA", () => {
+    expect(PRESETS).toHaveLength(12);
     expect(PRESETS[0].name).toBe("Monochrome");
     expect(PRESETS[0].config).toEqual(makeDefault());
     for (const p of PRESETS) {

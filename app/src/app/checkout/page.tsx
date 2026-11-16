@@ -1,6 +1,7 @@
 import { readShippingSettings } from "@/modules/shipping/shipping-settings.service";
 import { cookies } from "next/headers";
 import { CHECKOUT_INTENT_COOKIE, checkoutIntentId, claimCheckoutIntent, getIntentCheckoutView } from "@/modules/checkout/checkout-intent";
+import { selectedCartLines } from "@/modules/checkout/checkout.validation";
 import { HttpError } from "@/lib/response";
 import { randomUUID } from "node:crypto";
 import { redirect } from "next/navigation";
@@ -16,13 +17,16 @@ import { checkoutAvailable } from "@/modules/payments/midtrans/settings";
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Checkout", robots: { index: false } };
 
-export default async function CheckoutPage({ searchParams }: { searchParams: Promise<{ intent?: string }> }) {
-  const { intent } = await searchParams;
+export default async function CheckoutPage({ searchParams }: { searchParams: Promise<{ intent?: string; items?: string }> }) {
+  const { intent,items } = await searchParams;
+  const parsed=items === undefined ? undefined : selectedCartLines.safeParse(typeof items === "string" ? items.split(",") : []);
+  if(parsed && (!parsed.success || intent)) return <p role="alert">Pilihan keranjang tidak valid. <a href="/cart">Kembali ke keranjang</a></p>;
+  const selectedIds=parsed?.data;
   if (intent !== undefined && !checkoutIntentId.safeParse(intent).success) {
     return <p role="alert">Checkout tidak valid. Silakan pilih produk kembali.</p>;
   }
   const user = await getCurrentUser();
-  if (!user) redirect(`/login?redirectTo=${encodeURIComponent(intent ? `/checkout?intent=${intent}` : "/checkout")}`);
+  if (!user) redirect(`/login?redirectTo=${encodeURIComponent(intent ? `/checkout?intent=${intent}` : selectedIds ? "/checkout?items="+selectedIds.join(",") : "/checkout")}`);
   let directView: Awaited<ReturnType<typeof getIntentCheckoutView>> | undefined;
   if (intent) {
     try {
@@ -36,7 +40,7 @@ export default async function CheckoutPage({ searchParams }: { searchParams: Pro
   }
 
   const [cart, banks, customer, shippingSettings, midtransAvailable] = await Promise.all([
-    intent ? directView! : getCartView(user.id),
+    intent ? directView! : getCartView(user.id, prisma, selectedIds).catch(error=>{if(error instanceof HttpError && error.status === 409) redirect("/cart?changed=1"); throw error;}),
     listActiveBankAccounts(),
     prisma.customer.findUnique({
       where: { userId: user.id },
@@ -73,6 +77,7 @@ export default async function CheckoutPage({ searchParams }: { searchParams: Pro
       </section>
       <CheckoutClient
         key={intent || "cart"}
+        selectedIds={selectedIds}
         intentId={intent}
         jntCheckout={!!shippingSettings.activeJnt}
         requestId={randomUUID()}
