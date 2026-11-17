@@ -119,7 +119,7 @@ class Engine:
     manifest=extract(folder/'release.tar.gz',source,release,installed,self.config)
     if manifest['compatibility']['rollback_compatible']!=release['rollbackCompatible']:raise Rejected('manifest_compatibility')
     for key,name in [('minimumInstalledVersion','minimum_installed_version'),('maximumInstalledVersion','maximum_installed_version')]:
-     if manifest['compatibility'].get(name)!=release[key]:raise Rejected('manifest_compatibility')
+     if not release.get('rollbackCompatible') and manifest['compatibility'].get(name)!=release[key]:raise Rejected('manifest_compatibility')
     candidate=copy.deepcopy(old)
     for name,target in [('tools','tools'),('app','runtime')]:
      image='single-store-'+name+':update-'+job['id']

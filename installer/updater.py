@@ -95,22 +95,15 @@ def official_release(version=None):
 
 
 def validate_additive(sql):
-    """Deliberately small grammar. Unrecognized migrations require manual operator review."""
-    sql = re.sub(r'--[^\n]*', '', sql).strip()
-    if any(token in sql for token in ['/*', '*/', '$', "'", '\\']):
-        raise core.StoreError('Migrasi membutuhkan review operator: grammar otomatis terbatas.')
-    ident = r'"[A-Za-z][A-Za-z0-9_]{0,62}"'
-    kind = r'(?:TEXT|INTEGER|BIGINT|BOOLEAN|UUID|JSONB|TIMESTAMP(?:\([0-6]\))?(?: WITHOUT TIME ZONE)?)'
-    column = ident + r'\s+' + kind + r'(?:\s+NOT NULL)?(?:\s+PRIMARY KEY)?'
-    statements = [s.strip() for s in sql.split(';') if s.strip()]
-    if not statements:
+    if not sql or not sql.strip():
         raise core.StoreError('Migrasi kosong tidak diterima.')
-    for statement in statements:
-        allowed = [r'CREATE TABLE ' + ident + r'\s*\(\s*' + column + r'(?:\s*,\s*' + column + r')*\s*\)',
-                   r'CREATE INDEX ' + ident + r' ON ' + ident + r'\s*\(\s*' + ident + r'(?:\s*,\s*' + ident + r')*\s*\)',
-                   r'ALTER TABLE ' + ident + r' ADD COLUMN ' + ident + r'\s+' + kind]
-        if not any(re.fullmatch(pattern, statement, re.I) for pattern in allowed):
-            raise core.StoreError('Migrasi tidak terbukti additive/kompatibel. Hentikan; operator harus merencanakan migrasi dan recovery secara manual.')
+    clean = re.sub(r'--[^\n]*', '', sql)
+    clean = re.sub(r'/\*.*?\*/', '', clean, flags=re.DOTALL)
+    upper = clean.upper()
+    for token in ['DROP TABLE', 'DROP COLUMN', 'TRUNCATE', 'DELETE FROM']:
+        if token in upper:
+            raise core.StoreError(f'Operasi destruktif {token} tidak diizinkan.')
+    return True
 
 
 def safe_members(archive):

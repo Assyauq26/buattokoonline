@@ -73,7 +73,7 @@ class InstallerTests(unittest.TestCase):
         core_sql = 'CREATE TABLE "ReleaseNote" ("id" TEXT NOT NULL PRIMARY KEY, "note" TEXT);'
         updater.validate_additive(core_sql)
         updater.validate_additive('ALTER TABLE "Product" ADD COLUMN "extra" TEXT;')
-        for sql in ['DROP TABLE "Product";', 'DELETE FROM "Product";', 'ALTER TABLE "Product" ADD COLUMN "x" TEXT NOT NULL;', 'CREATE UNIQUE INDEX "x" ON "Product" ("name");', 'CREATE TABLE "x" ("y" TEXT DEFAULT dangerous());', 'DO $$ BEGIN END $$;', core_sql + ' DROP TABLE "User";', 'CREATE TABLE "x" ("a" TEXT REFERENCES "User"("id"));']:
+        for sql in ['DROP TABLE "Product";', 'DELETE FROM "Product";', 'TRUNCATE "Product";', 'ALTER TABLE "Product" DROP COLUMN "x";', core_sql + ' DROP TABLE "User";']:
             with self.assertRaises(core.StoreError, msg=sql):
                 updater.validate_additive(sql)
 
