@@ -93,7 +93,7 @@ class Engine:
     operator_cutover_guard()
     installed=core.read_json(core.CONFIG/'version.json');old=core.read_json(core.COMPOSE)
     if 'APP_ORIGIN='+self.config['origin'] not in (core.CONFIG/'runtime.env').read_text().splitlines():raise Rejected('installation_mismatch')
-    if version(release['version'])<=version(installed['version']) or not version(release['minimumInstalledVersion'])<=version(installed['version'])<=version(release['maximumInstalledVersion']) or release['minimumUpdater']>VERSION or installed['db_contract']!=release['dbContract']:raise Rejected('incompatible_release')
+    if version(release['version'])<=version(installed['version']) or version(installed['version'])>version(release['maximumInstalledVersion']) or release['minimumUpdater']>VERSION or installed['db_contract']!=release['dbContract']:raise Rejected('incompatible_release')
     if not release['rollbackCompatible']:
      if not isinstance(release.get('upgradePolicy'),dict):raise Rejected('operator_migration_required')
      self.forward(job,folder,installed)

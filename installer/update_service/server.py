@@ -38,7 +38,7 @@ class Controller:
      if release['sha'] in catalog['revoked'] or (release['channel']=='pilot' and self.config['channel']!='pilot'):continue
      try:
       if release['rollbackCompatible']:
-       if not version(release['minimumInstalledVersion'])<=version(installed['version'])<=version(release['maximumInstalledVersion']):continue
+       if version(installed['version'])>version(release['maximumInstalledVersion']):continue
        self.engine.inspect(release,installed);self.forward_ready[release['sha']]=None;continue
       from .policy_feed import authorized
       from .evidence_forward import adapter

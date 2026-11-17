@@ -71,5 +71,5 @@ def compatible_current(config,state,release,installed):
     if not match or match['sha'] in cat['revoked'] or any(match.get(k)!=release.get(k) for k in ('version','digest','size','url','rollbackCompatible','minimumInstalledVersion','maximumInstalledVersion','minimumUpdater','dbContract')):raise Rejected('release_not_available')
     if match['channel']=='pilot' and config['channel']!='pilot':raise Rejected('release_not_available')
     if not match['rollbackCompatible'] or match['minimumUpdater']>VERSION:raise Rejected('incompatible_release')
-    if match['dbContract']!=installed['db_contract'] or not version(match['minimumInstalledVersion'])<=version(installed['version'])<=version(match['maximumInstalledVersion']):raise Rejected('incompatible_release')
+    if match['dbContract']!=installed['db_contract'] or version(match['version'])<=version(installed['version']) or version(installed['version'])>version(match['maximumInstalledVersion']):raise Rejected('incompatible_release')
     return match

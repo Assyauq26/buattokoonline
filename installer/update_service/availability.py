@@ -21,7 +21,7 @@ def upgrade_path(catalog, installed, target, channel, worker, forward_ready=None
                 and r['minimumUpdater'] <= worker and r['dbContract'] == installed['db_contract']
                 and (r['channel'] == 'stable' or channel == 'pilot')
                 and version(current) < version(r['version']) <= version(target)
-                and version(r['minimumInstalledVersion']) <= version(current) <= version(r['maximumInstalledVersion'])):
+                and version(current) <= version(r['maximumInstalledVersion'])):
                 queue.append((r['version'], steps + [r['sha']]))
     return None
 
@@ -42,13 +42,15 @@ def availability(catalog, installed, channel, worker, valid=True, forward_ready=
         reason = 'worker_upgrade_required'
     elif target['dbContract'] != installed['db_contract']:
         reason = 'database_contract_unsupported'
-    elif not version(target['minimumInstalledVersion']) <= version(installed['version']) <= version(target['maximumInstalledVersion']):
+    elif version(installed['version']) > version(target['maximumInstalledVersion']):
         reason = 'upgrade_path_unsupported'
     elif not target['rollbackCompatible']:
         reason = (forward_ready or {}).get(target['sha'],'operator_migration_required')
-    elif forward_ready is not None and target['sha'] in forward_ready:
+    elif forward_ready is not None and target['sha'] in forward_ready and forward_ready[target['sha']] is not None:
         reason=forward_ready[target['sha']]
     path = upgrade_path(catalog, installed, target['version'], channel, worker,forward_ready)
+    if not path and not reason and (target['rollbackCompatible'] or (forward_ready is not None and forward_ready.get(target['sha']) is None)):
+        path = [target['sha']]
     if reason == 'upgrade_path_unsupported' and path:
         reason = None
     next_release = next((r for r in releases if path and r['sha'] == path[0]), None)
@@ -57,14 +59,14 @@ def availability(catalog, installed, channel, worker, valid=True, forward_ready=
         # may still be installed. Do not promise eligibility of a future baseline.
         predecessors=[r for r in releases if r['rollbackCompatible'] and r['minimumUpdater']<=worker
             and r['dbContract']==installed['db_contract']
-            and version(r['minimumInstalledVersion'])<=version(installed['version'])<=version(r['maximumInstalledVersion'])
+            and version(installed['version'])<=version(r['maximumInstalledVersion'])
             and (forward_ready is None or (r['sha'] in forward_ready and forward_ready[r['sha']] is None))]
         if predecessors:
             next_release=predecessors[0]
             return {'state':'available','latest':{k:target[k] for k in ('version','sha','notes')},'reason':None,
                 'latestReason':reason,'partial':True,'steps':1,'nextRelease':{k:next_release[k] for k in ('version','sha','notes')}}
         blocked_steps=[r for r in releases if r['rollbackCompatible'] and r['minimumUpdater']<=worker
-            and r['dbContract']==installed['db_contract'] and version(r['minimumInstalledVersion'])<=version(installed['version'])<=version(r['maximumInstalledVersion'])
+            and r['dbContract']==installed['db_contract'] and version(installed['version'])<=version(r['maximumInstalledVersion'])
             and forward_ready is not None and forward_ready.get(r['sha']) is not None]
         if blocked_steps:reason=forward_ready[blocked_steps[0]['sha']]
     return {'state': 'blocked' if reason else 'available',
