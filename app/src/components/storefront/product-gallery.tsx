@@ -9,7 +9,7 @@ import { useProductSelection } from "./product-selection";
 type Photo = { url: string; alt: string };
 const reducedMotion = () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
-export function ProductGallery({ images, name }: { images: Photo[]; name: string }) {
+export function ProductGallery({ images, name, showProgress = true }: { images: Photo[]; name: string; showProgress?: boolean }) {
   const [zoom, setZoom] = useState(false);
   const [zoomInstant, setZoomInstant] = useState(false);
   const [active, setActive] = useState(0);
@@ -126,7 +126,7 @@ export function ProductGallery({ images, name }: { images: Photo[]; name: string
         <span className="pdp-count" aria-live="polite">{index + 1}/{count}</span>
         {!loaded.includes(list[index].url) && <span role="status" className="sr-only">Memuat foto produk…</span>}
       </>}
-    {count > 1 &&
+    {showProgress && count > 1 &&
       <div className="pdp-gallery-progress" role="slider" tabIndex={0} aria-label="Pilih foto produk" aria-valuemin={1} aria-valuemax={count} aria-valuenow={index + 1} aria-valuetext={`Foto ${index + 1} dari ${count}`} onKeyDown={onKeys} onClick={(event) => { const bounds = event.currentTarget.getBoundingClientRect(); navigate(Math.round(Math.max(0, Math.min(1, (event.clientX - bounds.left) / bounds.width)) * (count - 1))); }}>
         <span className="pdp-gallery-progress-track"><span ref={thumb} className="pdp-gallery-progress-thumb" style={{ width: `${100 / count}%`, transform: `translateX(${index * 100}%)` }} /></span>
       </div>

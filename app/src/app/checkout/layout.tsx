@@ -1,4 +1,7 @@
 import "./checkout.css";
+import "@/components/fashion/fashion.css";
+import { FashionShell } from "@/components/fashion/shell";
+import { getStorefrontUserContext } from "@/lib/auth/session";
 import { publicCampaign } from "@/modules/promotions/campaign-pricing";
 import { CampaignSync } from "@/components/storefront/campaign-sync";
 import { getPublishedAppearance } from "@/modules/appearance/published";
@@ -9,6 +12,10 @@ import { ChevronLeft, Lock } from "lucide-react";
 
 export default async function CheckoutLayout({ children }: { children: React.ReactNode }) {
   const [appearance,campaign] = await Promise.all([getPublishedAppearance(),publicCampaign()]);
+  if(appearance.config.themeId === "immersive-fashion") {
+    const user=await getStorefrontUserContext();
+    return <AppearanceProvider config={appearance.config}><div className="storefront-root fashion checkout-shell" data-theme-active="true" style={themeStyle(appearance.config)}><CampaignSync initial={campaign}/><PublishedVersionSync version={appearance.version}/><FashionShell signedIn={!!user} count={user?.cartCount}>{children}</FashionShell></div></AppearanceProvider>;
+  }
   return (
     <AppearanceProvider config={appearance.config}>
     <div className={`${isLegacy(appearance.config) ? "storefront-checkout-root" : "storefront-root"} checkout-shell min-h-screen bg-white`} data-theme-active={!isLegacy(appearance.config)} style={themeStyle(appearance.config)}>

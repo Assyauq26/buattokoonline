@@ -12,9 +12,18 @@ import {
 } from "@/modules/catalog/catalog.service";
 import { getStorefrontUserContext } from "@/lib/auth/session";
 import { wishlistProductIds } from "@/modules/wishlist/wishlist.service";
+import { getPublishedAppearance } from "@/modules/appearance/published";
+import { fashionFrame } from "@/modules/catalog/fashion-catalog";
+import { FashionCatalog } from "@/components/fashion/catalog";
 import "./home.css";
 
-export default async function HomePage() {
+export const metadata = { alternates: { canonical: "/" } };
+export default async function HomePage({searchParams}: {searchParams: Promise<{koleksi?:string; posisi?:string}>}) {
+  const { config } = await getPublishedAppearance();
+  if (config.themeId === "immersive-fashion") {
+    const params = await searchParams;
+    return <FashionCatalog frame={await fashionFrame(config.collections, params.koleksi, Number(params.posisi) - 1)} />;
+  }
   const wishIdsPromise = getStorefrontUserContext().then((user) =>
     user ? wishlistProductIds(user.id) : [],
   );

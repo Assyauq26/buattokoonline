@@ -44,6 +44,7 @@ it("blocks checkout until a pending quantity change settles and restores failed 
     lines: [
       {
         id: "line",
+        variantId: "variant",
         quantity: 1,
         unitPrice: 10000,
         lineTotal: 10000,

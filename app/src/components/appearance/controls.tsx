@@ -1,6 +1,8 @@
 "use client";
+import { CollectionControls } from "./collection-controls";
 import Image from "next/image";
 import {
+  defaultCollections,
   GRADIENT_TARGETS,
   TOKEN_KEYS,
   TOKEN_LABELS,
@@ -9,7 +11,7 @@ import {
 import { PRESETS } from "@/modules/appearance/presets";
 export const TABS = [
   "Identitas Toko",
-  "Preset/Template Warna",
+  "Tema",
   "Warna",
   "Gradasi",
   "Header",
@@ -231,14 +233,22 @@ export function Controls({
   if (tab === TABS[1])
     return (
       <div className="grid gap-3">
+        {draft.themeId === "immersive-fashion" && <CollectionControls draft={draft} change={change} />}
         {PRESETS.map((p) => (
           <button
             key={p.name}
             type="button"
             className="rounded-2xl border border-zinc-300 p-4 text-left hover:border-black focus-visible:outline"
+            aria-pressed={p.config.themeId === "immersive-fashion" ? draft.themeId === p.config.themeId : undefined}
             onClick={() =>
               change((d) => {
                 d.colors = structuredClone(p.config.colors);
+                d.themeId = p.config.themeId ?? "classic";
+                if (d.themeId === "immersive-fashion") {
+                  d.collections ??= structuredClone(defaultCollections);
+                  d.styling = structuredClone(p.config.styling);
+                  if (d.header.links.every(l => ["home","shop","category","brand","promo"].includes(l.id))) d.header.links = structuredClone(p.config.header.links);
+                }
               })
             }
           >

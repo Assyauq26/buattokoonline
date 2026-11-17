@@ -4,17 +4,21 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
+import { useAppearance } from "@/components/appearance/context";
+import { CartVariation } from "@/components/fashion/cart-variation";
 import { Trash2, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { QuantityStepper } from "./quantity-stepper";
 import { formatIDR } from "@/lib/money";
 import {
+  changeCartVariantAction,
   updateCartItemAction,
   removeCartItemAction,
 } from "@/modules/cart/cart.actions";
 import { emitCartCount } from "@/modules/cart/cart-events";
 
 interface Line {
+  variantId: string;
   id: string;
   quantity: number;
   unitPrice: number;
@@ -42,6 +46,8 @@ function recalculate(lines: Line[]): View {
 }
 
 export function CartClient({ initial }: { initial: View }) {
+  const fashion=useAppearance().config.themeId==="immersive-fashion";
+  const [omitted,setOmitted]=useState<string[]>([]);
   const [view, setView] = useState(initial);
   const router = useRouter();
   const pendingRef = useRef(false);
@@ -127,7 +133,8 @@ export function CartClient({ initial }: { initial: View }) {
   }
 
   const shippingEstimate = 20000;
-  const total = view.subtotal;
+  const chosen = fashion ? view.lines.filter(l=>l.inStock && !omitted.includes(l.id)) : view.lines;
+  const total = chosen.reduce((sum,l)=>sum+l.lineTotal,0);
 
   return (
     <div className="native-cart grid min-w-0 grid-cols-[minmax(0,1fr)] gap-8 lg:grid-cols-[minmax(0,1fr)_360px]">
@@ -146,12 +153,14 @@ export function CartClient({ initial }: { initial: View }) {
             {error}
           </p>
         )}
+        {fashion && <label className="flex min-h-11 items-center gap-3"><input type="checkbox" checked={chosen.length>0 && chosen.length===view.lines.filter(l=>l.inStock).length} onChange={e=>setOmitted(e.target.checked ? [] : view.lines.map(l=>l.id))}/> Pilih semua ({view.lines.length})</label>}
         {view.lines.map((l) => (
           <div
             key={l.id}
             className="flex gap-4 cart-item min-w-0 rounded-2xl p-3"
             data-testid={`cart-line-${l.id}`}
           >
+            {fashion && <input type="checkbox" aria-label={"Pilih "+l.product.name} disabled={!l.inStock || !!pendingId} checked={l.inStock && !omitted.includes(l.id)} onChange={e=>setOmitted(e.target.checked?omitted.filter(id=>id!==l.id):[...omitted,l.id])}/>}
             <Link
               href={`/product/${l.product.slug}`}
               className="relative h-24 w-24 flex-shrink-0 overflow-hidden rounded-xl bg-surface"
@@ -179,6 +188,7 @@ export function CartClient({ initial }: { initial: View }) {
                     {l.product.name}
                   </Link>
                   <p className="break-words [overflow-wrap:anywhere] text-xs text-ink-muted">{l.variantLabel}</p>
+                  {fashion && <CartVariation slug={l.product.slug} current={l.variantId} quantity={l.quantity} busy={!!pendingId} onChange={v=>mutate(l.id,view,()=>changeCartVariantAction(l.id,l.variantId,v,l.quantity))}/>}
                   {!l.inStock && (
                     <p className="text-xs font-semibold text-destructive">
                       Stok tidak cukup
@@ -226,12 +236,12 @@ export function CartClient({ initial }: { initial: View }) {
         <div className="space-y-2 text-sm">
           <div className="flex justify-between">
             <span className="text-ink-soft">Subtotal</span>
-            <span className="font-semibold">{formatIDR(view.subtotal)}</span>
+            <span className="font-semibold">{formatIDR(total)}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-ink-soft">Estimasi Ongkir</span>
+            <span className="text-ink-soft">{fashion ? "Ongkir" : "Estimasi Ongkir"}</span>
             <span className="text-ink-muted">
-              {formatIDR(shippingEstimate)}*
+              {fashion ? "Dihitung saat checkout" : formatIDR(shippingEstimate)+"*"}
             </span>
           </div>
           <div className="flex justify-between">
@@ -251,21 +261,20 @@ export function CartClient({ initial }: { initial: View }) {
               </span>
             </div>
             <p className="mt-1 text-[11px] text-ink-muted">
-              *Estimasi ongkir belum termasuk total sementara. Ongkir dan diskon
-              final dihitung saat checkout.
+              {fashion ? "Ongkir dan voucher dihitung saat checkout." : "*Estimasi ongkir belum termasuk total sementara. Ongkir dan diskon final dihitung saat checkout."}
             </p>
           </div>
           <Button
             type="button"
             onClick={() => {
-              if (!pendingRef.current) router.push("/checkout");
+              if (!pendingRef.current) router.push(fashion ? "/checkout?items="+chosen.map(l=>l.id).join(",") : "/checkout");
             }}
             className="w-full"
             size="lg"
-            disabled={pendingId !== null || view.lines.some((l) => !l.inStock)}
+            disabled={pendingId !== null || !chosen.length || chosen.length>100 || chosen.some((l) => !l.inStock)}
             data-testid="checkout-btn"
           >
-            Lanjut ke Checkout
+            {fashion ? "Checkout ("+chosen.length+")" : "Lanjut ke Checkout"}
           </Button>
         </div>
       </div>

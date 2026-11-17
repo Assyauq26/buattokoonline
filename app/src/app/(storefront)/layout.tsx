@@ -1,3 +1,5 @@
+import { FashionShell } from "@/components/fashion/shell";
+import "@/components/fashion/fashion.css";
 import { publicCampaign } from "@/modules/promotions/campaign-pricing";
 import { CampaignSync } from "@/components/storefront/campaign-sync";
 import { getPublishedAppearance } from "@/modules/appearance/published";
@@ -26,6 +28,8 @@ export default async function StorefrontLayout({
   const [user, appearance,campaign] = await Promise.all([getStorefrontUserContext(), getPublishedAppearance(),publicCampaign()]);
   const theme = appearance.config;
   const count = user?.cartCount ?? 0;
+
+  if (theme.themeId === "immersive-fashion") return <AppearanceProvider config={theme}><CartInteractionProvider><div className="storefront-root fashion" data-theme-active="true" style={themeStyle(theme)}><PublishedVersionSync version={appearance.version}/><CampaignSync initial={campaign}/>{user && <RegistrationOtpCleanup/>}<FashionShell count={count} signedIn={!!user}>{children}</FashionShell></div></CartInteractionProvider></AppearanceProvider>;
 
   return (
     <AppearanceProvider config={theme}>

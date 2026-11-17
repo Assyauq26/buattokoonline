@@ -1,4 +1,5 @@
 import "server-only";
+import { assetIds, revisionUsing, usesAsset } from "./asset-references";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { HttpError } from "@/lib/response";
@@ -75,33 +76,33 @@ async function assertAsset(
   actorId: string,
   sessionHash: string,
 ) {
-  const id = config.identity.logoAssetId;
-  if (!id) return;
-  const asset = await tx.storeBrandAsset.findUnique({ where: { id } });
-  if (!asset || !asset.ready || asset.retiredAt)
-    throw new HttpError("Logo tidak tersedia", 422);
-  const row = await tx.storeAppearance.findUnique({
-    where: { key: "primary" },
-  });
-  const referenced =
-    [row?.draft, row?.published].some(
-      (v) => v && parseAppearance(v).identity.logoAssetId === id,
-    ) ||
-    Boolean(
-      await tx.storeAppearanceRevision.findFirst({
-        where: { config: { path: ["identity", "logoAssetId"], equals: id } },
-      }),
-    );
-  if (
-    !referenced &&
-    (asset.actorId !== actorId ||
-      asset.sessionHash !== sessionHash ||
-      asset.expiresAt <= new Date())
-  )
-    throw new HttpError(
-      "Logo bukan milik sesi ini atau sudah kedaluwarsa",
-      403,
-    );
+  for (const id of assetIds(config)) {
+    const asset = await tx.storeBrandAsset.findUnique({ where: { id } });
+    if (!asset || !asset.ready || asset.retiredAt)
+      throw new HttpError("Logo tidak tersedia", 422);
+    const row = await tx.storeAppearance.findUnique({
+      where: { key: "primary" },
+    });
+    const referenced =
+      [row?.draft, row?.published].some(
+        (v) => usesAsset(v, id),
+      ) ||
+      Boolean(
+        await tx.storeAppearanceRevision.findFirst({
+          where: revisionUsing(id),
+        }),
+      );
+    if (
+      !referenced &&
+      (asset.actorId !== actorId ||
+        asset.sessionHash !== sessionHash ||
+        asset.expiresAt <= new Date())
+    )
+      throw new HttpError(
+        "Logo bukan milik sesi ini atau sudah kedaluwarsa",
+        403,
+      );
+  }
 }
 export async function changeAppearance(
   input: {
@@ -174,6 +175,11 @@ export async function changeAppearance(
           publishing &&
           !(input.kind === "rollback" && input.revision === 0)
         ) {
+          if (config.themeId === "immersive-fashion") {
+            const ids = [...new Set((config.collections ?? []).flatMap(c => c.cover ? [c.cover.split("/").pop()!] : []))];
+            if (ids.length && await tx.productImage.count({where:{id:{in:ids},product:{status:"PUBLISHED"}}}) !== ids.length)
+              throw new HttpError("Foto sampul harus berasal dari produk terbit di toko ini.",422);
+          }
           const errors = contrastErrors(config);
           if (errors.length)
             throw new HttpError(

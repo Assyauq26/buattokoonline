@@ -59,7 +59,7 @@ export default async function AdminLayout({
 
   return (
     <div
-      style={themeStyle(config)}
+      style={config.themeId === "immersive-fashion" ? undefined : themeStyle(config)}
       className="admin-shell min-h-screen bg-[#fafafa] text-zinc-950 md:flex"
     >
       <RegistrationOtpCleanup />

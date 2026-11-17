@@ -3,6 +3,7 @@ import { foreground, mix } from "./contrast";
 const seeds = [
   ["Monochrome", "#111111", "#FFFFFF"],
   ["Toko Online Mandiri", "#111111", "#FFFFFF"],
+  ["Immersive Fashion", "#FAF9F6", "#191817"],
   ["Midnight Ink", "#D6E4FF", "#101827"],
   ["Sage Studio", "#294D3A", "#F5F8F3"],
   ["Terracotta", "#833F2B", "#FFF8F4"],
@@ -76,5 +77,15 @@ export const PRESETS = seeds.map(([name, primary, bg], index) => {
     outlineHover: surface,
     outlinePressed: surface,
   });
+  if (name === "Immersive Fashion") {
+    v.themeId = "immersive-fashion";
+    v.styling.shadow = "none";
+    v.styling.button = "soft";
+    v.header.links = [
+      { id: "baru", label: "Koleksi Baru", href: "/?koleksi=baru", visible: true },
+      { id: "katalog", label: "Katalog", href: "/shop", visible: true },
+      { id: "bantuan", label: "Bantuan Toko", href: "/account/help", visible: true },
+    ];
+  }
   return { name, config: parseAppearance(v) };
 });

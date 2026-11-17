@@ -2,7 +2,7 @@ import { z } from "zod";
 import { checkoutIntentId } from "@/modules/checkout/checkout-intent";
 import { ok, handle } from "@/lib/response";
 import { requireUser } from "@/lib/auth/session";
-import { checkoutLinesSchema, checkoutQuoteSchema } from "@/modules/checkout/checkout.validation";
+import { checkoutLinesSchema, checkoutQuoteSchema, selectedCartLines } from "@/modules/checkout/checkout.validation";
 import { createOrder } from "@/modules/checkout/checkout.service";
 import { listOrdersForUser } from "@/modules/orders/orders.service";
 import { addressSchema } from "@/modules/regions/region.validation";
@@ -14,6 +14,7 @@ export const dynamic = "force-dynamic";
 
 const schema = z.object({
   intentId: checkoutIntentId.optional(),
+  selectedIds: selectedCartLines.optional(),
   address: addressSchema.transform(address => ({ ...address, city: address.city || "", province: address.province || "" })),
   shipping: z.object({ courier: shippingCourierSchema, service: z.string().max(30), cost: z.number().int().nonnegative(), quoteToken: z.string().min(1).max(4096) }),
   bankAccountId: z.string().max(100).default(""),

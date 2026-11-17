@@ -1,5 +1,7 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { FashionFrame } from "@/modules/catalog/fashion-catalog";
+import { readFashionPreview } from "@/modules/appearance/fashion-preview";
 import { useRouter } from "next/navigation";
 import {
   appearanceSchema,
@@ -94,6 +96,40 @@ export function AppearanceEditor({
     window.addEventListener("message", receive);
     return () => window.removeEventListener("message", receive);
   }, [nonce]);
+  const [previewFrame,setPreviewFrame] = useState<FashionFrame | null>(null);
+  const collectionKey = JSON.stringify(draft.collections?.map(({id,source,category})=>[id,source,category]));
+  useEffect(()=>{
+    let active=true;
+    setPreviewFrame(null);
+    if (draft.themeId !== "immersive-fashion" || !validation.success) return;
+    void readFashionPreview(validation.data).then(frame=>{if(active)setPreviewFrame(frame);}).catch(()=>{if(active)setError("Preview koleksi gagal dimuat.");});
+    return ()=>{active=false;};
+    // Only membership changes require fetching catalog rows again.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[collectionKey,draft.themeId,validation.success]);
+  useEffect(()=>{
+    const receive=async(e:MessageEvent)=>{
+      if(!nonce || e.source!==iframe.current?.contentWindow || e.origin!=="null" || e.data?.nonce!==nonce || !e.ports[0] || !validation.success || draft.themeId!=="immersive-fashion")return;
+      const {type,id,pos}=e.data, port=e.ports[0];
+      if(type!=="fashion-position" && type!=="fashion-asset")return;
+      try{
+        let value;
+        if(type==="fashion-position"){
+          if(!previewFrame?.collections.some(c=>c.id===id) || !Number.isSafeInteger(pos) || pos<0)throw Error();
+          value=await readFashionPreview(validation.data,id,pos);
+        } else {
+          if(!draft.collections?.some(c=>id && (c.cutoutId===id || c.backgroundId===id)))throw Error();
+          const response=await fetch("/api/v1/admin/store-branding/"+id);
+          if(!response.ok)throw Error();
+          value=await response.arrayBuffer();
+          if(value.byteLength>2097152)throw Error();
+        }
+        port.postMessage({ok:true,value});
+      }catch{port.postMessage({ok:false});}finally{port.close();}
+    };
+    window.addEventListener("message",receive);
+    return ()=>window.removeEventListener("message",receive);
+  },[nonce,validation,draft,previewFrame]);
   const logoId = draft.identity.logoAssetId;
   useEffect(() => {
     setLogoBytes(null);
@@ -123,8 +159,9 @@ export function AppearanceEditor({
       type: string;
       nonce: string;
       config: StoreAppearanceV1;
+      frame: FashionFrame | null;
       logo?: ArrayBuffer;
-    } = { type: "appearance", nonce, config: validation.data };
+    } = { type: "appearance", nonce, frame:previewFrame, config: validation.data };
     if (sentLogo.current !== logoId) {
       if (logoBytes?.id === logoId) {
         message.logo = logoBytes.bytes;
@@ -132,7 +169,7 @@ export function AppearanceEditor({
       } else sentLogo.current = null;
     }
     iframe.current?.contentWindow?.postMessage(message, "*");
-  }, [validation, ready, nonce, logoId, logoBytes]);
+  }, [validation, ready, nonce, logoId, logoBytes, previewFrame]);
   async function history(before?: number) {
     const r = await appearanceHistory(before);
     if (r.ok && r.data)
@@ -180,6 +217,7 @@ export function AppearanceEditor({
           mobile: "Navigasi",
           footer: "Footer",
           styling: "Tombol/Kartu",
+          themeId: "Tema", collections: "Koleksi",
           schemaVersion: "",
         })[k],
     );

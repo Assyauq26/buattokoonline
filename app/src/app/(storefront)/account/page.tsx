@@ -14,7 +14,9 @@ import {
   Pencil,
   ReceiptText,
   ShieldCheck,
+  Trash2,
 } from "lucide-react";
+import { getPublishedAppearance } from "@/modules/appearance/published";
 import { getCurrentUser } from "@/lib/auth/session";
 import { listOrdersForUser } from "@/modules/orders/orders.service";
 import { customerOrderGroup } from "@/lib/customer-order-view";
@@ -25,7 +27,9 @@ export const metadata = { title: "Akun Saya", robots: { index: false } };
 export default async function AccountPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login?redirectTo=/account");
-  const orders = await listOrdersForUser(user.id);
+  const [orders,appearance] = await Promise.all([listOrdersForUser(user.id),getPublishedAppearance()]);
+  const fashion=appearance.config.themeId === "immersive-fashion";
+  const email=fashion ? user.email.replace(/^(.).*(@.*)$/,"$1***$2") : user.email;
   const groups = [
     { key: "unpaid", label: "Belum bayar", icon: Wallet },
     { key: "process", label: "Diproses", icon: Package },
@@ -50,7 +54,7 @@ export default async function AccountPage() {
         </div>
         <div>
           <h2>{user.name}</h2>
-          <p>{user.email}</p>
+          <p>{email}</p>
         </div>
         {!user.isAdmin && (
           <Link href="/account/profile" className="account-edit">
@@ -59,6 +63,7 @@ export default async function AccountPage() {
           </Link>
         )}
       </section>
+      {fashion && !user.isAdmin && <section className="fashion-account-info"><h2>Info akun</h2><dl>{[["Nama",user.name],["Email",email],["Nomor HP",user.phone ? "•••• " + user.phone.slice(-4) : "Belum diisi"]].map(([label,value])=><div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl><Link href="/account/profile">Ubah profil</Link></section>}
       {user.isAdmin && (
         <Link className="account-admin" href="/admin" data-testid="admin-link">
           <ShieldCheck size={20} />
@@ -134,6 +139,7 @@ export default async function AccountPage() {
           ))}
       </nav>
       <LogoutButton />
+      {fashion && !user.isAdmin && <Link className="fashion-delete-account" href="/account/delete"><Trash2 size={19}/> Hapus akun</Link>}
     </div>
   );
 }

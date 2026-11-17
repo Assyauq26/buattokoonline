@@ -1,5 +1,9 @@
 "use client";
 import { useEffect, useState } from "react";
+import type { FashionFrame } from "@/modules/catalog/fashion-catalog";
+import { FashionShell } from "@/components/fashion/shell";
+import { FashionCatalog } from "@/components/fashion/catalog";
+import "@/components/fashion/fashion.css";
 import { AppearanceProvider, StoreLogo } from "./context";
 import { StorefrontHeader } from "@/components/storefront/header";
 import { PurchasePreviewSamples } from "./purchase-preview-samples";
@@ -13,6 +17,7 @@ import {
 } from "@/modules/appearance/schema";
 import { isLegacy, themeStyle } from "@/modules/appearance/runtime";
 export function AppearancePreview() {
+  const [frame,setFrame] = useState<FashionFrame|null>(null);
   const [config, setConfig] = useState<StoreAppearanceV1>(makeDefault()),
     [logo, setLogo] = useState<string>();
   useEffect(() => {
@@ -31,6 +36,7 @@ export function AppearancePreview() {
       try {
         const v = parseAppearance(event.data.config);
         setConfig(v);
+        setFrame(event.data.frame ?? null);
         if (v.identity.logoAssetId !== blobId) {
           if (blobUrl) URL.revokeObjectURL(blobUrl);
           blobUrl = undefined;
@@ -51,7 +57,7 @@ export function AppearancePreview() {
     const stop = (event: Event) => {
       if (
         event.type === "submit" ||
-        (event.target as HTMLElement)?.closest?.("a")
+        (event.target as HTMLElement)?.closest?.("a") && !(event.target as HTMLElement)?.closest?.(".fashion-slide")
       ) {
         event.preventDefault();
         event.stopPropagation();
@@ -68,6 +74,7 @@ export function AppearancePreview() {
       if (blobUrl) URL.revokeObjectURL(blobUrl);
     };
   }, []);
+  if(config.themeId === "immersive-fashion") return <AppearanceProvider config={config} preview logoUrl={logo}><div className="storefront-root fashion" data-theme-active="true" style={themeStyle(config)}><FashionShell>{frame ? <FashionCatalog frame={frame} previewConfig={config}/> : <p className="fashion-empty" role="status">Memuat preview koleksi…</p>}</FashionShell></div></AppearanceProvider>;
   return (
     <AppearanceProvider config={config} preview logoUrl={logo}>
       <div

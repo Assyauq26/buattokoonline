@@ -1,3 +1,4 @@
+import { fashionRendition } from "@/modules/catalog/fashion-rendition";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth/session";
 import { PERMISSIONS } from "@/lib/auth/permissions";
@@ -16,6 +17,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       const ownsCart = user && !staff && !ownsOrder ? await prisma.cartItem.findFirst({ where: { variant: { productId: image.productId }, cart: { userId: user.id } }, select: { id: true } }) : null;
       if (!staff && !ownsOrder && !ownsCart) throw new HttpError("Gambar tidak ditemukan", 404);
     }
+    const rendition = await fashionRendition(_req, image.id, async () => (await readManagedProductImage(image)).data);
+    if (rendition) return rendition;
     const { data, contentType } = await readManagedProductImage(image);
     return new Response(Buffer.from(data), { headers: { "Content-Type": contentType, "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff" } });
   });

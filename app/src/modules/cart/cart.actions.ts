@@ -37,6 +37,15 @@ export async function updateCartItemAction(itemId: string, quantity: number) {
   });
 }
 
+export async function changeCartVariantAction(itemId:string, previous:string, next:string, quantity:number) {
+  return runAction(async ()=>{
+    const user=await requireUser();
+    const view=await cart.changeCartVariant(user.id,itemId,previous,next,quantity);
+    revalidatePath("/cart");
+    return view;
+  });
+}
+
 export async function removeCartItemAction(itemId: string) {
   return runAction(async () => {
     const user = await requireUser();

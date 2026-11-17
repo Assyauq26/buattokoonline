@@ -1,0 +1,311 @@
+[
+  {
+    "trial": 0,
+    "cache": "cold",
+    "lcp": {
+      "ms": 1476,
+      "tag": "IMG",
+      "cls": "",
+      "url": "https://127.0.0.1:3473/api/v1/product-images/8e9f5c17-0e26-43a0-8af5-37bb03a08a0a?object=store%2Fproduct-images%2Fb6ee86e0-8713-40ed-96fe-1d5ad2251c7c%2F8e9f5c17-0e26-43a0-8af5-37bb03a08a0a.webp"
+    },
+    "images": [
+      {
+        "url": "/api/v1/product-images/8e9f5c17-0e26-43a0-8af5-37bb03a08a0a?object=store%2Fproduct-images%2Fb6ee86e0-8713-40ed-96fe-1d5ad2251c7c%2F8e9f5c17-0e26-43a0-8af5-37bb03a08a0a.webp",
+        "at": 1044,
+        "end": 1178,
+        "bytes": 35196,
+        "initiator": "link"
+      },
+      {
+        "url": "/api/v1/product-images/b55508bf-d3bf-4ff6-819f-5b4a44b6ab36?object=store%2Fproduct-images%2F6103799c-294e-487f-b9ee-f9486a239f29%2Fb55508bf-d3bf-4ff6-819f-5b4a44b6ab36.webp",
+        "at": 1460,
+        "end": 1724,
+        "bytes": 35196,
+        "initiator": "img"
+      },
+      {
+        "url": "/api/v1/product-images/9556b4de-deb2-42f7-9216-f485f4741762?object=store%2Fproduct-images%2Fe393389e-2d60-44c3-9829-252a0c9cf3c3%2F9556b4de-deb2-42f7-9216-f485f4741762.webp",
+        "at": 1461,
+        "end": 1662,
+        "bytes": 17432,
+        "initiator": "img"
+      },
+      {
+        "url": "/api/v1/product-images/9a5d06e8-0779-418a-8ccf-1176e8739753?object=store%2Fproduct-images%2Fa5ddf48f-d9bc-41b6-b16d-f8077502c7a7%2F9a5d06e8-0779-418a-8ccf-1176e8739753.webp",
+        "at": 1461,
+        "end": 1802,
+        "bytes": 73150,
+        "initiator": "img"
+      },
+      {
+        "url": "/api/v1/product-images/48cbe5f6-1381-4e6a-9763-279e18c7c73a?object=store%2Fproduct-images%2Fe8947270-8a16-4d60-b4a1-a038ac719c01%2F48cbe5f6-1381-4e6a-9763-279e18c7c73a.webp",
+        "at": 1462,
+        "end": 1646,
+        "bytes": 17432,
+        "initiator": "img"
+      }
+    ],
+    "ttfb": 194
+  },
+  {
+    "trial": 0,
+    "cache": "warm",
+    "lcp": {
+      "ms": 1060,
+      "tag": "IMG",
+      "cls": "",
+      "url": "https://127.0.0.1:3473/api/v1/product-images/8e9f5c17-0e26-43a0-8af5-37bb03a08a0a?object=store%2Fproduct-images%2Fb6ee86e0-8713-40ed-96fe-1d5ad2251c7c%2F8e9f5c17-0e26-43a0-8af5-37bb03a08a0a.webp"
+    },
+    "images": [
+      {
+        "url": "/api/v1/product-images/8e9f5c17-0e26-43a0-8af5-37bb03a08a0a?object=store%2Fproduct-images%2Fb6ee86e0-8713-40ed-96fe-1d5ad2251c7c%2F8e9f5c17-0e26-43a0-8af5-37bb03a08a0a.webp",
+        "at": 172,
+        "end": 304,
+        "bytes": 35196,
+        "initiator": "link"
+      },
+      {
+        "url": "/api/v1/product-images/b55508bf-d3bf-4ff6-819f-5b4a44b6ab36?object=store%2Fproduct-images%2F6103799c-294e-487f-b9ee-f9486a239f29%2Fb55508bf-d3bf-4ff6-819f-5b4a44b6ab36.webp",
+        "at": 723,
+        "end": 1037,
+        "bytes": 35196,
+        "initiator": "img"
+      },
+      {
+        "url": "/api/v1/product-images/9556b4de-deb2-42f7-9216-f485f4741762?object=store%2Fproduct-images%2Fe393389e-2d60-44c3-9829-252a0c9cf3c3%2F9556b4de-deb2-42f7-9216-f485f4741762.webp",
+        "at": 724,
+        "end": 942,
+        "bytes": 17432,
+        "initiator": "img"
+      },
+      {
+        "url": "/api/v1/product-images/9a5d06e8-0779-418a-8ccf-1176e8739753?object=store%2Fproduct-images%2Fa5ddf48f-d9bc-41b6-b16d-f8077502c7a7%2F9a5d06e8-0779-418a-8ccf-1176e8739753.webp",
+        "at": 725,
+        "end": 1100,
+        "bytes": 73150,
+        "initiator": "img"
+      },
+      {
+        "url": "/api/v1/product-images/48cbe5f6-1381-4e6a-9763-279e18c7c73a?object=store%2Fproduct-images%2Fe8947270-8a16-4d60-b4a1-a038ac719c01%2F48cbe5f6-1381-4e6a-9763-279e18c7c73a.webp",
+        "at": 727,
+        "end": 942,
+        "bytes": 17432,
+        "initiator": "img"
+      },
+      {
+        "url": "/api/v1/product-images/8e9f5c17-0e26-43a0-8af5-37bb03a08a0a?object=store%2Fproduct-images%2Fb6ee86e0-8713-40ed-96fe-1d5ad2251c7c%2F8e9f5c17-0e26-43a0-8af5-37bb03a08a0a.webp",
+        "at": 728,
+        "end": 1037,
+        "bytes": 35196,
+        "initiator": "img"
+      }
+    ],
+    "ttfb": 33.79999999701977
+  },
+  {
+    "trial": 1,
+    "cache": "cold",
+    "lcp": {
+      "ms": 716,
+      "tag": "IMG",
+      "cls": "",
+      "url": "https://127.0.0.1:3473/api/v1/product-images/8e9f5c17-0e26-43a0-8af5-37bb03a08a0a?object=store%2Fproduct-images%2Fb6ee86e0-8713-40ed-96fe-1d5ad2251c7c%2F8e9f5c17-0e26-43a0-8af5-37bb03a08a0a.webp"
+    },
+    "images": [
+      {
+        "url": "/api/v1/product-images/8e9f5c17-0e26-43a0-8af5-37bb03a08a0a?object=store%2Fproduct-images%2Fb6ee86e0-8713-40ed-96fe-1d5ad2251c7c%2F8e9f5c17-0e26-43a0-8af5-37bb03a08a0a.webp",
+        "at": 145,
+        "end": 478,
+        "bytes": 35196,
+        "initiator": "link"
+      },
+      {
+        "url": "/api/v1/product-images/b55508bf-d3bf-4ff6-819f-5b4a44b6ab36?object=store%2Fproduct-images%2F6103799c-294e-487f-b9ee-f9486a239f29%2Fb55508bf-d3bf-4ff6-819f-5b4a44b6ab36.webp",
+        "at": 693,
+        "end": 964,
+        "bytes": 35196,
+        "initiator": "img"
+      },
+      {
+        "url": "/api/v1/product-images/9556b4de-deb2-42f7-9216-f485f4741762?object=store%2Fproduct-images%2Fe393389e-2d60-44c3-9829-252a0c9cf3c3%2F9556b4de-deb2-42f7-9216-f485f4741762.webp",
+        "at": 694,
+        "end": 888,
+        "bytes": 17432,
+        "initiator": "img"
+      },
+      {
+        "url": "/api/v1/product-images/9a5d06e8-0779-418a-8ccf-1176e8739753?object=store%2Fproduct-images%2Fa5ddf48f-d9bc-41b6-b16d-f8077502c7a7%2F9a5d06e8-0779-418a-8ccf-1176e8739753.webp",
+        "at": 694,
+        "end": 1027,
+        "bytes": 73150,
+        "initiator": "img"
+      },
+      {
+        "url": "/api/v1/product-images/48cbe5f6-1381-4e6a-9763-279e18c7c73a?object=store%2Fproduct-images%2Fe8947270-8a16-4d60-b4a1-a038ac719c01%2F48cbe5f6-1381-4e6a-9763-279e18c7c73a.webp",
+        "at": 694,
+        "end": 916,
+        "bytes": 17432,
+        "initiator": "img"
+      }
+    ],
+    "ttfb": 33.099999997764826
+  },
+  {
+    "trial": 1,
+    "cache": "warm",
+    "lcp": {
+      "ms": 1100,
+      "tag": "IMG",
+      "cls": "",
+      "url": "https://127.0.0.1:3473/api/v1/product-images/8e9f5c17-0e26-43a0-8af5-37bb03a08a0a?object=store%2Fproduct-images%2Fb6ee86e0-8713-40ed-96fe-1d5ad2251c7c%2F8e9f5c17-0e26-43a0-8af5-37bb03a08a0a.webp"
+    },
+    "images": [
+      {
+        "url": "/api/v1/product-images/8e9f5c17-0e26-43a0-8af5-37bb03a08a0a?object=store%2Fproduct-images%2Fb6ee86e0-8713-40ed-96fe-1d5ad2251c7c%2F8e9f5c17-0e26-43a0-8af5-37bb03a08a0a.webp",
+        "at": 165,
+        "end": 302,
+        "bytes": 35196,
+        "initiator": "link"
+      },
+      {
+        "url": "/api/v1/product-images/b55508bf-d3bf-4ff6-819f-5b4a44b6ab36?object=store%2Fproduct-images%2F6103799c-294e-487f-b9ee-f9486a239f29%2Fb55508bf-d3bf-4ff6-819f-5b4a44b6ab36.webp",
+        "at": 768,
+        "end": 1074,
+        "bytes": 35196,
+        "initiator": "img"
+      },
+      {
+        "url": "/api/v1/product-images/9556b4de-deb2-42f7-9216-f485f4741762?object=store%2Fproduct-images%2Fe393389e-2d60-44c3-9829-252a0c9cf3c3%2F9556b4de-deb2-42f7-9216-f485f4741762.webp",
+        "at": 768,
+        "end": 980,
+        "bytes": 17432,
+        "initiator": "img"
+      },
+      {
+        "url": "/api/v1/product-images/9a5d06e8-0779-418a-8ccf-1176e8739753?object=store%2Fproduct-images%2Fa5ddf48f-d9bc-41b6-b16d-f8077502c7a7%2F9a5d06e8-0779-418a-8ccf-1176e8739753.webp",
+        "at": 768,
+        "end": 1136,
+        "bytes": 73150,
+        "initiator": "img"
+      },
+      {
+        "url": "/api/v1/product-images/48cbe5f6-1381-4e6a-9763-279e18c7c73a?object=store%2Fproduct-images%2Fe8947270-8a16-4d60-b4a1-a038ac719c01%2F48cbe5f6-1381-4e6a-9763-279e18c7c73a.webp",
+        "at": 768,
+        "end": 996,
+        "bytes": 17432,
+        "initiator": "img"
+      },
+      {
+        "url": "/api/v1/product-images/8e9f5c17-0e26-43a0-8af5-37bb03a08a0a?object=store%2Fproduct-images%2Fb6ee86e0-8713-40ed-96fe-1d5ad2251c7c%2F8e9f5c17-0e26-43a0-8af5-37bb03a08a0a.webp",
+        "at": 769,
+        "end": 1078,
+        "bytes": 35196,
+        "initiator": "img"
+      }
+    ],
+    "ttfb": 38.5
+  },
+  {
+    "trial": 2,
+    "cache": "cold",
+    "lcp": {
+      "ms": 868,
+      "tag": "IMG",
+      "cls": "",
+      "url": "https://127.0.0.1:3473/api/v1/product-images/8e9f5c17-0e26-43a0-8af5-37bb03a08a0a?object=store%2Fproduct-images%2Fb6ee86e0-8713-40ed-96fe-1d5ad2251c7c%2F8e9f5c17-0e26-43a0-8af5-37bb03a08a0a.webp"
+    },
+    "images": [
+      {
+        "url": "/api/v1/product-images/8e9f5c17-0e26-43a0-8af5-37bb03a08a0a?object=store%2Fproduct-images%2Fb6ee86e0-8713-40ed-96fe-1d5ad2251c7c%2F8e9f5c17-0e26-43a0-8af5-37bb03a08a0a.webp",
+        "at": 148,
+        "end": 457,
+        "bytes": 35196,
+        "initiator": "link"
+      },
+      {
+        "url": "/api/v1/product-images/b55508bf-d3bf-4ff6-819f-5b4a44b6ab36?object=store%2Fproduct-images%2F6103799c-294e-487f-b9ee-f9486a239f29%2Fb55508bf-d3bf-4ff6-819f-5b4a44b6ab36.webp",
+        "at": 839,
+        "end": 1083,
+        "bytes": 35196,
+        "initiator": "img"
+      },
+      {
+        "url": "/api/v1/product-images/9556b4de-deb2-42f7-9216-f485f4741762?object=store%2Fproduct-images%2Fe393389e-2d60-44c3-9829-252a0c9cf3c3%2F9556b4de-deb2-42f7-9216-f485f4741762.webp",
+        "at": 841,
+        "end": 1032,
+        "bytes": 17432,
+        "initiator": "img"
+      },
+      {
+        "url": "/api/v1/product-images/9a5d06e8-0779-418a-8ccf-1176e8739753?object=store%2Fproduct-images%2Fa5ddf48f-d9bc-41b6-b16d-f8077502c7a7%2F9a5d06e8-0779-418a-8ccf-1176e8739753.webp",
+        "at": 841,
+        "end": 1158,
+        "bytes": 73150,
+        "initiator": "img"
+      },
+      {
+        "url": "/api/v1/product-images/48cbe5f6-1381-4e6a-9763-279e18c7c73a?object=store%2Fproduct-images%2Fe8947270-8a16-4d60-b4a1-a038ac719c01%2F48cbe5f6-1381-4e6a-9763-279e18c7c73a.webp",
+        "at": 841,
+        "end": 1032,
+        "bytes": 17432,
+        "initiator": "img"
+      }
+    ],
+    "ttfb": 32.69999999925494
+  },
+  {
+    "trial": 2,
+    "cache": "warm",
+    "lcp": {
+      "ms": 1020,
+      "tag": "IMG",
+      "cls": "",
+      "url": "https://127.0.0.1:3473/api/v1/product-images/8e9f5c17-0e26-43a0-8af5-37bb03a08a0a?object=store%2Fproduct-images%2Fb6ee86e0-8713-40ed-96fe-1d5ad2251c7c%2F8e9f5c17-0e26-43a0-8af5-37bb03a08a0a.webp"
+    },
+    "images": [
+      {
+        "url": "/api/v1/product-images/8e9f5c17-0e26-43a0-8af5-37bb03a08a0a?object=store%2Fproduct-images%2Fb6ee86e0-8713-40ed-96fe-1d5ad2251c7c%2F8e9f5c17-0e26-43a0-8af5-37bb03a08a0a.webp",
+        "at": 161,
+        "end": 292,
+        "bytes": 35196,
+        "initiator": "link"
+      },
+      {
+        "url": "/api/v1/product-images/b55508bf-d3bf-4ff6-819f-5b4a44b6ab36?object=store%2Fproduct-images%2F6103799c-294e-487f-b9ee-f9486a239f29%2Fb55508bf-d3bf-4ff6-819f-5b4a44b6ab36.webp",
+        "at": 688,
+        "end": 1000,
+        "bytes": 35196,
+        "initiator": "img"
+      },
+      {
+        "url": "/api/v1/product-images/9556b4de-deb2-42f7-9216-f485f4741762?object=store%2Fproduct-images%2Fe393389e-2d60-44c3-9829-252a0c9cf3c3%2F9556b4de-deb2-42f7-9216-f485f4741762.webp",
+        "at": 688,
+        "end": 905,
+        "bytes": 17432,
+        "initiator": "img"
+      },
+      {
+        "url": "/api/v1/product-images/9a5d06e8-0779-418a-8ccf-1176e8739753?object=store%2Fproduct-images%2Fa5ddf48f-d9bc-41b6-b16d-f8077502c7a7%2F9a5d06e8-0779-418a-8ccf-1176e8739753.webp",
+        "at": 688,
+        "end": 1064,
+        "bytes": 73150,
+        "initiator": "img"
+      },
+      {
+        "url": "/api/v1/product-images/48cbe5f6-1381-4e6a-9763-279e18c7c73a?object=store%2Fproduct-images%2Fe8947270-8a16-4d60-b4a1-a038ac719c01%2F48cbe5f6-1381-4e6a-9763-279e18c7c73a.webp",
+        "at": 688,
+        "end": 904,
+        "bytes": 17432,
+        "initiator": "img"
+      },
+      {
+        "url": "/api/v1/product-images/8e9f5c17-0e26-43a0-8af5-37bb03a08a0a?object=store%2Fproduct-images%2Fb6ee86e0-8713-40ed-96fe-1d5ad2251c7c%2F8e9f5c17-0e26-43a0-8af5-37bb03a08a0a.webp",
+        "at": 688,
+        "end": 1000,
+        "bytes": 35196,
+        "initiator": "img"
+      }
+    ],
+    "ttfb": 39.599999997764826
+  }
+]

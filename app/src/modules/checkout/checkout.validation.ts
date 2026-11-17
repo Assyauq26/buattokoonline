@@ -1,5 +1,8 @@
 import { z } from "zod";
 
+export const selectedCartLines = z.array(z.string().regex(/^[a-zA-Z0-9_-]{1,64}$/)).min(1).max(100)
+  .refine(ids => new Set(ids).size === ids.length, "Pilihan keranjang duplikat");
+
 /** A confirmation, never a source of prices: compare with locked database values. */
 export const checkoutLinesSchema = z.array(z.object({
   variantId: z.string().min(1).max(64),

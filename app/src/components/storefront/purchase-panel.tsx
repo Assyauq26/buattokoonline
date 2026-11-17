@@ -16,7 +16,6 @@ import type {
   PurchaseVariant,
 } from "@/modules/catalog/purchase-options";
 
-import { Button } from "@/components/ui/button";
 
 import { buyNowAction } from "@/modules/checkout/checkout-intent.actions";
 
@@ -255,7 +254,7 @@ export function PurchasePanel({ product }: { product: PurchaseProduct }) {
           )}
 
           <span>
-            {pending ? "Menambahkan…" : soldOut ? "Stok habis" : "Tambah"}
+            {pending ? "Menambahkan…" : soldOut ? "Stok habis" : config.themeId === "immersive-fashion" ? "Tambah ke tas" : "Tambah"}
           </span>
         </button>
 

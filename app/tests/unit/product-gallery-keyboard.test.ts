@@ -149,3 +149,12 @@ it("renders later image props after an empty gallery and serves published local 
     "false",
   );
 });
+
+it("keeps keyboard navigation and count when the fashion progress track is omitted", () => {
+  const images = [{ url: "/a.webp", alt: "A" }, { url: "/b.webp", alt: "B" }];
+  const view = render(React.createElement(ProductGallery, { images, name: "Fashion", showProgress: false }));
+  expect(view.queryByRole("slider")).toBeNull();
+  fireEvent.keyDown(view.getByTestId("product-gallery-track"), { key: "End" });
+  expect(view.getByText("2/2")).toBeInTheDocument();
+  expect(view.getByRole("button", { name: "Lihat foto produk 2 dari 2" })).toHaveAttribute("aria-pressed", "true");
+});

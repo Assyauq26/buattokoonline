@@ -1,13 +1,15 @@
 import { StoreWordmark } from "@/components/brand/store-wordmark";
+import { getPublishedAppearance } from "@/modules/appearance/published";
 import Link from "next/link";
 import "@/components/legal/legal.css";
-export default function LegalLayout({
+export default async function LegalLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const {config} = await getPublishedAppearance();
   return (
-    <div className="legal-page">
+    <div className="legal-page" data-fashion={config.themeId === "immersive-fashion"}>
       <header className="legal-site-header">
         <Link href="/" className="legal-wordmark">
           <StoreWordmark />

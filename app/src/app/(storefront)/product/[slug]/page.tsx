@@ -260,7 +260,7 @@ export default async function ProductPage({ params }: ProductRouteProps) {
 
           <div className="pdp-hero">
             <div className="pdp-media">
-              <ProductGallery images={product.images} name={product.name} />
+              <ProductGallery images={product.images} name={product.name} showProgress={appearance.config.themeId !== "immersive-fashion"} />
             </div>
           </div>
 
@@ -298,6 +298,7 @@ export default async function ProductPage({ params }: ProductRouteProps) {
                 </span>
               </a>
 
+              {appearance.config.themeId === "immersive-fashion" && product.description && <p className="mb-4 line-clamp-2">{product.description}</p>}
               <PurchasePanel product={purchase} />
 
               <ProductSizeChart
@@ -308,7 +309,7 @@ export default async function ProductPage({ params }: ProductRouteProps) {
                 name={product.name}
               />
               <div className="pdp-information-rows">
-                <ProductDisclosure title="Deskripsi" icon={<FileText size={19} aria-hidden="true" />} defaultOpen>
+                <ProductDisclosure title={appearance.config.themeId === "immersive-fashion" ? "Detail produk" : "Deskripsi"} icon={<FileText size={19} aria-hidden="true" />} defaultOpen={appearance.config.themeId !== "immersive-fashion"}>
                   <ProductDescription text={product.description} />
                 </ProductDisclosure>
                 <ProductDisclosure title="Material & Perawatan" icon={<Package size={19} aria-hidden="true" />}>

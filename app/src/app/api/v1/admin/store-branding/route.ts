@@ -20,6 +20,7 @@ export async function POST(req: Request) {
         String(form.get("requestId") || ""),
         new Uint8Array(await file.arrayBuffer()),
         file.type,
+        form.get("role") === "cutout",
       ),
       201,
     );

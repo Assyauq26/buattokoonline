@@ -1,11 +1,11 @@
 import "server-only";
+import { revisionUsing, usesAsset } from "./asset-references";
 import { createHash, randomUUID } from "node:crypto";
 import sharp from "sharp";
 import { prisma } from "@/lib/prisma";
 import { getObject, putObject, removeObject, STORAGE_APP } from "@/lib/storage";
 import { HttpError } from "@/lib/response";
 import { writeAudit } from "@/modules/audit/audit.service";
-import { parseAppearance } from "./schema";
 import { rateLimit } from "./service";
 export const MAX_LOGO_BYTES = 2 * 1024 * 1024;
 export async function normalizeLogo(bytes: Uint8Array, mime: string) {
@@ -88,6 +88,7 @@ export async function uploadLogo(
   requestId: string,
   bytes: Uint8Array,
   mime: string,
+  cutout = false,
 ) {
   if (
     !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
@@ -113,6 +114,7 @@ export async function uploadLogo(
     return { id: previous.id };
   }
   const normalized = await normalizeLogo(bytes, mime);
+  if (cutout && (await sharp(normalized).stats()).isOpaque) throw new HttpError("Objek harus memiliki latar transparan.", 422);
   const id = randomUUID(),
     path = `${STORAGE_APP}/store-branding/${actorId}/${id}.webp`;
   await prisma.$transaction(async (tx) => {
@@ -188,10 +190,10 @@ export async function assetReferenced(id: string) {
   });
   return Boolean(
     [row?.draft, row?.published].some(
-      (v) => v && parseAppearance(v).identity.logoAssetId === id,
+      (v) => usesAsset(v, id),
     ) ||
       (await prisma.storeAppearanceRevision.findFirst({
-        where: { config: { path: ["identity", "logoAssetId"], equals: id } },
+        where: revisionUsing(id),
       })),
   );
 }
@@ -211,7 +213,7 @@ export async function readLogo(
     select: { published: true },
   });
   const published =
-    row && parseAppearance(row.published).identity.logoAssetId === id;
+    row && usesAsset(row.published, id);
   if (
     !published &&
     (!actor ||
@@ -239,10 +241,10 @@ export async function retireLogo(
     });
     if (
       [row?.draft, row?.published].some(
-        (v) => v && parseAppearance(v).identity.logoAssetId === id,
+        (v) => usesAsset(v, id),
       ) ||
       (await tx.storeAppearanceRevision.findFirst({
-        where: { config: { path: ["identity", "logoAssetId"], equals: id } },
+        where: revisionUsing(id),
       }))
     )
       throw new HttpError("Logo masih dipakai draft atau riwayat", 409);
@@ -280,13 +282,13 @@ export async function cleanupBranding() {
         SELECT 1 FROM "StoreAppearance" AS appearance
         WHERE appearance."key" = 'primary'
           AND (
-            appearance."draft"->'identity'->>'logoAssetId' = asset."id"::text
-            OR appearance."published"->'identity'->>'logoAssetId' = asset."id"::text
+            (appearance."draft"->'identity'->>'logoAssetId' = asset."id"::text OR appearance."draft"->'collections' @> jsonb_build_array(jsonb_build_object('backgroundId', asset."id"::text)) OR appearance."draft"->'collections' @> jsonb_build_array(jsonb_build_object('cutoutId', asset."id"::text)))
+            OR (appearance."published"->'identity'->>'logoAssetId' = asset."id"::text OR appearance."published"->'collections' @> jsonb_build_array(jsonb_build_object('backgroundId', asset."id"::text)) OR appearance."published"->'collections' @> jsonb_build_array(jsonb_build_object('cutoutId', asset."id"::text)))
           )
       )
       AND NOT EXISTS (
         SELECT 1 FROM "StoreAppearanceRevision" AS revision
-        WHERE revision."config"->'identity'->>'logoAssetId' = asset."id"::text
+        WHERE (revision."config"->'identity'->>'logoAssetId' = asset."id"::text OR revision."config"->'collections' @> jsonb_build_array(jsonb_build_object('backgroundId', asset."id"::text)) OR revision."config"->'collections' @> jsonb_build_array(jsonb_build_object('cutoutId', asset."id"::text)))
       )
     ORDER BY asset."expiresAt" ASC, asset."id" ASC
     LIMIT 100
@@ -306,12 +308,10 @@ export async function cleanupBranding() {
         });
         if (
           [row?.draft, row?.published].some(
-            (v) => v && parseAppearance(v).identity.logoAssetId === asset.id,
+            (v) => usesAsset(v, asset.id),
           ) ||
           (await tx.storeAppearanceRevision.findFirst({
-            where: {
-              config: { path: ["identity", "logoAssetId"], equals: asset.id },
-            },
+            where: revisionUsing(asset.id),
           }))
         )
           return;
