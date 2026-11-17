@@ -42,9 +42,9 @@ class Engine:
    if p.is_file() and p.relative_to(root).as_posix() not in baseline['files']:raise Rejected('local_customization')
  def build(self,source,tag,target):
   self.build_resources()
-  # Durable events contain only allowlisted stage/error codes, never raw logs.
-  with open(os.devnull,'wb') as log:
-   try:r=subprocess.run(['docker','build','--force-rm','--memory','1792m','--memory-swap','3072m','--cpu-period','100000','--cpu-quota','100000','--target',target,'-t',tag,str(source/'app')],env={**os.environ,'DOCKER_BUILDKIT':'0'},stdout=log,stderr=subprocess.STDOUT,timeout=2400)
+  log_path = source.parent / f'build-{target}.log'
+  with open(log_path,'wb') as log:
+   try:r=subprocess.run(['docker','build','--force-rm','--memory','2560m','--memory-swap','5120m','--target',target,'-t',tag,str(source/'app')],stdout=log,stderr=subprocess.STDOUT,timeout=2400)
    except subprocess.TimeoutExpired:raise Rejected('build_timeout') from None
   if r.returncode:raise Rejected('build_failed')
  def backup(self,folder):
