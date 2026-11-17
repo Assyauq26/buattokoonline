@@ -43,8 +43,11 @@ class Engine:
  def build(self,source,tag,target):
   self.build_resources()
   log_path = source.parent / f'build-{target}.log'
+  docker_config = Path(os.environ.get('DOCKER_CONFIG', '/run/single-store-updater/.docker'))
+  docker_config.mkdir(parents=True, exist_ok=True)
+  env = {**os.environ, 'DOCKER_CONFIG': str(docker_config)}
   with open(log_path,'wb') as log:
-   try:r=subprocess.run(['docker','build','--force-rm','--memory','2560m','--memory-swap','5120m','--target',target,'-t',tag,str(source/'app')],stdout=log,stderr=subprocess.STDOUT,timeout=2400)
+   try:r=subprocess.run(['docker','build','--force-rm','--memory','2560m','--memory-swap','5120m','--target',target,'-t',tag,str(source/'app')],env=env,stdout=log,stderr=subprocess.STDOUT,timeout=2400)
    except subprocess.TimeoutExpired:raise Rejected('build_timeout') from None
   if r.returncode:raise Rejected('build_failed')
  def backup(self,folder):
