@@ -218,6 +218,7 @@ export function AppearanceEditor({
           footer: "Footer",
           styling: "Tombol/Kartu",
           themeId: "Tema", collections: "Koleksi",
+          darkJeans: "Tema Dark Jeans",
           schemaVersion: "",
         })[k],
     );
