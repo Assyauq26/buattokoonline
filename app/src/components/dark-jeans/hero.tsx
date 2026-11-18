@@ -156,15 +156,15 @@ export function DarkJeansHero({ hero, onShopClick }: HeroProps) {
           </div>
         )}
 
-        {/* Desktop Carousel Navigation Controls: 01 / 003  < > */}
-        <div className="absolute bottom-5 left-6 sm:left-12 lg:left-20 z-30 hidden sm:flex items-center gap-4 text-xs font-mono text-zinc-300 bg-black/50 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-white/10 shadow-lg">
-          <span className="tracking-widest">
-            <strong className="text-white text-sm">
-              {String(currentIndex + 1).padStart(2, "0")}
-            </strong>{" "}
-            / {String(slides.length).padStart(3, "0")}
-          </span>
-          {slides.length > 1 && (
+        {/* Desktop Carousel Navigation Controls: ONLY if seller configured multiple slides */}
+        {slides.length > 1 && (
+          <div className="absolute bottom-5 left-6 sm:left-12 lg:left-20 z-30 hidden sm:flex items-center gap-4 text-xs font-mono text-zinc-300 bg-black/50 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-white/10 shadow-lg">
+            <span className="tracking-widest">
+              <strong className="text-white text-sm">
+                {String(currentIndex + 1).padStart(2, "0")}
+              </strong>{" "}
+              / {String(slides.length).padStart(3, "0")}
+            </span>
             <div className="flex items-center gap-1.5 ml-2 border-l border-white/15 pl-2">
               <button
                 type="button"
@@ -183,8 +183,8 @@ export function DarkJeansHero({ hero, onShopClick }: HeroProps) {
                 <ChevronRight size={13} />
               </button>
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* Mobile Pagination Dots: ● ○ ○ */}
         {slides.length > 1 && (
