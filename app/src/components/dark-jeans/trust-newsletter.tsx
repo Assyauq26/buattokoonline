@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import type { AppearanceConfig } from "@/modules/appearance/schema";
+import type { StoreAppearanceV1 } from "@/modules/appearance/schema";
 import {
   DiamondQualityIcon,
   ShieldSecurityIcon,
@@ -35,7 +35,7 @@ const TRUST_ITEMS = [
 export function DarkJeansTrustNewsletter({
   config,
 }: {
-  config?: AppearanceConfig;
+  config?: StoreAppearanceV1;
 }) {
   const showTrust = config?.footer?.trustFeatures !== false;
 

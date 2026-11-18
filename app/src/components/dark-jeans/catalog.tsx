@@ -9,7 +9,7 @@ import { DarkJeansTrustNewsletter } from "./trust-newsletter";
 import type { HeroConfig } from "@/modules/hero/schema";
 import type { ProductCardData } from "@/components/storefront/product-card";
 import type { CampaignClock } from "@/modules/promotions/campaign.validation";
-import type { AppearanceConfig } from "@/modules/appearance/schema";
+import type { StoreAppearanceV1 } from "@/modules/appearance/schema";
 
 const PREVIEW_PRODUCTS: ProductCardData[] = [
   {
@@ -79,7 +79,7 @@ export function DarkJeansCatalog({
   products?: ProductCardData[];
   wishlistIds?: Set<string>;
   campaign?: CampaignClock | null;
-  config?: AppearanceConfig;
+  config?: StoreAppearanceV1;
   preview?: boolean;
 }) {
   // Production storefront strictly uses real products; admin live preview falls back to preview cards

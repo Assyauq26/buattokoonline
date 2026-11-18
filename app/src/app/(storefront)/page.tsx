@@ -19,7 +19,7 @@ import { DarkJeansCatalog } from "@/components/dark-jeans/catalog";
 import "./home.css";
 
 export const metadata = { alternates: { canonical: "/" } };
-export default async function HomePage({searchParams}: {searchParams: Promise<{koleksi?:string; posisi?:string}>}) {
+export default async function HomePage({ searchParams }: { searchParams: Promise<{ koleksi?: string; posisi?: string }> }) {
   const { config } = await getPublishedAppearance();
   if (config.themeId === "immersive-fashion") {
     const params = await searchParams;
@@ -62,21 +62,21 @@ export default async function HomePage({searchParams}: {searchParams: Promise<{k
   // Zero published versions keep the existing banners until the first Publish.
   const slides =
     hero.config.enabled
-        ? hero.config.slides.map((slide) => ({
-            image: `/api/v1/store-hero/${slide.desktopAssetId}`,
-            mobileImage: slide.mobileAssetId
-              ? `/api/v1/store-hero/${slide.mobileAssetId}`
-              : undefined,
-            alt: slide.alt,
-            heading: slide.heading,
-            description: slide.description,
-            ctaLabel: slide.ctaLabel,
-            ctaHref: slide.ctaHref,
-            align: slide.align,
-            tone: slide.tone,
-            overlay: slide.overlay,
-          }))
-        : [];
+      ? hero.config.slides.map((slide) => ({
+        image: `/api/v1/store-hero/${slide.desktopAssetId}`,
+        mobileImage: slide.mobileAssetId
+          ? `/api/v1/store-hero/${slide.mobileAssetId}`
+          : undefined,
+        alt: slide.alt,
+        heading: slide.heading,
+        description: slide.description,
+        ctaLabel: slide.ctaLabel,
+        ctaHref: slide.ctaHref,
+        align: slide.align,
+        tone: slide.tone,
+        overlay: slide.overlay,
+      }))
+      : [];
 
   return (
     <div className="store-home grid gap-6 lg:gap-4">
@@ -97,46 +97,46 @@ export default async function HomePage({searchParams}: {searchParams: Promise<{k
             flash.items.length > 0)) && <FlashSaleBanner campaign={campaign} />}
 
       <div className="home-products">
-      <section className="min-w-0">
-        <SectionHeader
-          title="Produk Pilihan"
-          subtitle="Pilihan produk dari toko kami"
-          href="/shop"
-        />
-        <div
-          className="home-featured stagger flex snap-x snap-mandatory gap-2.5 overflow-x-auto overscroll-x-contain pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-          aria-label="Produk pilihan"
-        >
-          {featuredItems.map((p) => {
-            const card = toCardData(p);
-            return (
-              <div
-                key={p.id}
-                className="featured-card-track flex w-[calc((100%-20px)/3)] min-w-[12rem] shrink-0 snap-start"
-              >
-                <ProductCard
-                  product={card}
-                  wishlisted={wl.has(p.id)}
-                  homeFeatured
-                />
-              </div>
-            );
-          })}
-        </div>
-      </section>
+        <section className="min-w-0">
+          <SectionHeader
+            title="Produk Pilihan"
+            subtitle="Pilihan produk dari toko kami"
+            href="/shop"
+          />
+          <div
+            className="home-featured stagger flex snap-x snap-mandatory gap-2.5 overflow-x-auto overscroll-x-contain pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            aria-label="Produk pilihan"
+          >
+            {featuredItems.map((p) => {
+              const card = toCardData(p);
+              return (
+                <div
+                  key={p.id}
+                  className="featured-card-track flex w-[calc((100%-20px)/3)] min-w-[12rem] shrink-0 snap-start"
+                >
+                  <ProductCard
+                    product={card}
+                    wishlisted={wl.has(p.id)}
+                    homeFeatured
+                  />
+                </div>
+              );
+            })}
+          </div>
+        </section>
 
-      {latest.items.length > 0 && <section className="min-w-0">
-        <SectionHeader title="Produk Terbaru" subtitle="Temukan koleksi terbaru dari toko kami." href="/shop?sort=newest" />
-        <div className="home-latest">
-          {latest.items.map((p) => (
-            <ProductCard
-              key={p.id}
-              product={toCardData(p)}
-              wishlisted={wl.has(p.id)}
-            />
-          ))}
-        </div>
-      </section>}
+        {latest.items.length > 0 && <section className="min-w-0">
+          <SectionHeader title="Produk Terbaru" subtitle="Temukan koleksi terbaru dari toko kami." href="/shop?sort=newest" />
+          <div className="home-latest">
+            {latest.items.map((p) => (
+              <ProductCard
+                key={p.id}
+                product={toCardData(p)}
+                wishlisted={wl.has(p.id)}
+              />
+            ))}
+          </div>
+        </section>}
       </div>
     </div>
   );
