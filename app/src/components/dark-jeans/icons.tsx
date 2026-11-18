@@ -4,20 +4,80 @@ import React from "react";
 export function StreetIdLogo({
   className = "",
   size = 40,
-  showText = true,
+  variant = "horizontal",
 }: {
   className?: string;
   size?: number;
-  showText?: boolean;
+  variant?: "horizontal" | "stacked";
 }) {
+  if (variant === "stacked") {
+    return (
+      <div className={`flex items-center gap-2 select-none ${className}`}>
+        <img
+          src="/themes/dark-jeans/logo.jpg"
+          alt="street.id Jeans"
+          className="object-contain rounded-md transition-transform duration-200 group-hover:scale-105"
+          style={{ height: size, width: "auto" }}
+        />
+      </div>
+    );
+  }
+
+  // Horizontal Header/Footer Brand Layout matching mockup
   return (
-    <div className={`flex items-center gap-2 select-none ${className}`}>
-      <img
-        src="/themes/dark-jeans/logo.jpg"
-        alt="street.id Jeans"
-        className="object-contain rounded-md transition-transform duration-200 group-hover:scale-105"
-        style={{ height: size, width: "auto" }}
-      />
+    <div className={`flex items-center gap-3 select-none ${className}`}>
+      {/* Denim Stitched S Ribbon Icon */}
+      <svg
+        width={size}
+        height={size}
+        viewBox="0 0 48 48"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+        className="shrink-0 transition-transform duration-200 group-hover:scale-105"
+      >
+        <defs>
+          <linearGradient id="denimTwilH" x1="0" y1="0" x2="48" y2="48" gradientUnits="userSpaceOnUse">
+            <stop stopColor="#1E2838" />
+            <stop offset="0.5" stopColor="#162030" />
+            <stop offset="1" stopColor="#0F1722" />
+          </linearGradient>
+          <linearGradient id="goldStitchH" x1="0" y1="0" x2="48" y2="48" gradientUnits="userSpaceOnUse">
+            <stop stopColor="#FBD38D" />
+            <stop offset="0.5" stopColor="#E5A93C" />
+            <stop offset="1" stopColor="#B7791F" />
+          </linearGradient>
+        </defs>
+        {/* S ribbon geometry */}
+        <polygon
+          points="8,4 40,4 44,18 24,44 4,18"
+          fill="url(#denimTwilH)"
+          stroke="#2A394E"
+          strokeWidth="1.5"
+        />
+        <polygon
+          points="10,6 38,6 41,17 24,41 7,17"
+          fill="none"
+          stroke="url(#goldStitchH)"
+          strokeWidth="1"
+          strokeDasharray="2.5 2"
+        />
+        <path
+          d="M32 12 H18 C15 12 14 14 14 16 C14 19 16 20 21 21 L27 22 C33 23 35 25 35 29 C35 33 32 36 26 36 H14"
+          stroke="url(#goldStitchH)"
+          strokeWidth="2.8"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+
+      <div className="flex flex-col leading-none">
+        <span className="font-black italic tracking-wide text-white text-lg md:text-xl font-display">
+          street<span className="text-[#E5A93C]">.id</span>
+        </span>
+        <span className="text-[8px] md:text-[9px] tracking-[0.3em] text-[#9E9E9E] uppercase font-bold mt-0.5">
+          — JEANS —
+        </span>
+      </div>
     </div>
   );
 }

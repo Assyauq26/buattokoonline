@@ -36,7 +36,7 @@ export function DarkJeansHero({ onShopClick }: HeroProps) {
         <div className="lg:col-span-7 flex flex-col items-start gap-6 max-w-xl">
           {/* Stitched Logo Emblem */}
           <div className="flex items-center gap-3">
-            <StreetIdLogo size={56} />
+            <StreetIdLogo size={90} variant="stacked" />
           </div>
 
           {/* Headline Typography */}
@@ -97,22 +97,22 @@ export function DarkJeansHero({ onShopClick }: HeroProps) {
         {/* Right Column: Streetwear Model Visual + Watermark */}
         <div className="lg:col-span-5 relative flex justify-center items-center">
           {/* Visual Canvas Box */}
-          <div className="relative w-full max-w-[460px] aspect-[4/5] rounded-2xl overflow-hidden border border-white/10 shadow-2xl group">
+          <div className="relative w-full max-w-[540px] aspect-[16/11] rounded-2xl overflow-hidden border border-[#E5A93C]/30 shadow-2xl group bg-[#111319]">
             {/* Visual Image */}
             <Image
               src="/themes/dark-jeans/hero-model.jpg"
               alt="street.id Jeans Collection Model"
               fill
               priority
-              className="object-cover object-center transition-transform duration-700 ease-out group-hover:scale-105"
+              className="object-cover object-[65%_35%] transition-transform duration-700 ease-out group-hover:scale-105"
             />
 
-            {/* Subtle Gradient lighting overlays */}
-            <div className="absolute inset-0 bg-gradient-to-t from-[#0B0B0E] via-transparent to-transparent opacity-80" />
-            <div className="absolute inset-0 ring-1 ring-inset ring-white/10 rounded-2xl pointer-events-none" />
+            {/* Subtle Vignette overlay */}
+            <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent pointer-events-none" />
+            <div className="absolute inset-0 ring-1 ring-inset ring-[#E5A93C]/20 rounded-2xl pointer-events-none" />
 
             {/* Diagonal Gold Accent Line */}
-            <div className="absolute -top-12 -right-12 w-32 h-32 bg-gradient-to-bl from-[#E5A93C]/30 to-transparent blur-xl pointer-events-none" />
+            <div className="absolute -top-12 -right-12 w-36 h-36 bg-gradient-to-bl from-[#E5A93C]/30 to-transparent blur-xl pointer-events-none" />
           </div>
 
           {/* Stylized Vertical Watermark on right edge */}
