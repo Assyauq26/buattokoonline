@@ -443,3 +443,74 @@
 .dark-jeans ::-webkit-scrollbar-thumb:hover {
   background: var(--dj-gold);
 }
+
+/* --------------------------------------------------------------------------
+   Storewide Dark Denim Overrides for Other Pages (/shop, /product, /cart, etc)
+   -------------------------------------------------------------------------- */
+.storefront-root.dark-jeans {
+  --color-primary: #E5A93C;
+  --color-page-bg: #0B0B0E;
+  --color-surface: #111319;
+  --color-card: #13151D;
+  --color-border: #262935;
+  --color-text: #FFFFFF;
+}
+
+.storefront-root.dark-jeans .product-card {
+  background-color: #13151D !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+  color: #FFFFFF !important;
+  transition: transform 200ms var(--ease-out), border-color 200ms var(--ease-out), box-shadow 200ms var(--ease-out) !important;
+}
+
+.storefront-root.dark-jeans .product-card:hover {
+  transform: translateY(-3px) !important;
+  border-color: rgba(229, 169, 60, 0.45) !important;
+  box-shadow: 0 10px 24px -4px rgba(0, 0, 0, 0.7), 0 0 14px var(--dj-gold-glow) !important;
+}
+
+.storefront-root.dark-jeans .product-card .text-ink {
+  color: #FFFFFF !important;
+}
+
+.storefront-root.dark-jeans .product-card .text-ink-soft,
+.storefront-root.dark-jeans .product-card .text-ink-muted {
+  color: #9E9E9E !important;
+}
+
+.storefront-root.dark-jeans input,
+.storefront-root.dark-jeans select,
+.storefront-root.dark-jeans textarea {
+  background-color: #121318 !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+  color: #FFFFFF !important;
+}
+
+.storefront-root.dark-jeans input:focus,
+.storefront-root.dark-jeans select:focus,
+.storefront-root.dark-jeans textarea:focus {
+  border-color: var(--dj-gold) !important;
+  box-shadow: 0 0 0 2px rgba(229, 169, 60, 0.2) !important;
+}
+
+.storefront-root.dark-jeans .bg-white {
+  background-color: #13151D !important;
+}
+
+.storefront-root.dark-jeans .bg-surface {
+  background-color: #111319 !important;
+}
+
+.storefront-root.dark-jeans .text-ink {
+  color: #FFFFFF !important;
+}
+
+.storefront-root.dark-jeans .text-ink-soft,
+.storefront-root.dark-jeans .text-ink-muted {
+  color: #9CA3AF !important;
+}
+
+.storefront-root.dark-jeans .border-line {
+  border-color: rgba(255, 255, 255, 0.08) !important;
+}
+

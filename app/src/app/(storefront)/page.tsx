@@ -25,24 +25,6 @@ export default async function HomePage({searchParams}: {searchParams: Promise<{k
     const params = await searchParams;
     return <FashionCatalog frame={await fashionFrame(config.collections, params.koleksi, Number(params.posisi) - 1)} />;
   }
-  if (config.themeId === "dark-jeans") {
-    const latest = await listProducts({ sort: "newest", pageSize: 8, includeTotal: false });
-    const denimItems = latest.items.filter(
-      (p) =>
-        p.name.toLowerCase().includes("jean") ||
-        p.name.toLowerCase().includes("denim")
-    );
-    const mapped = denimItems.map((p) => ({
-      id: p.id,
-      name: p.name,
-      slug: p.slug,
-      categoryName: p.brand?.name || "Denim Collection",
-      price: Number(p.salePrice ?? p.basePrice) || 299000,
-      image: p.images?.[0]?.url || "/themes/dark-jeans/product-baggy-black.jpg",
-      isNew: true,
-    }));
-    return <DarkJeansCatalog products={mapped.length > 0 ? mapped : undefined} />;
-  }
   const wishIdsPromise = getStorefrontUserContext().then((user) =>
     user ? wishlistProductIds(user.id) : [],
   );
@@ -63,6 +45,19 @@ export default async function HomePage({searchParams}: {searchParams: Promise<{k
   // an empty section when the catalog itself is populated.
   const featuredItems =
     featured.items.length > 0 ? featured.items : latest.items.slice(0, 4);
+
+  if (config.themeId === "dark-jeans") {
+    return (
+      <DarkJeansCatalog
+        hero={hero}
+        categories={categories}
+        products={featuredItems.map(toCardData)}
+        wishlistIds={wl}
+        campaign={campaign}
+        config={config}
+      />
+    );
+  }
 
   // Zero published versions keep the existing banners until the first Publish.
   const slides =

@@ -4,8 +4,16 @@ import React from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { ArrowRight, Zap } from "lucide-react";
+import type { CampaignClock } from "@/modules/promotions/campaign.validation";
 
-export function DarkJeansPromoBanner() {
+export function DarkJeansPromoBanner({
+  campaign,
+}: {
+  campaign?: CampaignClock | null;
+}) {
+  const isCampaignActive = !!campaign;
+  const targetHref = isCampaignActive ? "/shop?flash=1" : "/shop";
+
   return (
     <section className="w-full py-6 md:py-10 bg-[#0B0B0E]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -36,7 +44,7 @@ export function DarkJeansPromoBanner() {
               UPGRADE STYLE, SAVE MORE!
             </p>
 
-            <Link href="/shop" className="dj-btn-pill group !px-8 !py-3.5 mt-2">
+            <Link href={targetHref} className="dj-btn-pill group !px-8 !py-3.5 mt-2">
               <span>SHOP NOW</span>
               <ArrowRight
                 size={16}

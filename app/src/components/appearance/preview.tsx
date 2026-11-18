@@ -78,7 +78,7 @@ export function AppearancePreview() {
     };
   }, []);
   if(config.themeId === "immersive-fashion") return <AppearanceProvider config={config} preview logoUrl={logo}><div className="storefront-root fashion" data-theme-active="true" style={themeStyle(config)}><FashionShell>{frame ? <FashionCatalog frame={frame} previewConfig={config}/> : <p className="fashion-empty" role="status">Memuat preview koleksi…</p>}</FashionShell></div></AppearanceProvider>;
-  if(config.themeId === "dark-jeans") return <AppearanceProvider config={config} preview logoUrl={logo}><div className="storefront-root dark-jeans" data-theme-active="true" style={themeStyle(config)}><DarkJeansShell count={2} signedIn={false}><DarkJeansCatalog preview={true} /></DarkJeansShell></div></AppearanceProvider>;
+  if(config.themeId === "dark-jeans") return <AppearanceProvider config={config} preview logoUrl={logo}><div className="storefront-root dark-jeans" data-theme-active="true" style={themeStyle(config)}><DarkJeansShell count={2} signedIn={false}><DarkJeansCatalog config={config} preview={true} /></DarkJeansShell></div></AppearanceProvider>;
   return (
     <AppearanceProvider config={config} preview logoUrl={logo}>
       <div

@@ -1,125 +1,209 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { ArrowRight, ChevronLeft, ChevronRight } from "lucide-react";
-import { StreetIdLogo } from "./icons";
+import type { HeroConfig } from "@/modules/hero/schema";
 
 interface HeroProps {
+  hero?: {
+    config: HeroConfig;
+    version: number;
+  } | null;
   onShopClick?: () => void;
 }
 
-export function DarkJeansHero({ onShopClick }: HeroProps) {
-  const [currentSlide, setCurrentSlide] = useState(1);
-  const totalSlides = 3;
+export function DarkJeansHero({ hero, onShopClick }: HeroProps) {
+  const [currentIndex, setCurrentIndex] = useState(0);
+
+  const customSlides =
+    hero?.config?.enabled && hero.config.slides.length > 0
+      ? hero.config.slides.map((s) => ({
+          id: s.id,
+          desktopImage: s.desktopAssetId
+            ? `/api/v1/store-hero/${s.desktopAssetId}`
+            : "/themes/dark-jeans/hero-desktop.jpg",
+          mobileImage: s.mobileAssetId
+            ? `/api/v1/store-hero/${s.mobileAssetId}`
+            : s.desktopAssetId
+            ? `/api/v1/store-hero/${s.desktopAssetId}`
+            : "/themes/dark-jeans/hero-mobile.jpg",
+          alt: s.alt || "Hero Banner",
+          heading: s.heading || "",
+          description: s.description || "",
+          ctaLabel: s.ctaLabel || "",
+          ctaHref: s.ctaHref || "/shop",
+          align: s.align || "left",
+          tone: s.tone || "dark",
+          overlay: s.overlay ?? 0,
+        }))
+      : [];
+
+  const defaultSlide = {
+    id: "default-dark-jeans-slide",
+    desktopImage: "/themes/dark-jeans/hero-desktop.jpg",
+    mobileImage: "/themes/dark-jeans/hero-mobile.jpg",
+    alt: "street.id Jeans Collection — More Than Just Jeans",
+    heading: "", // Artwork has typography embedded
+    description: "",
+    ctaLabel: "SHOP NOW",
+    ctaHref: "/shop",
+    align: "left" as const,
+    tone: "dark" as const,
+    overlay: 0,
+  };
+
+  const slides = customSlides.length > 0 ? customSlides : [defaultSlide];
+  const slide = slides[currentIndex] || slides[0];
+
+  useEffect(() => {
+    if (slides.length <= 1) return;
+    const interval = (hero?.config?.autoplaySeconds || 6) * 1000;
+    const timer = setInterval(() => {
+      setCurrentIndex((prev) => (prev + 1) % slides.length);
+    }, interval);
+    return () => clearInterval(timer);
+  }, [slides.length, hero?.config?.autoplaySeconds]);
 
   const nextSlide = () => {
-    setCurrentSlide((prev) => (prev % totalSlides) + 1);
+    setCurrentIndex((prev) => (prev + 1) % slides.length);
   };
 
   const prevSlide = () => {
-    setCurrentSlide((prev) => (prev === 1 ? totalSlides : prev - 1));
+    setCurrentIndex((prev) => (prev === 0 ? slides.length - 1 : prev - 1));
   };
 
   return (
-    <section className="relative w-full dj-hero min-h-[580px] lg:min-h-[660px] flex items-center dark-jeans-twill-bg overflow-hidden">
-      {/* Golden volumetric lighting & ambient glow overlays */}
-      <div className="absolute top-0 right-1/4 w-96 h-96 bg-[#E5A93C]/10 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute bottom-0 left-10 w-80 h-80 bg-blue-900/10 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute inset-0 bg-gradient-to-r from-[#0B0B0E] via-[#0B0B0E]/60 to-transparent z-10 pointer-events-none hidden lg:block" />
-
-      {/* Main Grid Container */}
-      <div className="relative z-20 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-12 lg:py-16 grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+    <section className="relative w-full dj-hero overflow-hidden bg-[#0B0B0E]">
+      {/* Full-width edge-to-edge container */}
+      <div className="relative w-full aspect-[16/9] sm:aspect-[2/1] md:aspect-[2.28/1] min-h-[280px] sm:min-h-[380px] md:min-h-[440px] max-h-[640px] overflow-hidden select-none">
         
-        {/* Left Column: Brand Mark, Headline, Tagline, CTA, Pager */}
-        <div className="lg:col-span-7 flex flex-col items-start gap-6 max-w-xl">
-          {/* Stitched Logo Emblem */}
-          <div className="flex items-center gap-3">
-            <StreetIdLogo size={90} variant="stacked" />
+        {/* Banner Images (Desktop & Mobile) */}
+        <Link
+          href={slide.ctaHref || "/shop"}
+          onClick={onShopClick}
+          className="block absolute inset-0 z-10 cursor-pointer"
+          aria-label={slide.alt}
+        >
+          {/* Desktop panoramic banner artwork */}
+          <div className="hidden md:block relative w-full h-full">
+            <Image
+              src={slide.desktopImage}
+              alt={slide.alt}
+              fill
+              priority
+              className="object-cover object-center transition-transform duration-700 ease-out hover:scale-[1.01]"
+            />
           </div>
 
-          {/* Headline Typography */}
-          <div className="space-y-2">
-            <h1 className="text-3xl sm:text-5xl lg:text-6xl font-black tracking-tight text-white uppercase font-display leading-[1.05]">
-              <span className="block text-white">More Than</span>
-              <span className="block dj-hero-title-metallic">Just Jeans</span>
-            </h1>
-            <p className="text-sm sm:text-base text-zinc-300 font-medium tracking-wide">
-              Upgrade Your Style, Step Up Your Attitude.
-            </p>
+          {/* Mobile banner artwork */}
+          <div className="block md:hidden relative w-full h-full">
+            <Image
+              src={slide.mobileImage}
+              alt={slide.alt}
+              fill
+              priority
+              className="object-cover object-center"
+            />
           </div>
 
-          {/* CTA Button */}
-          <div className="pt-2">
-            <Link
-              href="/shop"
-              onClick={onShopClick}
-              className="dj-btn-pill group !px-8 !py-3.5"
+          {/* Optional Overlay Darkness if configured by seller */}
+          {slide.overlay > 0 && (
+            <div
+              className="absolute inset-0 bg-black pointer-events-none"
+              style={{ opacity: slide.overlay / 100 }}
+            />
+          )}
+        </Link>
+
+        {/* Text Overlay (ONLY if heading/description was provided by seller) */}
+        {slide.heading && (
+          <div className="absolute inset-0 z-20 flex items-center px-6 sm:px-12 lg:px-20 pointer-events-none">
+            <div
+              className={`max-w-xl flex flex-col gap-3 pointer-events-auto ${
+                slide.align === "center"
+                  ? "items-center text-center mx-auto"
+                  : slide.align === "right"
+                  ? "items-end text-right ml-auto"
+                  : "items-start text-left"
+              }`}
             >
-              <span>SHOP NOW</span>
-              <ArrowRight
-                size={16}
-                className="text-[#E5A93C] transition-transform duration-200 group-hover:translate-x-1"
-              />
-            </Link>
+              <h1 className="text-2xl sm:text-4xl lg:text-5xl font-black text-white tracking-tight uppercase font-display leading-[1.08]">
+                <span className="block dj-hero-title-metallic">{slide.heading}</span>
+              </h1>
+              {slide.description && (
+                <p className="text-xs sm:text-sm lg:text-base text-zinc-300 font-medium tracking-wide">
+                  {slide.description}
+                </p>
+              )}
+              {slide.ctaLabel && (
+                <div className="pt-2">
+                  <Link
+                    href={slide.ctaHref}
+                    onClick={onShopClick}
+                    className="dj-btn-pill group !px-8 !py-3.5"
+                  >
+                    <span>{slide.ctaLabel}</span>
+                    <ArrowRight
+                      size={16}
+                      className="text-[#E5A93C] transition-transform duration-200 group-hover:translate-x-1"
+                    />
+                  </Link>
+                </div>
+              )}
+            </div>
           </div>
+        )}
 
-          {/* Slider Pagination Controls: 01 / 003  < > */}
-          <div className="flex items-center gap-4 pt-6 text-xs font-mono text-zinc-400">
-            <span className="tracking-widest">
-              <strong className="text-white text-sm">
-                {String(currentSlide).padStart(2, "0")}
-              </strong>{" "}
-              / 003
-            </span>
-            <div className="flex items-center gap-2">
+        {/* Desktop Carousel Navigation Controls: 01 / 003  < > */}
+        <div className="absolute bottom-5 left-6 sm:left-12 lg:left-20 z-30 hidden sm:flex items-center gap-4 text-xs font-mono text-zinc-300 bg-black/50 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-white/10 shadow-lg">
+          <span className="tracking-widest">
+            <strong className="text-white text-sm">
+              {String(currentIndex + 1).padStart(2, "0")}
+            </strong>{" "}
+            / {String(slides.length).padStart(3, "0")}
+          </span>
+          {slides.length > 1 && (
+            <div className="flex items-center gap-1.5 ml-2 border-l border-white/15 pl-2">
               <button
                 type="button"
                 onClick={prevSlide}
-                className="dj-icon-btn !w-8 !h-8 text-zinc-400 hover:text-white"
+                className="dj-icon-btn !w-6 !h-6 text-zinc-300 hover:text-white"
                 aria-label="Slide sebelumnya"
               >
-                <ChevronLeft size={16} />
+                <ChevronLeft size={13} />
               </button>
               <button
                 type="button"
                 onClick={nextSlide}
-                className="dj-icon-btn !w-8 !h-8 text-zinc-400 hover:text-white"
+                className="dj-icon-btn !w-6 !h-6 text-zinc-300 hover:text-white"
                 aria-label="Slide berikutnya"
               >
-                <ChevronRight size={16} />
+                <ChevronRight size={13} />
               </button>
             </div>
-          </div>
+          )}
         </div>
 
-        {/* Right Column: Streetwear Model Visual + Watermark */}
-        <div className="lg:col-span-5 relative flex justify-center items-center">
-          {/* Visual Canvas Box */}
-          <div className="relative w-full max-w-[540px] aspect-[16/11] rounded-2xl overflow-hidden border border-[#E5A93C]/30 shadow-2xl group bg-[#111319]">
-            {/* Visual Image */}
-            <Image
-              src="/themes/dark-jeans/hero-model.jpg"
-              alt="street.id Jeans Collection Model"
-              fill
-              priority
-              className="object-cover object-[65%_35%] transition-transform duration-700 ease-out group-hover:scale-105"
-            />
-
-            {/* Subtle Vignette overlay */}
-            <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent pointer-events-none" />
-            <div className="absolute inset-0 ring-1 ring-inset ring-[#E5A93C]/20 rounded-2xl pointer-events-none" />
-
-            {/* Diagonal Gold Accent Line */}
-            <div className="absolute -top-12 -right-12 w-36 h-36 bg-gradient-to-bl from-[#E5A93C]/30 to-transparent blur-xl pointer-events-none" />
+        {/* Mobile Pagination Dots: ● ○ ○ */}
+        {slides.length > 1 && (
+          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-30 flex sm:hidden items-center gap-2 bg-black/40 backdrop-blur-sm px-3 py-1 rounded-full border border-white/10">
+            {slides.map((_, idx) => (
+              <button
+                key={idx}
+                type="button"
+                onClick={() => setCurrentIndex(idx)}
+                className={`transition-all duration-200 rounded-full ${
+                  idx === currentIndex
+                    ? "w-4 h-1.5 bg-[#E5A93C]"
+                    : "w-1.5 h-1.5 bg-white/40 hover:bg-white/70"
+                }`}
+                aria-label={`Slide ${idx + 1}`}
+              />
+            ))}
           </div>
-
-          {/* Stylized Vertical Watermark on right edge */}
-          <div className="hidden sm:flex absolute -right-6 lg:-right-10 top-1/2 -translate-y-1/2 dj-watermark text-[10px]">
-            street.id jeans &nbsp;&bull;&nbsp; est. 2025
-          </div>
-        </div>
+        )}
 
       </div>
     </section>

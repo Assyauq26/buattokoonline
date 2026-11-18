@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -12,6 +12,7 @@ import {
   Truck,
   ShieldCheck,
   RefreshCw,
+  Sparkles,
   ChevronDown,
 } from "lucide-react";
 import {
@@ -23,6 +24,8 @@ import {
 } from "./icons";
 import { StoreLogo, useAppearance } from "@/components/appearance/context";
 import { CART_COUNT_EVENT } from "@/modules/cart/cart-events";
+
+const ANNOUNCEMENT_ICONS = [Truck, ShieldCheck, RefreshCw, Sparkles];
 
 export function DarkJeansShell({
   count = 0,
@@ -61,74 +64,104 @@ export function DarkJeansShell({
     router.push(`/shop?q=${encodeURIComponent(searchQuery.trim())}`);
   };
 
-  const navLinks = [
-    { label: "Home", href: "/" },
-    { label: "Shop", href: "/shop", hasDropdown: true },
-    { label: "Collection", href: "/shop" },
-    { label: "About", href: "/account/help" },
-    { label: "Contact", href: "/account/help" },
-  ];
+  // Nav links from seller configuration, fallback to default if none configured
+  const configuredLinks = config?.header?.links?.filter((l) => l.visible);
+  const navLinks =
+    configuredLinks && configuredLinks.length > 0
+      ? configuredLinks.map((l) => ({
+          label: l.label,
+          href: l.href,
+          hasDropdown: l.label.toLowerCase() === "shop",
+        }))
+      : [
+          { label: "Home", href: "/", hasDropdown: false },
+          { label: "Shop", href: "/shop", hasDropdown: true },
+          { label: "Collection", href: "/shop", hasDropdown: false },
+          { label: "About", href: "/account/help", hasDropdown: false },
+          { label: "Contact", href: "/account/help", hasDropdown: false },
+        ];
+
+  // Announcement items parsed from seller configuration
+  const announcementRaw = config?.header?.announcement;
+  const announcementItems = announcementRaw
+    ? announcementRaw
+        .split("|")
+        .map((s) => s.trim())
+        .filter(Boolean)
+    : [
+        "Gratis Ongkir Min. 200K",
+        "100% Original Product",
+        "Mudah Return",
+      ];
+
+  const storeName = config?.identity?.name || "street.id";
+  const storeTagline =
+    config?.identity?.tagline ||
+    config?.footer?.tagline ||
+    "More Than Just Jeans.";
+  const storeAddress =
+    config?.identity?.operationalAddress || "Jl. Veteran No.123, Pekalongan";
 
   return (
-    <div className="flex flex-col min-h-screen bg-[#0B0B0E] text-white">
+    <div className="flex flex-col min-h-screen bg-[#0B0B0E] text-white selection:bg-[#E5A93C] selection:text-[#0B0B0E]">
       {/* 1. TOP ANNOUNCEMENT BAR */}
-      <div className="dj-announcement">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-2 px-4">
-          {/* Left value tags */}
-          <div className="flex flex-wrap items-center justify-center gap-4 md:gap-8 text-xs font-medium">
-            <span className="dj-announcement-item">
-              <Truck size={14} className="text-[#E5A93C]" />
-              Gratis Ongkir Min. 200K
-            </span>
-            <span className="dj-announcement-item">
-              <ShieldCheck size={14} className="text-[#E5A93C]" />
-              100% Original Product
-            </span>
-            <span className="dj-announcement-item">
-              <RefreshCw size={14} className="text-[#E5A93C]" />
-              Mudah Return
-            </span>
-          </div>
+      {announcementItems.length > 0 && (
+        <div className="dj-announcement">
+          <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-2 px-4 sm:px-6 lg:px-8">
+            {/* Left value tags with metallic gold outline icons */}
+            <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-6 md:gap-8 text-xs font-medium">
+              {announcementItems.map((text, idx) => {
+                const IconComp =
+                  ANNOUNCEMENT_ICONS[idx % ANNOUNCEMENT_ICONS.length];
+                return (
+                  <span key={idx} className="dj-announcement-item">
+                    <IconComp size={14} className="text-[#E5A93C] shrink-0" />
+                    <span>{text}</span>
+                  </span>
+                );
+              })}
+            </div>
 
-          {/* Right social media links */}
-          <div className="flex items-center gap-3 text-xs">
-            <span className="text-[#9E9E9E]">Follow Us :</span>
-            <div className="flex items-center gap-2.5 text-white/80">
-              <a
-                href="https://tiktok.com"
-                target="_blank"
-                rel="noreferrer"
-                className="hover:text-[#E5A93C] transition-colors"
-                aria-label="TikTok"
-              >
-                <TikTokIcon className="w-3.5 h-3.5" />
-              </a>
-              <a
-                href="https://instagram.com"
-                target="_blank"
-                rel="noreferrer"
-                className="hover:text-[#E5A93C] transition-colors"
-                aria-label="Instagram"
-              >
-                <InstagramIcon className="w-3.5 h-3.5" />
-              </a>
-              <a
-                href="https://youtube.com"
-                target="_blank"
-                rel="noreferrer"
-                className="hover:text-[#E5A93C] transition-colors"
-                aria-label="YouTube"
-              >
-                <YouTubeIcon className="w-3.5 h-3.5" />
-              </a>
+            {/* Right social media links */}
+            <div className="flex items-center gap-3 text-xs">
+              <span className="text-[#9E9E9E] hidden sm:inline">Follow Us :</span>
+              <div className="flex items-center gap-2.5 text-white/80">
+                <a
+                  href="https://tiktok.com"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="hover:text-[#E5A93C] transition-colors"
+                  aria-label="TikTok"
+                >
+                  <TikTokIcon className="w-3.5 h-3.5" />
+                </a>
+                <a
+                  href="https://instagram.com"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="hover:text-[#E5A93C] transition-colors"
+                  aria-label="Instagram"
+                >
+                  <InstagramIcon className="w-3.5 h-3.5" />
+                </a>
+                <a
+                  href="https://youtube.com"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="hover:text-[#E5A93C] transition-colors"
+                  aria-label="YouTube"
+                >
+                  <YouTubeIcon className="w-3.5 h-3.5" />
+                </a>
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* 2. MAIN HEADER / NAVIGATION */}
       <header className="dj-header">
-        <div className="max-w-7xl mx-auto flex items-center justify-between gap-4 px-4 py-3 md:py-4">
+        <div className="max-w-7xl mx-auto flex items-center justify-between gap-4 px-4 sm:px-6 lg:px-8 py-3 md:py-4">
           {/* Mobile menu toggle */}
           <button
             type="button"
@@ -139,7 +172,7 @@ export function DarkJeansShell({
             <Menu size={20} />
           </button>
 
-          {/* Brand Logo */}
+          {/* Brand Logo (Seller StoreLogo if uploaded, else official denim stitched logo) */}
           <Link href="/" className="flex items-center gap-2 group">
             {config?.identity?.logoAssetId ? (
               <StoreLogo />
@@ -169,7 +202,10 @@ export function DarkJeansShell({
           {/* Right Header Controls: Search, User, Cart */}
           <div className="flex items-center gap-2.5 md:gap-4">
             {/* Search Pill Input */}
-            <form onSubmit={handleSearch} className="hidden sm:flex dj-search-pill items-center gap-2 w-44 md:w-56">
+            <form
+              onSubmit={handleSearch}
+              className="hidden sm:flex dj-search-pill items-center gap-2 w-44 md:w-56"
+            >
               <input
                 type="text"
                 placeholder="Cari produk..."
@@ -177,7 +213,11 @@ export function DarkJeansShell({
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="bg-transparent border-none outline-none text-xs w-full text-white placeholder-zinc-500"
               />
-              <button type="submit" aria-label="Cari" className="text-zinc-400 hover:text-[#E5A93C] transition-colors">
+              <button
+                type="submit"
+                aria-label="Cari"
+                className="text-zinc-400 hover:text-[#E5A93C] transition-colors"
+              >
                 <Search size={15} />
               </button>
             </form>
@@ -220,6 +260,7 @@ export function DarkJeansShell({
               <div className="flex items-center justify-between pb-6 border-b border-zinc-800">
                 <StreetIdLogo size={36} />
                 <button
+                  type="button"
                   onClick={() => setMobileMenuOpen(false)}
                   className="dj-icon-btn"
                   aria-label="Tutup menu"
@@ -229,7 +270,13 @@ export function DarkJeansShell({
               </div>
 
               {/* Mobile Search */}
-              <form onSubmit={handleSearch} className="mt-6 flex dj-search-pill items-center gap-2">
+              <form
+                onSubmit={(e) => {
+                  handleSearch(e);
+                  setMobileMenuOpen(false);
+                }}
+                className="mt-6 flex dj-search-pill items-center gap-2"
+              >
                 <input
                   type="text"
                   placeholder="Cari produk..."
@@ -237,7 +284,11 @@ export function DarkJeansShell({
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="bg-transparent border-none outline-none text-xs w-full text-white placeholder-zinc-500"
                 />
-                <button type="submit" aria-label="Cari" className="text-zinc-400">
+                <button
+                  type="submit"
+                  aria-label="Cari"
+                  className="text-zinc-400"
+                >
                   <Search size={15} />
                 </button>
               </form>
@@ -258,7 +309,7 @@ export function DarkJeansShell({
             </div>
 
             <div className="pt-6 border-t border-zinc-800 text-xs text-zinc-500">
-              <p>© 2025 street.id. All rights reserved.</p>
+              <p>© {new Date().getFullYear()} {storeName}. All rights reserved.</p>
             </div>
           </div>
         </div>
@@ -269,14 +320,18 @@ export function DarkJeansShell({
 
       {/* 4. FOOTER (Matching mockup 4 columns + copyright) */}
       <footer className="bg-[#08080A] border-t border-white/10 pt-14 pb-8">
-        <div className="max-w-7xl mx-auto px-4 grid grid-cols-1 md:grid-cols-4 gap-10 md:gap-8 pb-12">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-1 md:grid-cols-4 gap-10 md:gap-8 pb-12">
           {/* Column 1: Brand & Socials */}
           <div className="flex flex-col gap-4">
             <Link href="/">
-              <StreetIdLogo size={42} />
+              {config?.identity?.logoAssetId ? (
+                <StoreLogo />
+              ) : (
+                <StreetIdLogo size={42} />
+              )}
             </Link>
             <p className="text-xs text-zinc-400 max-w-xs mt-1">
-              More Than Just Jeans.
+              {storeTagline}
             </p>
             <div className="flex items-center gap-3 mt-2 text-zinc-400">
               <a
@@ -318,67 +373,87 @@ export function DarkJeansShell({
 
           {/* Column 2: Quick Link */}
           <div className="flex flex-col gap-3">
-            <h4 className="text-sm font-bold tracking-wider text-white uppercase">
+            <h4 className="text-sm font-bold tracking-wider text-white uppercase font-display">
               Quick Link
             </h4>
             <ul className="flex flex-col gap-2 text-xs text-zinc-400 font-medium">
               <li>
-                <Link href="/" className="hover:text-white transition-colors">Home</Link>
+                <Link href="/" className="hover:text-white transition-colors">
+                  Home
+                </Link>
               </li>
               <li>
-                <Link href="/shop" className="hover:text-white transition-colors">Shop</Link>
+                <Link href="/shop" className="hover:text-white transition-colors">
+                  Shop
+                </Link>
               </li>
               <li>
-                <Link href="/shop" className="hover:text-white transition-colors">Collection</Link>
+                <Link href="/shop" className="hover:text-white transition-colors">
+                  Collection
+                </Link>
               </li>
               <li>
-                <Link href="/account/help" className="hover:text-white transition-colors">About</Link>
+                <Link href="/account/help" className="hover:text-white transition-colors">
+                  About
+                </Link>
               </li>
               <li>
-                <Link href="/account/help" className="hover:text-white transition-colors">Contact</Link>
+                <Link href="/account/help" className="hover:text-white transition-colors">
+                  Contact
+                </Link>
               </li>
             </ul>
           </div>
 
           {/* Column 3: Customer Care */}
           <div className="flex flex-col gap-3">
-            <h4 className="text-sm font-bold tracking-wider text-white uppercase">
+            <h4 className="text-sm font-bold tracking-wider text-white uppercase font-display">
               Customer Care
             </h4>
             <ul className="flex flex-col gap-2 text-xs text-zinc-400 font-medium">
               <li>
-                <Link href="/account/help" className="hover:text-white transition-colors">Cara Belanja</Link>
+                <Link href="/account/help" className="hover:text-white transition-colors">
+                  Cara Belanja
+                </Link>
               </li>
               <li>
-                <Link href="/account/help" className="hover:text-white transition-colors">Pengiriman</Link>
+                <Link href="/account/help" className="hover:text-white transition-colors">
+                  Pengiriman
+                </Link>
               </li>
               <li>
-                <Link href="/account/help" className="hover:text-white transition-colors">Pembayaran</Link>
+                <Link href="/account/help" className="hover:text-white transition-colors">
+                  Pembayaran
+                </Link>
               </li>
               <li>
-                <Link href="/account/help" className="hover:text-white transition-colors">Retur &amp; Refund</Link>
+                <Link href="/account/help" className="hover:text-white transition-colors">
+                  Retur &amp; Refund
+                </Link>
               </li>
               <li>
-                <Link href="/account/help" className="hover:text-white transition-colors">FAQ</Link>
+                <Link href="/account/help" className="hover:text-white transition-colors">
+                  FAQ
+                </Link>
               </li>
             </ul>
           </div>
 
           {/* Column 4: Our Store */}
           <div className="flex flex-col gap-3">
-            <h4 className="text-sm font-bold tracking-wider text-white uppercase">
+            <h4 className="text-sm font-bold tracking-wider text-white uppercase font-display">
               Our Store
             </h4>
             <div className="text-xs text-zinc-400 leading-relaxed">
-              <p className="text-white font-semibold">street.id Pekalongan</p>
-              <p>Jl. Veteran No.123, Pekalongan</p>
+              <p className="text-white font-semibold">{storeName}</p>
+              <p>{storeAddress}</p>
             </div>
           </div>
         </div>
 
         {/* Copyright Bar */}
         <div className="border-t border-white/5 pt-6 text-center text-xs text-zinc-500">
-          <p>© 2025 street.id. All rights reserved.</p>
+          <p>© {new Date().getFullYear()} {storeName}. All rights reserved.</p>
         </div>
       </footer>
     </div>
