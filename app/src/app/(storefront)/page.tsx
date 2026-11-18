@@ -30,16 +30,14 @@ export default async function HomePage({searchParams}: {searchParams: Promise<{k
     const denimItems = latest.items.filter(
       (p) =>
         p.name.toLowerCase().includes("jean") ||
-        p.name.toLowerCase().includes("denim") ||
-        p.category?.name?.toLowerCase().includes("jean") ||
-        p.category?.name?.toLowerCase().includes("denim")
+        p.name.toLowerCase().includes("denim")
     );
     const mapped = denimItems.map((p) => ({
       id: p.id,
       name: p.name,
       slug: p.slug,
-      categoryName: p.category?.name || "Denim Collection",
-      price: Number(p.price) || 299000,
+      categoryName: p.brand?.name || "Denim Collection",
+      price: Number(p.salePrice ?? p.basePrice) || 299000,
       image: p.images?.[0]?.url || "/themes/dark-jeans/product-baggy-black.jpg",
       isNew: true,
     }));
