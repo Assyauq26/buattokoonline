@@ -239,7 +239,7 @@ export function Controls({
             key={p.name}
             type="button"
             className="rounded-2xl border border-zinc-300 p-4 text-left hover:border-black focus-visible:outline"
-            aria-pressed={p.config.themeId === "immersive-fashion" ? draft.themeId === p.config.themeId : undefined}
+            aria-pressed={p.config.themeId ? draft.themeId === p.config.themeId : undefined}
             onClick={() =>
               change((d) => {
                 d.colors = structuredClone(p.config.colors);
@@ -248,6 +248,10 @@ export function Controls({
                   d.collections ??= structuredClone(defaultCollections);
                   d.styling = structuredClone(p.config.styling);
                   if (d.header.links.every(l => ["home","shop","category","brand","promo"].includes(l.id))) d.header.links = structuredClone(p.config.header.links);
+                } else if (d.themeId === "dark-jeans") {
+                  d.styling = structuredClone(p.config.styling);
+                  if (p.config.header.announcement) d.header.announcement = p.config.header.announcement;
+                  if (d.header.links.every(l => ["home","shop","category","brand","promo","baru","katalog","bantuan"].includes(l.id))) d.header.links = structuredClone(p.config.header.links);
                 }
               })
             }

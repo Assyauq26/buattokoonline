@@ -29,3 +29,6 @@ app/preview-awb.ts
 /variation-two-step-evidence/
 /variation-sheet-evidence/
 /promotion-evidence/
+
+.agents/
+skills-lock.json

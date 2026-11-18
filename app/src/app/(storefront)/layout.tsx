@@ -1,5 +1,7 @@
 import { FashionShell } from "@/components/fashion/shell";
 import "@/components/fashion/fashion.css";
+import { DarkJeansShell } from "@/components/dark-jeans/shell";
+import "@/components/dark-jeans/dark-jeans.css";
 import { publicCampaign } from "@/modules/promotions/campaign-pricing";
 import { CampaignSync } from "@/components/storefront/campaign-sync";
 import { getPublishedAppearance } from "@/modules/appearance/published";
@@ -30,6 +32,8 @@ export default async function StorefrontLayout({
   const count = user?.cartCount ?? 0;
 
   if (theme.themeId === "immersive-fashion") return <AppearanceProvider config={theme}><CartInteractionProvider><div className="storefront-root fashion" data-theme-active="true" style={themeStyle(theme)}><PublishedVersionSync version={appearance.version}/><CampaignSync initial={campaign}/>{user && <RegistrationOtpCleanup/>}<FashionShell count={count} signedIn={!!user}>{children}</FashionShell></div></CartInteractionProvider></AppearanceProvider>;
+
+  if (theme.themeId === "dark-jeans") return <AppearanceProvider config={theme}><CartInteractionProvider><div className="storefront-root dark-jeans" data-theme-active="true" style={themeStyle(theme)}><PublishedVersionSync version={appearance.version}/><CampaignSync initial={campaign}/>{user && <RegistrationOtpCleanup/>}<DarkJeansShell count={count} signedIn={!!user}>{children}</DarkJeansShell></div></CartInteractionProvider></AppearanceProvider>;
 
   return (
     <AppearanceProvider config={theme}>

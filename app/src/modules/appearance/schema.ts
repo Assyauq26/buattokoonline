@@ -224,7 +224,7 @@ export const defaultCollections: FashionCollection[] = [
 export const appearanceSchema = z
   .object({
     schemaVersion: z.literal(1),
-    themeId: z.enum(["classic", "immersive-fashion"]).optional(),
+    themeId: z.enum(["classic", "immersive-fashion", "dark-jeans"]).optional(),
     collections: z.array(fashionCollectionSchema).min(1).max(12)
       .refine(items => new Set(items.map(i => i.id)).size === items.length, "ID koleksi harus unik").optional(),
     identity: z

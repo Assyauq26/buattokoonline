@@ -1,0 +1,445 @@
+/* ==========================================================================
+   Dark Jeans Theme - High-Fashion Streetwear Aesthetic
+   Designed with Emil Kowalski's Design-Engineering Philosophy
+   - Custom easing curves
+   - Snappy active press states
+   - Micro-interactions under 250ms
+   - No scale(0), no ease-in
+   ========================================================================== */
+
+:root {
+  --dj-bg: #0B0B0E;
+  --dj-surface: #121316;
+  --dj-card: #15171F;
+  --dj-card-inner: #191B24;
+  --dj-border: #262935;
+  --dj-border-gold: rgba(229, 169, 60, 0.35);
+  --dj-gold: #E5A93C;
+  --dj-gold-light: #FBD38D;
+  --dj-gold-dark: #B7791F;
+  --dj-gold-glow: rgba(229, 169, 60, 0.22);
+  --dj-text: #FFFFFF;
+  --dj-text-muted: #9E9E9E;
+  --dj-text-subtle: #6B7280;
+  
+  /* Emil's Easing Curves */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-spring: cubic-bezier(0.175, 0.885, 0.32, 1.15);
+}
+
+.storefront-root.dark-jeans {
+  background-color: var(--dj-bg);
+  color: var(--dj-text);
+  font-family: inherit;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Subtle Denim Twill Texture Overlay */
+.dark-jeans-twill-bg {
+  background-color: var(--dj-bg);
+  background-image: 
+    radial-gradient(ellipse at 50% 0%, rgba(30, 42, 60, 0.35) 0%, transparent 70%),
+    repeating-linear-gradient(
+      45deg,
+      rgba(255, 255, 255, 0.012) 0px,
+      rgba(255, 255, 255, 0.012) 1px,
+      transparent 1px,
+      transparent 4px
+    );
+}
+
+/* --------------------------------------------------------------------------
+   Announcement Bar
+   -------------------------------------------------------------------------- */
+.dj-announcement {
+  background-color: #08080A;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  color: var(--dj-text-muted);
+  font-size: 0.75rem;
+  letter-spacing: 0.02em;
+  padding: 0.5rem 1rem;
+}
+
+.dj-announcement-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  transition: color 150ms var(--ease-out);
+}
+
+.dj-announcement-item:hover {
+  color: #FFFFFF;
+}
+
+/* --------------------------------------------------------------------------
+   Navigation Bar
+   -------------------------------------------------------------------------- */
+.dj-header {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background-color: rgba(11, 11, 14, 0.88);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  transition: background-color 200ms var(--ease-out), border-color 200ms var(--ease-out);
+}
+
+.dj-nav-link {
+  position: relative;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: #D1D5DB;
+  padding: 0.5rem 0.25rem;
+  transition: color 140ms var(--ease-out);
+}
+
+.dj-nav-link:hover {
+  color: #FFFFFF;
+}
+
+.dj-nav-link.active {
+  color: #FFFFFF;
+}
+
+.dj-nav-link.active::after {
+  content: "";
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--dj-gold-light), var(--dj-gold));
+  border-radius: 9999px;
+  box-shadow: 0 0 8px var(--dj-gold);
+}
+
+.dj-search-pill {
+  background-color: #17181F;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 9999px;
+  padding: 0.45rem 1rem;
+  font-size: 0.8125rem;
+  color: #FFFFFF;
+  transition: all 180ms var(--ease-out);
+}
+
+.dj-search-pill:focus-within {
+  border-color: var(--dj-gold);
+  background-color: #1A1C24;
+  box-shadow: 0 0 0 3px rgba(229, 169, 60, 0.18);
+}
+
+/* --------------------------------------------------------------------------
+   Interactive Buttons (Emil's active scale + custom easing)
+   -------------------------------------------------------------------------- */
+.dj-btn-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.65rem 1.75rem;
+  border-radius: 9999px;
+  font-size: 0.875rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #FFFFFF;
+  background: linear-gradient(180deg, #1A1D24 0%, #0F1116 100%);
+  border: 1px solid var(--dj-border-gold);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+  cursor: pointer;
+  transition: 
+    transform 120ms var(--ease-out),
+    border-color 160ms var(--ease-out),
+    box-shadow 180ms var(--ease-out),
+    background 180ms var(--ease-out);
+  user-select: none;
+}
+
+.dj-btn-pill:hover {
+  border-color: var(--dj-gold);
+  box-shadow: 0 0 16px var(--dj-gold-glow), 0 4px 14px rgba(0, 0, 0, 0.6);
+  background: linear-gradient(180deg, #222630 0%, #14171E 100%);
+}
+
+.dj-btn-pill:active {
+  transform: scale(0.97);
+}
+
+.dj-btn-gold {
+  background: linear-gradient(135deg, var(--dj-gold-light) 0%, var(--dj-gold) 60%, var(--dj-gold-dark) 100%);
+  color: #0B0B0E;
+  border: 1px solid #FFE4A0;
+  box-shadow: 0 2px 12px rgba(229, 169, 60, 0.35);
+  font-weight: 800;
+}
+
+.dj-btn-gold:hover {
+  box-shadow: 0 0 20px rgba(229, 169, 60, 0.55), 0 4px 16px rgba(0, 0, 0, 0.4);
+  filter: brightness(1.05);
+}
+
+.dj-btn-gold:active {
+  transform: scale(0.97);
+}
+
+.dj-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.35rem;
+  height: 2.35rem;
+  border-radius: 9999px;
+  background-color: #17181F;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #FFFFFF;
+  cursor: pointer;
+  transition: 
+    transform 100ms var(--ease-out),
+    border-color 140ms var(--ease-out),
+    background-color 140ms var(--ease-out),
+    color 140ms var(--ease-out);
+}
+
+.dj-icon-btn:hover {
+  border-color: var(--dj-gold);
+  color: var(--dj-gold);
+  background-color: #1E202B;
+}
+
+.dj-icon-btn:active {
+  transform: scale(0.95);
+}
+
+/* --------------------------------------------------------------------------
+   Hero Section
+   -------------------------------------------------------------------------- */
+.dj-hero {
+  position: relative;
+  background: radial-gradient(circle at 75% 30%, rgba(229, 169, 60, 0.08) 0%, transparent 60%),
+              radial-gradient(circle at 20% 50%, rgba(26, 38, 57, 0.4) 0%, transparent 70%),
+              #0B0B0E;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.dj-hero-title {
+  font-size: clamp(2rem, 5vw, 3.75rem);
+  font-weight: 900;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  color: #FFFFFF;
+  text-transform: uppercase;
+}
+
+.dj-hero-title-metallic {
+  background: linear-gradient(180deg, #FFFFFF 0%, #D4D4D8 45%, #71717A 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.dj-watermark {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  font-family: monospace;
+  font-size: 0.75rem;
+  letter-spacing: 0.3em;
+  color: rgba(255, 255, 255, 0.2);
+  user-select: none;
+}
+
+/* --------------------------------------------------------------------------
+   Category Silhouette Bar
+   -------------------------------------------------------------------------- */
+.dj-category-bar {
+  background: linear-gradient(180deg, #111217 0%, #0D0E12 100%);
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.dj-category-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.65rem;
+  padding: 1.25rem 1rem;
+  color: #9CA3AF;
+  cursor: pointer;
+  transition: 
+    transform 160ms var(--ease-out),
+    color 160ms var(--ease-out);
+  user-select: none;
+}
+
+.dj-category-item:hover {
+  color: var(--dj-gold);
+  transform: translateY(-2px);
+}
+
+.dj-category-item:active {
+  transform: translateY(0) scale(0.97);
+}
+
+.dj-category-item-text {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+/* --------------------------------------------------------------------------
+   New Arrival Products Section
+   -------------------------------------------------------------------------- */
+.dj-card {
+  background-color: var(--dj-card);
+  border: 1px solid var(--dj-border);
+  border-radius: 1rem;
+  overflow: hidden;
+  transition: 
+    transform 200ms var(--ease-out),
+    border-color 200ms var(--ease-out),
+    box-shadow 200ms var(--ease-out);
+  position: relative;
+}
+
+.dj-card:hover {
+  transform: translateY(-4px);
+  border-color: rgba(229, 169, 60, 0.45);
+  box-shadow: 0 12px 28px -6px rgba(0, 0, 0, 0.7), 0 0 16px var(--dj-gold-glow);
+}
+
+.dj-card-image-wrap {
+  position: relative;
+  aspect-ratio: 3/4;
+  overflow: hidden;
+  background: radial-gradient(circle at 50% 50%, #20232E 0%, #13151D 100%);
+}
+
+.dj-card-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 300ms var(--ease-out);
+}
+
+.dj-card:hover .dj-card-image {
+  transform: scale(1.04);
+}
+
+.dj-badge-new {
+  position: absolute;
+  top: 0.75rem;
+  left: 0.75rem;
+  background-color: rgba(18, 20, 26, 0.85);
+  border: 1px solid var(--dj-gold);
+  color: var(--dj-gold);
+  font-size: 0.6875rem;
+  font-weight: 800;
+  padding: 0.2rem 0.6rem;
+  border-radius: 0.375rem;
+  letter-spacing: 0.08em;
+  backdrop-filter: blur(4px);
+  z-index: 2;
+}
+
+.dj-card-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 9999px;
+  background-color: #1C1F2A;
+  border: 1px solid rgba(229, 169, 60, 0.3);
+  color: #FFFFFF;
+  cursor: pointer;
+  transition: 
+    transform 120ms var(--ease-out),
+    background-color 140ms var(--ease-out),
+    border-color 140ms var(--ease-out),
+    color 140ms var(--ease-out);
+}
+
+.dj-card-btn:hover {
+  background-color: var(--dj-gold);
+  border-color: var(--dj-gold);
+  color: #0B0B0E;
+}
+
+.dj-card-btn:active {
+  transform: scale(0.92);
+}
+
+/* --------------------------------------------------------------------------
+   Special Promo Banner
+   -------------------------------------------------------------------------- */
+.dj-promo-banner {
+  position: relative;
+  background: radial-gradient(circle at 20% 50%, rgba(229, 169, 60, 0.12) 0%, transparent 60%),
+              linear-gradient(135deg, #101217 0%, #0B0C10 100%);
+  border: 1px solid rgba(229, 169, 60, 0.35);
+  border-radius: 1.25rem;
+  overflow: hidden;
+}
+
+.dj-promo-headline {
+  font-size: clamp(2.5rem, 6vw, 4.5rem);
+  font-weight: 900;
+  line-height: 0.95;
+  background: linear-gradient(180deg, #FFF1CC 0%, var(--dj-gold) 50%, #996515 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.7));
+}
+
+/* --------------------------------------------------------------------------
+   Trust Pillars & Newsletter
+   -------------------------------------------------------------------------- */
+.dj-trust-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 1.25rem 0.75rem;
+  border-radius: 0.75rem;
+  transition: transform 160ms var(--ease-out);
+}
+
+.dj-trust-card:hover {
+  transform: translateY(-2px);
+}
+
+.dj-cursive-script {
+  font-family: "Brush Script MT", "Caveat", "Segoe Script", cursive;
+  font-size: clamp(1.75rem, 3.5vw, 2.75rem);
+  color: var(--dj-gold);
+  letter-spacing: 0.04em;
+  transform: rotate(-3deg);
+  text-shadow: 0 0 16px rgba(229, 169, 60, 0.4);
+}
+
+/* --------------------------------------------------------------------------
+   Custom Slim Scrollbars
+   -------------------------------------------------------------------------- */
+.dark-jeans ::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.dark-jeans ::-webkit-scrollbar-track {
+  background: #0B0B0E;
+}
+
+.dark-jeans ::-webkit-scrollbar-thumb {
+  background: #272B38;
+  border-radius: 9999px;
+}
+
+.dark-jeans ::-webkit-scrollbar-thumb:hover {
+  background: var(--dj-gold);
+}

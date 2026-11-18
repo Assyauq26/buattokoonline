@@ -4,6 +4,7 @@ const seeds = [
   ["Monochrome", "#111111", "#FFFFFF"],
   ["Toko Online Mandiri", "#111111", "#FFFFFF"],
   ["Immersive Fashion", "#FAF9F6", "#191817"],
+  ["Dark Jeans", "#E5A93C", "#0B0B0E"],
   ["Midnight Ink", "#D6E4FF", "#101827"],
   ["Sage Studio", "#294D3A", "#F5F8F3"],
   ["Terracotta", "#833F2B", "#FFF8F4"],
@@ -85,6 +86,20 @@ export const PRESETS = seeds.map(([name, primary, bg], index) => {
       { id: "baru", label: "Koleksi Baru", href: "/?koleksi=baru", visible: true },
       { id: "katalog", label: "Katalog", href: "/shop", visible: true },
       { id: "bantuan", label: "Bantuan Toko", href: "/account/help", visible: true },
+    ];
+  }
+  if (name === "Dark Jeans") {
+    v.themeId = "dark-jeans";
+    v.styling.shadow = "soft";
+    v.styling.button = "pill";
+    v.styling.radius = "round";
+    v.header.announcement = "Gratis Ongkir Min. 200K  |  100% Original Product  |  Mudah Return";
+    v.header.links = [
+      { id: "home", label: "Home", href: "/", visible: true },
+      { id: "shop", label: "Shop", href: "/shop", visible: true },
+      { id: "collection", label: "Collection", href: "/shop", visible: true },
+      { id: "about", label: "About", href: "/account/help", visible: true },
+      { id: "contact", label: "Contact", href: "/account/help", visible: true },
     ];
   }
   return { name, config: parseAppearance(v) };

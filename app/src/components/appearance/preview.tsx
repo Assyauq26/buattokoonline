@@ -4,6 +4,9 @@ import type { FashionFrame } from "@/modules/catalog/fashion-catalog";
 import { FashionShell } from "@/components/fashion/shell";
 import { FashionCatalog } from "@/components/fashion/catalog";
 import "@/components/fashion/fashion.css";
+import { DarkJeansShell } from "@/components/dark-jeans/shell";
+import { DarkJeansCatalog } from "@/components/dark-jeans/catalog";
+import "@/components/dark-jeans/dark-jeans.css";
 import { AppearanceProvider, StoreLogo } from "./context";
 import { StorefrontHeader } from "@/components/storefront/header";
 import { PurchasePreviewSamples } from "./purchase-preview-samples";
@@ -75,6 +78,7 @@ export function AppearancePreview() {
     };
   }, []);
   if(config.themeId === "immersive-fashion") return <AppearanceProvider config={config} preview logoUrl={logo}><div className="storefront-root fashion" data-theme-active="true" style={themeStyle(config)}><FashionShell>{frame ? <FashionCatalog frame={frame} previewConfig={config}/> : <p className="fashion-empty" role="status">Memuat preview koleksi…</p>}</FashionShell></div></AppearanceProvider>;
+  if(config.themeId === "dark-jeans") return <AppearanceProvider config={config} preview logoUrl={logo}><div className="storefront-root dark-jeans" data-theme-active="true" style={themeStyle(config)}><DarkJeansShell count={2} signedIn={false}><DarkJeansCatalog preview={true} /></DarkJeansShell></div></AppearanceProvider>;
   return (
     <AppearanceProvider config={config} preview logoUrl={logo}>
       <div
