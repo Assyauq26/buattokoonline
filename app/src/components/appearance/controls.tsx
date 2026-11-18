@@ -1,5 +1,6 @@
 "use client";
 import { CollectionControls } from "./collection-controls";
+import { DarkJeansControls } from "./dark-jeans-controls";
 import Image from "next/image";
 import {
   defaultCollections,
@@ -234,6 +235,7 @@ export function Controls({
     return (
       <div className="grid gap-3">
         {draft.themeId === "immersive-fashion" && <CollectionControls draft={draft} change={change} />}
+        {draft.themeId === "dark-jeans" && <DarkJeansControls draft={draft} change={change} />}
         {PRESETS.map((p) => (
           <button
             key={p.name}
@@ -250,7 +252,7 @@ export function Controls({
                   if (d.header.links.every(l => ["home","shop","category","brand","promo"].includes(l.id))) d.header.links = structuredClone(p.config.header.links);
                 } else if (d.themeId === "dark-jeans") {
                   d.styling = structuredClone(p.config.styling);
-                  if (p.config.header.announcement) d.header.announcement = p.config.header.announcement;
+                  d.darkJeans ??= structuredClone(p.config.darkJeans);
                   if (d.header.links.every(l => ["home","shop","category","brand","promo","baru","katalog","bantuan"].includes(l.id))) d.header.links = structuredClone(p.config.header.links);
                 }
               })

@@ -12,6 +12,7 @@ export default async function CategoriesPage() {
       name: true,
       slug: true,
       parentId: true,
+      iconKey: true,
       sortOrder: true,
     },
     orderBy: { sortOrder: "asc" },

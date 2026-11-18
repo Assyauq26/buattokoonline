@@ -33,6 +33,7 @@ export function ProductCard({
   homeFeatured = false,
   hideEmptyRating = false,
   preview = false,
+  variant,
 }: {
   product: ProductCardData;
   wishlisted?: boolean;
@@ -42,10 +43,97 @@ export function ProductCard({
   homeFeatured?: boolean;
   hideEmptyRating?: boolean;
   preview?: boolean;
+  variant?: "default" | "dark-jeans";
 }) {
   const price = effectivePrice(product.basePrice, product.salePrice);
   const pct = discountPercent(product.basePrice, product.salePrice);
   const priceLayout = pct > 0 ? "inline" : "single";
+
+  if (variant === "dark-jeans") {
+    return (
+      <article
+        data-theme-variant="dark-jeans"
+        className="product-card dark-jeans-card group flex flex-col relative overflow-hidden rounded-xl border border-[#242428] bg-[#111111] transition-all duration-200 hover:border-[#D9AC61]/50 hover:shadow-[0_8px_24px_rgba(0,0,0,0.6)]"
+        data-testid={`product-card-${product.slug}`}
+      >
+        <Link
+          prefetch={preview ? false : undefined}
+          href={`/product/${product.slug}`}
+          className="block relative"
+        >
+          <div className="relative aspect-[3/4] overflow-hidden bg-[#161616]">
+            {product.image ? (
+              <Image
+                src={product.image}
+                alt={product.name}
+                fill
+                sizes="(max-width:768px) 50vw, 25vw"
+                className="object-cover transition-transform duration-500 group-hover:scale-105"
+              />
+            ) : (
+              <div className="flex h-full items-center justify-center text-zinc-600 text-xs">
+                No image
+              </div>
+            )}
+
+            {pct > 0 && !compact && (
+              <div className="absolute left-2 top-2 z-10">
+                <span className="rounded bg-[#111111]/90 border border-[#D9AC61] px-1.5 py-0.5 text-[10px] font-bold text-[#D9AC61] backdrop-blur-sm">
+                  {pct}%
+                </span>
+              </div>
+            )}
+          </div>
+        </Link>
+
+        {!featured && !preview && (
+          <div className="absolute right-2 top-2 z-10">
+            <WishlistButton productId={product.id} initialActive={wishlisted} />
+          </div>
+        )}
+
+        <div className="flex flex-col flex-1 justify-between p-3 gap-2 bg-[#111111]">
+          <div>
+            <Link
+              prefetch={preview ? false : undefined}
+              href={`/product/${product.slug}`}
+              className="block"
+            >
+              <h3 className="line-clamp-1 text-xs sm:text-sm font-semibold text-white group-hover:text-[#D9AC61] transition-colors">
+                {product.name}
+              </h3>
+            </Link>
+            {product.brandName && (
+              <p className="mt-0.5 line-clamp-1 text-[11px] text-[#A0A0A0]">
+                {product.brandName}
+              </p>
+            )}
+          </div>
+
+          <div className="flex items-center justify-between gap-2 pt-2 border-t border-white/5">
+            <div className="flex flex-col">
+              {pct > 0 && (
+                <span className="text-[10px] text-zinc-500 line-through">
+                  {formatIDR(product.basePrice)}
+                </span>
+              )}
+              <span className="text-xs sm:text-sm font-bold text-[#D9AC61] font-mono">
+                {formatIDR(price)}
+              </span>
+            </div>
+
+            {!featured && !homeFeatured && !preview && (
+              <QuickAddButton
+                slug={product.slug}
+                testId={product.variantId ?? product.id}
+                className="!w-8 !h-8 sm:!w-9 sm:!h-9 !rounded-lg border border-[#D9AC61]/40 bg-[#161616] text-[#D9AC61] hover:bg-[#D9AC61] hover:text-[#080808] transition-all shrink-0"
+              />
+            )}
+          </div>
+        </div>
+      </article>
+    );
+  }
 
   return (
     <article

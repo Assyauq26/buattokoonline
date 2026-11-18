@@ -221,12 +221,197 @@ export const defaultCollections: FashionCollection[] = [
   { id: "favorit", title: "Paling Diminati", description: "Jelajahi pilihan favorit.", source: "bestselling" },
   { id: "promo", title: "Flash Sale", description: "", source: "flash" },
 ].map(c => ({ ...c, source: c.source as FashionCollection["source"], category: "", cover: "", mobileFocus: 24, desktopFocus: 10 }));
+
+export const announcementItemSchema = z
+  .object({
+    id: z.string().regex(/^[a-z0-9-]{1,40}$/),
+    label: z.string().trim().min(1).max(100),
+    icon: z.string().max(40).default("truck"),
+    href: z.string().max(240).optional(),
+    visible: z.boolean().default(true),
+    order: z.number().int().default(0),
+  })
+  .strict();
+export type AnnouncementItem = z.infer<typeof announcementItemSchema>;
+
+export const socialMediaEntrySchema = z
+  .object({
+    platform: z.enum(["instagram", "tiktok", "youtube", "facebook", "whatsapp"]),
+    url: z.string().max(240).refine((val) => {
+      if (!val) return true;
+      try {
+        const u = new URL(val);
+        return ["http:", "https:"].includes(u.protocol);
+      } catch {
+        return false;
+      }
+    }, "URL media sosial harus menggunakan http:// atau https://"),
+    enabled: z.boolean().default(true),
+    headerVisible: z.boolean().default(true),
+    footerVisible: z.boolean().default(true),
+    order: z.number().int().default(0),
+  })
+  .strict();
+export type SocialMediaEntry = z.infer<typeof socialMediaEntrySchema>;
+
+export const darkJeansNewArrivalSchema = z
+  .object({
+    enabled: z.boolean().default(true),
+    eyebrow: z.string().max(40).default("///// NEW ARRIVAL"),
+    heading: z.string().max(60).default("New Arrival"),
+    highlightedHeading: z.string().max(60).default("Premium Denim"),
+    description: z
+      .string()
+      .max(200)
+      .default("Koleksi terbaru dengan kualitas terbaik untuk gaya lebih percaya diri."),
+    ctaLabel: z.string().max(40).default("SHOP NOW"),
+    ctaHref: z.string().max(240).default("/shop"),
+    productSource: z.enum(["newest", "featured", "category"]).default("newest"),
+    displayCount: z.number().int().min(1).max(12).default(4),
+  })
+  .strict();
+export type DarkJeansNewArrivalConfig = z.infer<typeof darkJeansNewArrivalSchema>;
+
+export const darkJeansPromoSchema = z
+  .object({
+    enabled: z.boolean().default(false),
+    desktopAssetId: z.string().uuid().nullable().optional(),
+    mobileAssetId: z.string().uuid().nullable().optional(),
+    altText: z.string().max(120).default("Special Promo"),
+    displayMode: z.enum(["artwork", "overlay"]).default("artwork"),
+    heading: z.string().max(60).default("DISKON"),
+    highlightedDiscount: z.string().max(20).default("50%"),
+    description: z.string().max(160).default("UPGRADE STYLE, SAVE MORE!"),
+    ctaLabel: z.string().max(40).default("SHOP NOW"),
+    ctaHref: z.string().max(240).default("/shop"),
+    alignment: z.enum(["left", "center", "right"]).default("left"),
+    overlayOpacity: z.number().int().min(0).max(100).default(0),
+    campaignId: z.string().optional(),
+  })
+  .strict();
+export type DarkJeansPromoConfig = z.infer<typeof darkJeansPromoSchema>;
+
+export const trustFeatureItemSchema = z
+  .object({
+    id: z.string().regex(/^[a-z0-9-]{1,40}$/),
+    icon: z.string().max(40).default("diamond"),
+    title: z.string().max(60),
+    description: z.string().max(100).default(""),
+    visible: z.boolean().default(true),
+    order: z.number().int().default(0),
+  })
+  .strict();
+export type TrustFeatureItem = z.infer<typeof trustFeatureItemSchema>;
+
+export const footerLinkSchema = z
+  .object({
+    id: z.string().regex(/^[a-z0-9-]{1,40}$/),
+    label: z.string().max(60),
+    href: z.string().max(240),
+    visible: z.boolean().default(true),
+  })
+  .strict();
+export type FooterLink = z.infer<typeof footerLinkSchema>;
+
+export const darkJeansConfigSchema = z
+  .object({
+    announcementItems: z.array(announcementItemSchema).max(8).optional(),
+    socialLinks: z.array(socialMediaEntrySchema).max(8).optional(),
+    newArrival: darkJeansNewArrivalSchema.optional(),
+    promoBanner: darkJeansPromoSchema.optional(),
+    trustFeatures: z
+      .object({
+        enabled: z.boolean().default(true),
+        items: z.array(trustFeatureItemSchema).max(6).optional(),
+        signature: z.string().max(60).optional(),
+      })
+      .strict()
+      .optional(),
+    footer: z
+      .object({
+        quickLinksTitle: z.string().max(40).default("Quick Link"),
+        customerCareTitle: z.string().max(40).default("Customer Care"),
+        quickLinks: z.array(footerLinkSchema).max(10).optional(),
+        customerCare: z.array(footerLinkSchema).max(10).optional(),
+      })
+      .strict()
+      .optional(),
+  })
+  .strict();
+export type DarkJeansConfig = z.infer<typeof darkJeansConfigSchema>;
+
+export function defaultDarkJeansConfig(): DarkJeansConfig {
+  return {
+    announcementItems: [
+      { id: "ann-1", label: "Gratis Ongkir Min. 200K", icon: "truck", visible: true, order: 0 },
+      { id: "ann-2", label: "100% Original Product", icon: "shield", visible: true, order: 1 },
+      { id: "ann-3", label: "Mudah Return", icon: "refresh", visible: true, order: 2 },
+    ],
+    socialLinks: [
+      { platform: "tiktok", url: "", enabled: false, headerVisible: true, footerVisible: true, order: 0 },
+      { platform: "instagram", url: "", enabled: false, headerVisible: true, footerVisible: true, order: 1 },
+      { platform: "youtube", url: "", enabled: false, headerVisible: true, footerVisible: true, order: 2 },
+    ],
+    newArrival: {
+      enabled: true,
+      eyebrow: "///// NEW ARRIVAL",
+      heading: "New Arrival",
+      highlightedHeading: "Premium Denim",
+      description: "Koleksi terbaru dengan kualitas terbaik untuk gaya lebih percaya diri.",
+      ctaLabel: "SHOP NOW",
+      ctaHref: "/shop",
+      productSource: "newest",
+      displayCount: 4,
+    },
+    promoBanner: {
+      enabled: false,
+      altText: "Special Promo",
+      displayMode: "artwork",
+      heading: "DISKON",
+      highlightedDiscount: "50%",
+      description: "UPGRADE STYLE, SAVE MORE!",
+      ctaLabel: "SHOP NOW",
+      ctaHref: "/shop",
+      alignment: "left",
+      overlayOpacity: 0,
+    },
+    trustFeatures: {
+      enabled: true,
+      items: [
+        { id: "t-1", icon: "diamond", title: "Premium Quality", description: "Kualitas bahan terbaik", visible: true, order: 0 },
+        { id: "t-2", icon: "shield", title: "Secure Payment", description: "Transaksi 100% aman", visible: true, order: 1 },
+        { id: "t-3", icon: "truck", title: "Fast Delivery", description: "Pengiriman cepat", visible: true, order: 2 },
+        { id: "t-4", icon: "headset", title: "24/7 Support", description: "Bantuan pelanggan", visible: true, order: 3 },
+      ],
+      signature: "Streetwear Denim Style",
+    },
+    footer: {
+      quickLinksTitle: "Quick Link",
+      customerCareTitle: "Customer Care",
+      quickLinks: [
+        { id: "ql-1", label: "Home", href: "/", visible: true },
+        { id: "ql-2", label: "Shop", href: "/shop", visible: true },
+        { id: "ql-3", label: "Kategori", href: "/shop", visible: true },
+        { id: "ql-4", label: "Brand", href: "/shop", visible: true },
+        { id: "ql-5", label: "Promo", href: "/shop?flash=1", visible: true },
+      ],
+      customerCare: [
+        { id: "cc-1", label: "Cara Belanja", href: "/account/help", visible: true },
+        { id: "cc-2", label: "Pengiriman", href: "/account/help", visible: true },
+        { id: "cc-3", label: "Pembayaran", href: "/account/help", visible: true },
+        { id: "cc-4", label: "Retur & Refund", href: "/account/help", visible: true },
+        { id: "cc-5", label: "FAQ", href: "/account/help", visible: true },
+      ],
+    },
+  };
+}
 export const appearanceSchema = z
   .object({
     schemaVersion: z.literal(1),
     themeId: z.enum(["classic", "immersive-fashion", "dark-jeans"]).optional(),
     collections: z.array(fashionCollectionSchema).min(1).max(12)
       .refine(items => new Set(items.map(i => i.id)).size === items.length, "ID koleksi harus unik").optional(),
+    darkJeans: darkJeansConfigSchema.optional(),
     identity: z
       .object({
         name: z.string().trim().min(1).max(100),

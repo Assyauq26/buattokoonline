@@ -904,7 +904,11 @@ export async function saveCategory(
   );
   const parsed = categoryInputSchema.safeParse(value);
   if (!parsed.success) throw new HttpError(parsed.error.issues[0].message, 422);
-  const data = { ...parsed.data, parentId: parsed.data.parentId || null };
+  const data = {
+    ...parsed.data,
+    parentId: parsed.data.parentId || null,
+    iconKey: parsed.data.iconKey ?? null,
+  };
   return transaction(async (tx) => {
     const categories = await tx.category.findMany({
       select: { id: true, parentId: true },

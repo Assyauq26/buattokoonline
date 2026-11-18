@@ -47,11 +47,17 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
     featured.items.length > 0 ? featured.items : latest.items.slice(0, 4);
 
   if (config.themeId === "dark-jeans") {
+    const productSource = config.darkJeans?.newArrival?.productSource || "newest";
+    const darkJeansItems =
+      productSource === "featured" && featured.items.length > 0
+        ? featured.items
+        : latest.items.slice(0, config.darkJeans?.newArrival?.displayCount || 4);
+
     return (
       <DarkJeansCatalog
         hero={hero}
         categories={categories}
-        products={featuredItems.map(toCardData)}
+        products={darkJeansItems.map(toCardData)}
         wishlistIds={wl}
         campaign={campaign}
         config={config}

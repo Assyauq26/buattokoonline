@@ -275,6 +275,7 @@ export const categoryInputSchema = z.object({
   name: z.string().trim().min(2).max(120),
   slug,
   parentId: z.string().max(64).nullable().optional(),
+  iconKey: z.string().max(64).nullable().optional(),
   sortOrder: z.number().int().min(0).max(100_000).default(0),
 });
 export type CatalogActor = {

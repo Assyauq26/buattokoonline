@@ -1,10 +1,15 @@
-import { makeDefault, makeMandiriPreset, parseAppearance } from "./schema";
+import {
+  defaultDarkJeansConfig,
+  makeDefault,
+  makeMandiriPreset,
+  parseAppearance,
+} from "./schema";
 import { foreground, mix } from "./contrast";
 const seeds = [
   ["Monochrome", "#111111", "#FFFFFF"],
   ["Toko Online Mandiri", "#111111", "#FFFFFF"],
   ["Immersive Fashion", "#FAF9F6", "#191817"],
-  ["Dark Jeans", "#E5A93C", "#0B0B0E"],
+  ["Dark Jeans", "#D9AC61", "#080808"],
   ["Midnight Ink", "#D6E4FF", "#101827"],
   ["Sage Studio", "#294D3A", "#F5F8F3"],
   ["Terracotta", "#833F2B", "#FFF8F4"],
@@ -93,14 +98,30 @@ export const PRESETS = seeds.map(([name, primary, bg], index) => {
     v.styling.shadow = "soft";
     v.styling.button = "pill";
     v.styling.radius = "round";
-    v.header.announcement = "Gratis Ongkir Min. 200K  |  100% Original Product  |  Mudah Return";
+    v.header.announcement = "";
     v.header.links = [
       { id: "home", label: "Home", href: "/", visible: true },
       { id: "shop", label: "Shop", href: "/shop", visible: true },
-      { id: "collection", label: "Collection", href: "/shop", visible: true },
-      { id: "about", label: "About", href: "/account/help", visible: true },
-      { id: "contact", label: "Contact", href: "/account/help", visible: true },
+      { id: "category", label: "Kategori", href: "/shop", visible: true },
+      { id: "brand", label: "Brand", href: "/shop", visible: true },
+      { id: "promo", label: "Promo", href: "/shop?flash=1", visible: true },
     ];
+    Object.assign(v.colors, {
+      pageBg: "#080808",
+      surface: "#111111",
+      card: "#111111",
+      modal: "#161616",
+      header: "#080808",
+      footer: "#080808",
+      nav: "#080808",
+      primary: "#D9AC61",
+      accent: "#D9AC61",
+      text: "#F5F5F5",
+      secondaryText: "#B5B5B5",
+      price: "#D9AC61",
+      border: "#242428",
+    });
+    v.darkJeans = defaultDarkJeansConfig();
   }
   return { name, config: parseAppearance(v) };
 });
